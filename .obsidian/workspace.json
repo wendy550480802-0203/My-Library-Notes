@@ -1,0 +1,220 @@
+{
+  "main": {
+    "id": "a2179dfce616a5b9",
+    "type": "split",
+    "children": [
+      {
+        "id": "626ec16a6cafd693",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "97711eee44d17346",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "关系图谱"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "ce63786c3d99159c",
+    "type": "split",
+    "children": [
+      {
+        "id": "963c6041f7b3cb7b",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "ce44487e5562cba0",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "文件列表"
+            }
+          },
+          {
+            "id": "4df41e61aeb6eba3",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "搜索"
+            }
+          },
+          {
+            "id": "9e7b4c1d5a7f40bd",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "书签"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "0d52cdc5e9884502",
+    "type": "split",
+    "children": [
+      {
+        "id": "1637d2f853aed865",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "3393f9468b2cd29c",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "反向链接"
+            }
+          },
+          {
+            "id": "2f056ac29166224c",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "出链"
+            }
+          },
+          {
+            "id": "ce48344a3ebd3e0e",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "标签"
+            }
+          },
+          {
+            "id": "114afae2c127a5a4",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "添加笔记属性"
+            }
+          },
+          {
+            "id": "3ef83829b6898990",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "大纲"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:打开快速切换": false,
+      "graph:查看关系图谱": false,
+      "canvas:新建白板": false,
+      "daily-notes:打开/创建今天的日记": false,
+      "templates:插入模板": false,
+      "command-palette:打开命令面板": false,
+      "bases:新建数据库": false
+    }
+  },
+  "active": "97711eee44d17346",
+  "lastOpenFiles": [
+    "00_百度网盘藏书总清单.md",
+    "00_总索引.md",
+    "知识图谱/Knowledge Graph.html",
+    "知识图谱",
+    "09_经济与企业管理/enhanced_notes/海龟交易法则（珍藏版）-（美）费思.md",
+    "09_经济与企业管理/enhanced_notes/非理性繁荣（第二版）（新金融系列）.md",
+    "09_经济与企业管理/enhanced_notes/00_概念索引.md",
+    "09_经济与企业管理/enhanced_notes/运营之光2.0.md",
+    "09_经济与企业管理/enhanced_notes/Li Xiang Feng Man - Feng Lun 2.md",
+    "09_经济与企业管理/enhanced_notes/IT项目量化管理——细化、量化与图形化最佳实践 2.md",
+    "温蒂知识库（wiki）/wiki/domains/写作/虚假人设，最终究竟害了谁？02.md",
+    "温蒂知识库（wiki）/wiki/domains/写作/让孩子更有勇气去探索世界的关系.md",
+    "温蒂知识库（wiki）/wiki/domains/副业/赞美话语整理.md",
+    "温蒂知识库（wiki）/wiki/domains/线上课/笔记类/先导课3+4笔记.md",
+    "温蒂知识库（wiki）/wiki/domains/副业/0908.md",
+    "温蒂知识库（wiki）/wiki/sources/群分享/语鑫：《组建付费社群如何轻松的运营》.md",
+    "温蒂知识库（wiki）/wiki/analyses/输出/✅【只管去做】第5节课.md",
+    "温蒂知识库（wiki）/wiki/domains/线上课/日期记录/1020.md",
+    "09_经济与企业管理/enhanced_notes/IBM：变革之舞 (华夏基石世界级企业最佳实践研究丛书) 2.md",
+    "温蒂知识库（wiki）/wiki/domains/线上课/其他书籍/08《做你自己》.md",
+    "温蒂知识库（wiki）/wiki/domains/线上课/大课类/第6节大课：万物皆助攻，在爱里活成专属你的美好版本.md",
+    "温蒂知识库（wiki）/wiki/domains/写作/十一月复盘：放下包袱，大胆前行，开启全新篇章.md",
+    "温蒂知识库（wiki）/wiki/domains/线上课/大课类/第8节大课：财富共创课，多维度确认你和金钱之间的关系.md",
+    "温蒂知识库（wiki）/wiki/concepts/我的2025：当精心规划的生活，被一颗牙齿彻底推翻.md",
+    "温蒂知识库（wiki）/wiki/domains/线上课/练习/第4周课后练习.md",
+    "温蒂知识库（wiki）/WIKI.md",
+    "温蒂知识库（wiki）/wiki/domains/写作/✅如果你也在“想太多”，请去南半球验证这3件事.md",
+    "温蒂知识库（wiki）/wiki/domains/副业/开始阶段.md",
+    "温蒂知识库（wiki）/wiki/domains/线上课/Angie安姐俱乐部",
+    "温蒂知识库（wiki）/wiki/domains/线上课/书籍解读与复盘/其他",
+    "温蒂知识库（wiki）/wiki/domains/线上课/书籍解读与复盘/解读",
+    "温蒂知识库（wiki）/wiki/domains/线上课/书籍解读与复盘/复盘",
+    "温蒂知识库（wiki）/wiki/domains/线上课/编号100-199",
+    "温蒂知识库（wiki）/wiki/domains/线上课/编号200-299",
+    "温蒂知识库（wiki）/wiki/domains/线上课/书籍解读与复盘",
+    "温蒂知识库（wiki）/wiki/domains/线上课/研习社第14期",
+    "工作项目/英语私教/识别各流程中可AI化的环节.png",
+    "知识图谱/knowledge-graph.canvas"
+  ]
+}
