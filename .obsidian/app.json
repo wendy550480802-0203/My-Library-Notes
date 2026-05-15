@@ -1,0 +1,21 @@
+{
+  "defaultViewMode": "source",
+  "foldHeading": false,
+  "foldIndent": true,
+  "readableLineLength": true,
+  "strictLineBreaks": false,
+  "showFrontmatter": false,
+  "spellcheck": false,
+  "spellcheckLanguages": [
+    "zh",
+    "en"
+  ],
+  "vimMode": false,
+  "newFileLocation": "folder",
+  "newFileFolderPath": "Inbox",
+  "attachmentFolderPath": "Resources/attachments",
+  "newLinkFormat": "shortest",
+  "useMarkdownLinks": false,
+  "showUnsupportedFiles": false,
+  "promptDelete": false
+}

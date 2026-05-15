@@ -1,0 +1,11 @@
+{
+  "daily-notes": {
+    "folder": "Journal",
+    "template": "Templates/📅 Daily 日志模板",
+    "format": "YYYY-MM-DD",
+    "autorun": false
+  },
+  "templates": {
+    "folder": "Templates"
+  }
+}
