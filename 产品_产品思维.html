@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>产品 - 产品思维 - 知识图谱</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#0f172a; color:#e2e8f0; overflow:hidden; }
+
+/* 侧边栏 */
+#sidebar { position:fixed; left:0; top:0; width:220px; height:100vh; background:#1e293b; border-right:1px solid #334155; overflow-y:auto; z-index:50; transition:transform 0.3s; font-size:12px; }
+#sidebar.collapsed { transform:translateX(-220px); }
+#sidebar h2 { font-size:13px; padding:12px 14px 8px; color:#94a3b8; border-bottom:1px solid #334155; }
+#sidebar .domain-header { padding:7px 14px; cursor:pointer; font-weight:600; border-bottom:1px solid #1a2332; transition:background 0.15s; user-select:none; }
+#sidebar .domain-header:hover { background:#334155; }
+#sidebar .domain-pages { display:none; }
+#sidebar .domain-pages a { display:block; padding:5px 14px 5px 24px; color:#cbd5e1; text-decoration:none; border-bottom:1px solid #1a2332; transition:background 0.15s; font-size:11px; }
+#sidebar .domain-pages a:hover { background:#334155; color:#fff; }
+#sidebar .domain-pages a.active { font-weight:600; }
+#sidebar a.active { background:#a855f7; color:#0f172a; }
+#sidebar-toggle { position:fixed; left:8px; top:56px; z-index:60; background:#334155; border:1px solid #475569; color:#e2e8f0; border-radius:6px; padding:4px 7px; cursor:pointer; font-size:13px; transition:left 0.3s; }
+#sidebar:not(.collapsed) ~ #sidebar-toggle { left:228px; }
+
+/* 右侧详情面板 */
+#detail-panel { position:fixed; top:0; right:-420px; width:400px; height:100vh; background:#1e293b; border-left:1px solid #334155; z-index:55; transition:right 0.3s; display:flex; flex-direction:column; }
+#detail-panel.open { right:0; }
+#detail-header { padding:14px 16px; border-bottom:1px solid #334155; display:flex; align-items:flex-start; gap:10px; }
+#detail-header h2 { flex:1; font-size:14px; line-height:1.4; margin:0; word-break:break-all; }
+#detail-close { background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer; padding:0 4px; line-height:1; }
+#detail-close:hover { color:#fff; }
+#detail-body { flex:1; overflow-y:auto; padding:16px; font-size:13px; line-height:1.7; }
+#detail-body .section { margin-bottom:16px; }
+#detail-body .section-title { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+#detail-body .tag { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#334155; border-radius:4px; font-size:11px; color:#cbd5e1; }
+#detail-body .keyword { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#a855f722; border:1px solid #a855f766; border-radius:4px; font-size:11px; color:#e2e8f0; }
+#detail-body .summary { color:#cbd5e1; white-space:pre-wrap; }
+#detail-body .open-link { display:inline-block; margin-top:12px; padding:6px 14px; background:#a855f7; color:#0f172a; border-radius:6px; text-decoration:none; font-size:12px; font-weight:600; }
+#detail-body .open-link:hover { opacity:0.85; }
+#detail-body .meta-row { display:flex; gap:12px; margin-bottom:8px; font-size:12px; }
+#detail-body .meta-label { color:#94a3b8; min-width:60px; }
+#detail-body .connected-list { list-style:none; padding:0; }
+#detail-body .connected-list li { padding:4px 0; border-bottom:1px solid #1a2332; font-size:12px; cursor:pointer; }
+#detail-body .connected-list li:hover { color:#a855f7; }
+
+#header { padding:10px 20px 10px 50px; background:#1e293b; border-bottom:1px solid #334155; display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-left:200px; transition:margin-left 0.3s; }
+#sidebar.collapsed ~ #header { margin-left:0; }
+#header h1 { margin:0; font-size:17px; color:#a855f7; white-space:nowrap; }
+#search-wrap { position:relative; }
+#search-box { width:220px; padding:5px 10px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#e2e8f0; font-size:13px; }
+#search-results { position:absolute; top:32px; left:0; width:260px; max-height:300px; overflow-y:auto; background:#1e293b; border:1px solid #475569; border-radius:6px; display:none; z-index:100; }
+.sri { padding:7px 10px; cursor:pointer; font-size:12px; border-bottom:1px solid #334155; }
+.sri:hover { background:#334155; }
+.stats { font-size:12px; color:#94a3b8; white-space:nowrap; }
+.ctrls { display:flex; gap:6px; margin-left:auto; }
+.btn { padding:5px 12px; border-radius:6px; border:1px solid #475569; background:#334155; color:#e2e8f0; cursor:pointer; font-size:12px; }
+.btn:hover { background:#475569; }
+.btn.active { background:#a855f7; color:#0f172a; border-color:#a855f7; }
+#legend { position:absolute; top:52px; left:220px; background:#1e293b; border:1px solid #475569; border-radius:8px; padding:10px 14px; font-size:12px; z-index:10; }
+.li { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+.ld { width:10px; height:10px; border-radius:50%; }
+#tooltip { position:absolute; padding:8px 12px; background:#1e293b; border:1px solid #475569; border-radius:8px; font-size:12px; pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:100; box-shadow:0 4px 20px rgba(0,0,0,0.5); max-width:320px; }
+#graph { width:calc(100vw - 200px); height:calc(100vh - 48px); margin-left:200px; transition:width 0.3s, margin-left 0.3s; }
+#sidebar.collapsed ~ #graph { margin-left:0; width:100vw; }
+#detail-panel.open ~ #graph { width:calc(100vw - 200px - 400px); }
+.link { stroke:#475569; stroke-opacity:0.3; }
+.link-book { stroke-opacity:0.12; }
+.node circle { cursor:pointer; stroke-width:1.5; }
+.node text { fill:#e2e8f0; font-size:10px; pointer-events:none; }
+.highlight circle { stroke:#fff !important; stroke-width:2.5px; }
+.highlight text { fill:#fff; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>📚 藏书阁 · 知识图谱</h2>
+  <div class="domain-header" data-target="IT" style="color:#67e8f9; border-left:3px solid #67e8f9;">IT ▾</div>
+  <div class="domain-pages" id="IT">
+    <a href="IT.json" style="border-left:3px solid #67e8f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(225篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="个人成长" style="color:#fb923c; border-left:3px solid #fb923c;">个人成长 ▾</div>
+  <div class="domain-pages" id="个人成长">
+    <a href="个人成长.json" style="border-left:3px solid #fb923c; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(461篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="产品" style="color:#a855f7; border-left:3px solid #a855f7;">产品 ▾</div>
+  <div class="domain-pages" id="产品">
+    <a href="产品_(其他).json" style="border-left:3px solid #a855f7; padding-left:18px;">(其他) <span style="font-size:10px;color:#64748b;">(553篇)</span></a>
+    <a href="产品_产品思维.json" class="active" style="border-left:3px solid #a855f7; padding-left:18px;">产品思维 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="产品_小程序生态.json" style="border-left:3px solid #a855f7; padding-left:18px;">小程序生态 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="产品_用户增长.json" style="border-left:3px solid #a855f7; padding-left:18px;">用户增长 <span style="font-size:10px;color:#64748b;">(49篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="会计" style="color:#86efac; border-left:3px solid #86efac;">会计 ▾</div>
+  <div class="domain-pages" id="会计">
+    <a href="会计.json" style="border-left:3px solid #86efac; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(67篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="健康" style="color:#34d399; border-left:3px solid #34d399;">健康 ▾</div>
+  <div class="domain-pages" id="健康">
+    <a href="健康.json" style="border-left:3px solid #34d399; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(284篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="写作" style="color:#c084fc; border-left:3px solid #c084fc;">写作 ▾</div>
+  <div class="domain-pages" id="写作">
+    <a href="写作.json" style="border-left:3px solid #c084fc; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(238篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="历史" style="color:#06b6d4; border-left:3px solid #06b6d4;">历史 ▾</div>
+  <div class="domain-pages" id="历史">
+    <a href="历史_(其他)_part1.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part2.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part3.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part4.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part5.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(541篇)</span></a>
+    <a href="历史_世界史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">世界史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="历史_中国历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国历史 <span style="font-size:10px;color:#64748b;">(96篇)</span></a>
+    <a href="历史_中国古代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国古代文学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="历史_中国现代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国现代文学 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="历史_中国近代史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国近代史 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="历史_人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">人物传记 <span style="font-size:10px;color:#64748b;">(143篇)</span></a>
+    <a href="历史_军事历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">军事历史 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="历史_历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史 <span style="font-size:10px;color:#64748b;">(538篇)</span></a>
+    <a href="历史_历史与政治.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史与政治 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史人物传记 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="历史_历史学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史学 <span style="font-size:10px;color:#64748b;">(189篇)</span></a>
+    <a href="历史_历史小说.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史小说 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史研究.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史研究 <span style="font-size:10px;color:#64748b;">(162篇)</span></a>
+    <a href="历史_思想史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">思想史 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="历史_文学与历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">文学与历史 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="历史_科技史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">科技史 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="历史_艺术史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">艺术史 <span style="font-size:10px;color:#64748b;">(83篇)</span></a>
+    <a href="历史_西方哲学史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">西方哲学史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="哲学" style="color:#14b8a6; border-left:3px solid #14b8a6;">哲学 ▾</div>
+  <div class="domain-pages" id="哲学">
+    <a href="哲学_(其他)_part1.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="哲学_(其他)_part2.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(272篇)</span></a>
+    <a href="哲学_中国哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">中国哲学 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="哲学_人生哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">人生哲学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="哲学_哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">哲学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+    <a href="哲学_政治哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">政治哲学 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="哲学_生活哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">生活哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+    <a href="哲学_社会哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">社会哲学 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="哲学_科学哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">科学哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="商业" style="color:#10b981; border-left:3px solid #10b981;">商业 ▾</div>
+  <div class="domain-pages" id="商业">
+    <a href="商业_(其他)_part1.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（1/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part2.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（2/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part3.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（3/3） <span style="font-size:10px;color:#64748b;">(391篇)</span></a>
+    <a href="商业_企业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">企业管理 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="商业_健康管理.json" style="border-left:3px solid #10b981; padding-left:18px;">健康管理 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="商业_创业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">创业管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业战略.json" style="border-left:3px solid #10b981; padding-left:18px;">商业战略 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">商业管理 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="商业_投资理财.json" style="border-left:3px solid #10b981; padding-left:18px;">投资理财 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_知识管理.json" style="border-left:3px solid #10b981; padding-left:18px;">知识管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_管理.json" style="border-left:3px solid #10b981; padding-left:18px;">管理 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_组织管理.json" style="border-left:3px solid #10b981; padding-left:18px;">组织管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_经济学.json" style="border-left:3px solid #10b981; padding-left:18px;">经济学 <span style="font-size:10px;color:#64748b;">(74篇)</span></a>
+    <a href="商业_金融投资.json" style="border-left:3px solid #10b981; padding-left:18px;">金融投资 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="商业_领导力.json" style="border-left:3px solid #10b981; padding-left:18px;">领导力 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="图书馆学" style="color:#5eead4; border-left:3px solid #5eead4;">图书馆学 ▾</div>
+  <div class="domain-pages" id="图书馆学">
+    <a href="图书馆学.json" style="border-left:3px solid #5eead4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(23篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="宗教" style="color:#c4b5fd; border-left:3px solid #c4b5fd;">宗教 ▾</div>
+  <div class="domain-pages" id="宗教">
+    <a href="宗教.json" style="border-left:3px solid #c4b5fd; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(19篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="心理学" style="color:#f59e0b; border-left:3px solid #f59e0b;">心理学 ▾</div>
+  <div class="domain-pages" id="心理学">
+    <a href="心理学_(其他)_part1.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（1/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part2.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（2/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part3.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（3/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part4.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（4/4） <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="心理学_个人成长与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">个人成长与心理学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理健康.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理健康 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理学 <span style="font-size:10px;color:#64748b;">(239篇)</span></a>
+    <a href="心理学_教育心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">教育心理学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="心理学_文学与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">文学与心理学 <span style="font-size:10px;color:#64748b;">(119篇)</span></a>
+    <a href="心理学_沟通技巧.json" style="border-left:3px solid #f59e0b; padding-left:18px;">沟通技巧 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="心理学_社会心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">社会心理学 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+    <a href="心理学_认知心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知心理学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="心理学_认知科学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知科学 <span style="font-size:10px;color:#64748b;">(39篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="房地产" style="color:#6ee7b7; border-left:3px solid #6ee7b7;">房地产 ▾</div>
+  <div class="domain-pages" id="房地产">
+    <a href="房地产.json" style="border-left:3px solid #6ee7b7; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(12篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="政治" style="color:#fbbf24; border-left:3px solid #fbbf24;">政治 ▾</div>
+  <div class="domain-pages" id="政治">
+    <a href="政治.json" style="border-left:3px solid #fbbf24; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(253篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="教育" style="color:#ec4899; border-left:3px solid #ec4899;">教育 ▾</div>
+  <div class="domain-pages" id="教育">
+    <a href="教育_(其他)_part1.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="教育_(其他)_part2.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(382篇)</span></a>
+    <a href="教育_个人成长.json" style="border-left:3px solid #ec4899; padding-left:18px;">个人成长 <span style="font-size:10px;color:#64748b;">(250篇)</span></a>
+    <a href="教育_儿童教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">儿童教育 <span style="font-size:10px;color:#64748b;">(62篇)</span></a>
+    <a href="教育_家庭教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">家庭教育 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="教育_教育理念.json" style="border-left:3px solid #ec4899; padding-left:18px;">教育理念 <span style="font-size:10px;color:#64748b;">(68篇)</span></a>
+    <a href="教育_财商教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">财商教育 <span style="font-size:10px;color:#64748b;">(48篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="文学" style="color:#8b5cf6; border-left:3px solid #8b5cf6;">文学 ▾</div>
+  <div class="domain-pages" id="文学">
+    <a href="文学_(其他)_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_中国古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">中国古典文学 <span style="font-size:10px;color:#64748b;">(112篇)</span></a>
+    <a href="文学_儿童文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">儿童文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">古典文学 <span style="font-size:10px;color:#64748b;">(92篇)</span></a>
+    <a href="文学_奇幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">奇幻文学 <span style="font-size:10px;color:#64748b;">(51篇)</span></a>
+    <a href="文学_女性主义文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">女性主义文学 <span style="font-size:10px;color:#64748b;">(38篇)</span></a>
+    <a href="文学_悬疑小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">悬疑小说分析 <span style="font-size:10px;color:#64748b;">(52篇)</span></a>
+    <a href="文学_推理小说.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="文学_推理小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说分析 <span style="font-size:10px;color:#64748b;">(126篇)</span></a>
+    <a href="文学_推理文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理文学 <span style="font-size:10px;color:#64748b;">(35篇)</span></a>
+    <a href="文学_文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学 <span style="font-size:10px;color:#64748b;">(223篇)</span></a>
+    <a href="文学_文学与个人成长.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与个人成长 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="文学_文学与人生哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与人生哲学 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="文学_文学与哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与哲学 <span style="font-size:10px;color:#64748b;">(303篇)</span></a>
+    <a href="文学_文学与社会学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与社会学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="文学_文学分析_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（1/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（2/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（3/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（4/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（5/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part6.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（6/6） <span style="font-size:10px;color:#64748b;">(254篇)</span></a>
+    <a href="文学_文学批评.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学批评 <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="文学_文学理论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学理论 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_文学研究.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学研究 <span style="font-size:10px;color:#64748b;">(84篇)</span></a>
+    <a href="文学_文学经典.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学经典 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="文学_文学解读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学解读 <span style="font-size:10px;color:#64748b;">(40篇)</span></a>
+    <a href="文学_文学评论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学评论 <span style="font-size:10px;color:#64748b;">(482篇)</span></a>
+    <a href="文学_文学赏析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学赏析 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="文学_文学鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学鉴赏 <span style="font-size:10px;color:#64748b;">(82篇)</span></a>
+    <a href="文学_文学阅读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学阅读 <span style="font-size:10px;color:#64748b;">(78篇)</span></a>
+    <a href="文学_旅行文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">旅行文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_日本文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">日本文学 <span style="font-size:10px;color:#64748b;">(98篇)</span></a>
+    <a href="文学_武侠文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">武侠文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_科幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学 <span style="font-size:10px;color:#64748b;">(175篇)</span></a>
+    <a href="文学_科幻文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学分析 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="文学_网络文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">网络文学分析 <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_艺术鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">艺术鉴赏 <span style="font-size:10px;color:#64748b;">(44篇)</span></a>
+    <a href="文学_非虚构文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">非虚构文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="时尚生活" style="color:#f9a8d4; border-left:3px solid #f9a8d4;">时尚生活 ▾</div>
+  <div class="domain-pages" id="时尚生活">
+    <a href="时尚生活.json" style="border-left:3px solid #f9a8d4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(71篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="未知" style="color:#94a3b8; border-left:3px solid #94a3b8;">未知 ▾</div>
+  <div class="domain-pages" id="未知">
+    <a href="未知.json" style="border-left:3px solid #94a3b8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(16篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="法学" style="color:#fcd34d; border-left:3px solid #fcd34d;">法学 ▾</div>
+  <div class="domain-pages" id="法学">
+    <a href="法学.json" style="border-left:3px solid #fcd34d; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="社会学" style="color:#6366f1; border-left:3px solid #6366f1;">社会学 ▾</div>
+  <div class="domain-pages" id="社会学">
+    <a href="社会学_(其他)_part1.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="社会学_(其他)_part2.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(484篇)</span></a>
+    <a href="社会学_文化研究.json" style="border-left:3px solid #6366f1; padding-left:18px;">文化研究 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="社会学_社会学.json" style="border-left:3px solid #6366f1; padding-left:18px;">社会学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="科学" style="color:#f97316; border-left:3px solid #f97316;">科学 ▾</div>
+  <div class="domain-pages" id="科学">
+    <a href="科学_(其他)_part1.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="科学_(其他)_part2.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(116篇)</span></a>
+    <a href="科学_医学人文.json" style="border-left:3px solid #f97316; padding-left:18px;">医学人文 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="科学_神经科学.json" style="border-left:3px solid #f97316; padding-left:18px;">神经科学 <span style="font-size:10px;color:#64748b;">(56篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="编程" style="color:#818cf8; border-left:3px solid #818cf8;">编程 ▾</div>
+  <div class="domain-pages" id="编程">
+    <a href="编程.json" style="border-left:3px solid #818cf8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(151篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="艺术" style="color:#e879f9; border-left:3px solid #e879f9;">艺术 ▾</div>
+  <div class="domain-pages" id="艺术">
+    <a href="艺术.json" style="border-left:3px solid #e879f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(365篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="英语" style="color:#f472b6; border-left:3px solid #f472b6;">英语 ▾</div>
+  <div class="domain-pages" id="英语">
+    <a href="英语.json" style="border-left:3px solid #f472b6; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(209篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="语言文学" style="color:#d8b4fe; border-left:3px solid #d8b4fe;">语言文学 ▾</div>
+  <div class="domain-pages" id="语言文学">
+    <a href="语言文学.json" style="border-left:3px solid #d8b4fe; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="金融" style="color:#a3e635; border-left:3px solid #a3e635;">金融 ▾</div>
+  <div class="domain-pages" id="金融">
+    <a href="金融.json" style="border-left:3px solid #a3e635; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(208篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="雅思" style="color:#22d3ee; border-left:3px solid #22d3ee;">雅思 ▾</div>
+  <div class="domain-pages" id="雅思">
+    <a href="雅思.json" style="border-left:3px solid #22d3ee; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(511篇)</span></a>
+  </div>
+
+    <script>
+    document.querySelectorAll('.domain-header').forEach(function(h){
+      h.addEventListener('click', function(){
+        var t = document.getElementById(this.dataset.target);
+        t.style.display = t.style.display==='none' ? 'block' : 'none';
+        this.innerHTML = this.innerHTML.replace(/[▾▸]/, t.style.display==='none'?'▸':'▾');
+      });
+    });
+    </script>
+    
+</div>
+<button id="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">☰</button>
+
+<div id="header">
+  <h1>📚 产品 · 产品思维</h1>
+  <div id="search-wrap">
+    <input id="search-box" type="text" placeholder="🔍 搜索书名/概念...">
+    <div id="search-results"></div>
+  </div>
+  <div class="stats">
+    <span id="node-count">0</span> 节点 ·
+    <span id="link-count">0</span> 连接
+  </div>
+  <div class="ctrls">
+    <button class="btn" id="btn-toggle-concept">隐藏概念</button>
+    <button class="btn" id="btn-reset">重置视图</button>
+  </div>
+</div>
+
+<div id="graph"></div>
+<div id="tooltip"></div>
+
+<!-- 右侧详情面板 -->
+<div id="detail-panel">
+  <div id="detail-header">
+    <h2 id="detail-title"></h2>
+    <button id="detail-close" onclick="closeDetail()">✕</button>
+  </div>
+  <div id="detail-body"></div>
+</div>
+
+<script>
+var NODES = [{"id": "创造价值.md", "label": "创造价值", "title": "创造价值", "type": "book", "degree": 8, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "核心概念：产品经理的核心使命是通过专业化的视角和能力，连接客观世界（资源）、过去（历史）与将来（趋势），将一个有价值的“东西”创造出来，从而优化世界。专业化的力量：缺乏专业视角，即使面对资源（如海水中的盐）也无法识别和利用。专业能力是化平凡为神奇、从0到1创造价值的关键。因为缺乏专业化视角（如古代渔民），所以只能“守着资源受穷”，导致国家工业基础薄弱，国民缺乏自信。因为拥有专业化能力并敢于行动（如范旭东、张小龙、雷军），所以能从无到有创造出改变世界的产品，进而推动产业升级、普惠大众、建立自信", "keywords": ["相关笔记", "认知与行动的鸿沟", "缺乏专业化视角", "专业化的力量", "自信源于创造", "方法论提炼", "核心概念", "主要论点"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0205-30 产品连接客观世界、过去与将来"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/创造价值.md"}, {"id": "极致化单品.md", "label": "极致化单品", "title": "极致化单品", "type": "book", "degree": 8, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "核心概念：产品经理的核心使命是通过专业化的视角和能力，连接客观世界（资源）、过去（历史）与将来（趋势），将一个有价值的“东西”创造出来，从而优化世界。专业化的力量：缺乏专业视角，即使面对资源（如海水中的盐）也无法识别和利用。专业能力是化平凡为神奇、从0到1创造价值的关键。因为缺乏专业化视角（如古代渔民），所以只能“守着资源受穷”，导致国家工业基础薄弱，国民缺乏自信。因为拥有专业化能力并敢于行动（如范旭东、张小龙、雷军），所以能从无到有创造出改变世界的产品，进而推动产业升级、普惠大众、建立自信", "keywords": ["相关笔记", "认知与行动的鸿沟", "缺乏专业化视角", "专业化的力量", "自信源于创造", "方法论提炼", "核心概念", "主要论点"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0205-30 产品连接客观世界、过去与将来"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/极致化单品.md"}, {"id": "产品精神.md", "label": "产品精神", "title": "产品精神", "type": "book", "degree": 6, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "核心概念：自我与自律是两种截然不同的思维与行为模式，分别对应着右脑与左脑的思维主导。产品精神的核心更倾向于“自我”，因为它驱动创造力；而管理精神则更倾向于“自律”，因为它驱动控制力与效率。优秀的產品經理通常是“自我”的人，他们感受力强、情绪化、时间观念差、甚至自私，但这些特质正是创造力的源泉。底层逻辑：课程的核心逻辑建立在大脑分工（左脑/右脑） 与行为驱动力（愉悦/恐惧） 两个模型之上。原因（右脑主导 + 愉悦驱动） → 结果（自我特质） → 优势（创造力强，能做出打动人心的产品） → 劣势（难以合作，破坏团队规则）", "keywords": ["相关笔记", "核心概念", "主要论点", "自我", "自律", "脑思维"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0112自我与自律，哪一种更贴近产品精神"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/产品精神.md"}, {"id": "微观体感.md", "label": "微观体感", "title": "微观体感", "type": "book", "degree": 8, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "产品能力的三层结构：判断一个人是否是产品高手，不能只看单一维度，而要从“中观、微观、宏观”三个层次进行综合评估。这三个层次分别对应了套路、体感和战略。中观能力（套路）：指在成熟体系中习得的、可复用的方法论和标准化流程。武术领域：中观套路 = 武术的“招数”（如太极拳的招式）；微观体感 = “听劲”（感知对手力量、意图的触觉）；宏观能力 = “战略”（如“他强由他强，清风拂山岗”的全局观）。艺术领域：中观套路 = 绘画的构图、色彩理论（达芬奇画蛋前的知识）；微观体感 = 对光影、线条、质感的精妙把握（达芬奇画蛋练习的成果）；宏观能力 = 作品的时代精神与艺术风格", "keywords": ["相关笔记", "产品能力的三层结构", "自我诊断", "补齐短板", "若缺中观", "若缺微观", "若缺宏观", "刻意练习"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0202看产品的微观、中观与宏观视角"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/微观体感.md"}, {"id": "愉悦与恐惧驱动.md", "label": "愉悦与恐惧驱动", "title": "愉悦与恐惧驱动", "type": "book", "degree": 6, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "核心概念：自我与自律是两种截然不同的思维与行为模式，分别对应着右脑与左脑的思维主导。产品精神的核心更倾向于“自我”，因为它驱动创造力；而管理精神则更倾向于“自律”，因为它驱动控制力与效率。优秀的產品經理通常是“自我”的人，他们感受力强、情绪化、时间观念差、甚至自私，但这些特质正是创造力的源泉。底层逻辑：课程的核心逻辑建立在大脑分工（左脑/右脑） 与行为驱动力（愉悦/恐惧） 两个模型之上。原因（右脑主导 + 愉悦驱动） → 结果（自我特质） → 优势（创造力强，能做出打动人心的产品） → 劣势（难以合作，破坏团队规则）", "keywords": ["相关笔记", "核心概念", "主要论点", "自我", "自律", "脑思维"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0112自我与自律，哪一种更贴近产品精神"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/愉悦与恐惧驱动.md"}, {"id": "左脑与右脑思维.md", "label": "左脑与右脑思维", "title": "左脑与右脑思维", "type": "book", "degree": 6, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "核心概念：自我与自律是两种截然不同的思维与行为模式，分别对应着右脑与左脑的思维主导。产品精神的核心更倾向于“自我”，因为它驱动创造力；而管理精神则更倾向于“自律”，因为它驱动控制力与效率。优秀的產品經理通常是“自我”的人，他们感受力强、情绪化、时间观念差、甚至自私，但这些特质正是创造力的源泉。底层逻辑：课程的核心逻辑建立在大脑分工（左脑/右脑） 与行为驱动力（愉悦/恐惧） 两个模型之上。原因（右脑主导 + 愉悦驱动） → 结果（自我特质） → 优势（创造力强，能做出打动人心的产品） → 劣势（难以合作，破坏团队规则）", "keywords": ["核心概念", "主要论点", "自我", "自律", "产品精神", "创造力"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0112自我与自律，哪一种更贴近产品精神"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/左脑与右脑思维.md"}, {"id": "左脑思维.md", "label": "左脑思维", "title": "左脑思维", "type": "book", "degree": 6, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "核心概念：自我与自律是两种截然不同的思维与行为模式，分别对应着右脑与左脑的思维主导。产品精神的核心更倾向于“自我”，因为它驱动创造力；而管理精神则更倾向于“自律”，因为它驱动控制力与效率。优秀的產品經理通常是“自我”的人，他们感受力强、情绪化、时间观念差、甚至自私，但这些特质正是创造力的源泉。底层逻辑：课程的核心逻辑建立在大脑分工（左脑/右脑） 与行为驱动力（愉悦/恐惧） 两个模型之上。原因（右脑主导 + 愉悦驱动） → 结果（自我特质） → 优势（创造力强，能做出打动人心的产品） → 劣势（难以合作，破坏团队规则）", "keywords": ["核心概念", "主要论点", "自我", "自律", "产品精神", "创造力"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0112自我与自律，哪一种更贴近产品精神"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/左脑思维.md"}, {"id": "老鼠尾巴.md", "label": "老鼠尾巴", "title": "老鼠尾巴", "type": "book", "degree": 4, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "系统能力： 产品并非孤立的一个“点”，而是由一系列相互关联、协同运作的环节（如战略、运营、技术、客服等）组成的“系统”所产生的结果。苹果树能结出苹果，不是因为它有“苹果点”，而是因为它拥有从土壤、阳光到光合作用的完整系统。服务 vs. 产品： 产品思维是以“我”为中心（我要做一个打孔机），而服务思维是以“用户”为中心（用户需要墙上的一个洞）。确定性： 用户对一个产品产生依赖的根本原因，在于它能持续、稳定地提供预期的结果。系统能力的涌现性： 产品的最终价值（确定性）不是某个单一环节能创造的，而是整个系统（所有环节）协同配合后“涌现”出来的整体特性", "keywords": ["确定性", "确定性", "服务", "一个产品"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0118怎样用"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/老鼠尾巴.md"}, {"id": "用户驱动.md", "label": "用户驱动", "title": "用户驱动", "type": "book", "degree": 8, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "产品能力：一种将信息、资源整合打包，向世界交付价值并获取回报的底层生存能力。产品人：拥有产品能力，并以此为思维和行为模式的人。用户驱动：产品人的唯一信仰和行动准则，即所有决策和行动都围绕满足用户需求展开。从普通人到产品人的过程，是建立个人认知框架、处理信息、建立内心秩序的过程。不确定性对抗逻辑：世界充满不确定性和负面信息，产品能力提供了一套“认知框架”，将混乱的信息秩序化，从而获得掌控感和确定性", "keywords": ["不确定性对抗逻辑", "系统对抗个体逻辑", "可执行的行动步骤", "建立信息处理日志", "与其他领域的联系", "价值创造逻辑", "类似概念对比", "与商业管理"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0108发刊词-产品能力是每个人的底层能力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/用户驱动.md"}, {"id": "产品能力.md", "label": "产品能力", "title": "产品能力", "type": "book", "degree": 8, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "产品能力：一种将信息、资源整合打包，向世界交付价值并获取回报的底层生存能力。产品人：拥有产品能力，并以此为思维和行为模式的人。用户驱动：产品人的唯一信仰和行动准则，即所有决策和行动都围绕满足用户需求展开。从普通人到产品人的过程，是建立个人认知框架、处理信息、建立内心秩序的过程。不确定性对抗逻辑：世界充满不确定性和负面信息，产品能力提供了一套“认知框架”，将混乱的信息秩序化，从而获得掌控感和确定性", "keywords": ["不确定性对抗逻辑", "系统对抗个体逻辑", "可执行的行动步骤", "建立信息处理日志", "与其他领域的联系", "价值创造逻辑", "类似概念对比", "与商业管理"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0108发刊词-产品能力是每个人的底层能力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/产品能力.md"}, {"id": "点线面体.md", "label": "点线面体", "title": "点线面体", "type": "book", "degree": 8, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "产品能力的三层结构：判断一个人是否是产品高手，不能只看单一维度，而要从“中观、微观、宏观”三个层次进行综合评估。这三个层次分别对应了套路、体感和战略。中观能力（套路）：指在成熟体系中习得的、可复用的方法论和标准化流程。武术领域：中观套路 = 武术的“招数”（如太极拳的招式）；微观体感 = “听劲”（感知对手力量、意图的触觉）；宏观能力 = “战略”（如“他强由他强，清风拂山岗”的全局观）。艺术领域：中观套路 = 绘画的构图、色彩理论（达芬奇画蛋前的知识）；微观体感 = 对光影、线条、质感的精妙把握（达芬奇画蛋练习的成果）；宏观能力 = 作品的时代精神与艺术风格", "keywords": ["产品能力的三层结构", "自我诊断", "补齐短板", "若缺中观", "若缺微观", "若缺宏观", "刻意练习", "武术领域"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0202看产品的微观、中观与宏观视角"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/点线面体.md"}, {"id": "宏观能力.md", "label": "宏观能力", "title": "宏观能力", "type": "book", "degree": 8, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "产品能力的三层结构：判断一个人是否是产品高手，不能只看单一维度，而要从“中观、微观、宏观”三个层次进行综合评估。这三个层次分别对应了套路、体感和战略。中观能力（套路）：指在成熟体系中习得的、可复用的方法论和标准化流程。武术领域：中观套路 = 武术的“招数”（如太极拳的招式）；微观体感 = “听劲”（感知对手力量、意图的触觉）；宏观能力 = “战略”（如“他强由他强，清风拂山岗”的全局观）。艺术领域：中观套路 = 绘画的构图、色彩理论（达芬奇画蛋前的知识）；微观体感 = 对光影、线条、质感的精妙把握（达芬奇画蛋练习的成果）；宏观能力 = 作品的时代精神与艺术风格", "keywords": ["产品能力的三层结构", "自我诊断", "补齐短板", "若缺中观", "若缺微观", "若缺宏观", "刻意练习", "武术领域"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0202看产品的微观、中观与宏观视角"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/宏观能力.md"}, {"id": "系统能力.md", "label": "系统能力", "title": "系统能力", "type": "book", "degree": 4, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "系统能力： 产品并非孤立的一个“点”，而是由一系列相互关联、协同运作的环节（如战略、运营、技术、客服等）组成的“系统”所产生的结果。苹果树能结出苹果，不是因为它有“苹果点”，而是因为它拥有从土壤、阳光到光合作用的完整系统。服务 vs. 产品： 产品思维是以“我”为中心（我要做一个打孔机），而服务思维是以“用户”为中心（用户需要墙上的一个洞）。确定性： 用户对一个产品产生依赖的根本原因，在于它能持续、稳定地提供预期的结果。系统能力的涌现性： 产品的最终价值（确定性）不是某个单一环节能创造的，而是整个系统（所有环节）协同配合后“涌现”出来的整体特性", "keywords": ["确定性", "确定性", "服务", "一个产品"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0118怎样用"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/系统能力.md"}, {"id": "中观能力.md", "label": "中观能力", "title": "中观能力", "type": "book", "degree": 8, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "产品能力的三层结构：判断一个人是否是产品高手，不能只看单一维度，而要从“中观、微观、宏观”三个层次进行综合评估。这三个层次分别对应了套路、体感和战略。中观能力（套路）：指在成熟体系中习得的、可复用的方法论和标准化流程。武术领域：中观套路 = 武术的“招数”（如太极拳的招式）；微观体感 = “听劲”（感知对手力量、意图的触觉）；宏观能力 = “战略”（如“他强由他强，清风拂山岗”的全局观）。艺术领域：中观套路 = 绘画的构图、色彩理论（达芬奇画蛋前的知识）；微观体感 = 对光影、线条、质感的精妙把握（达芬奇画蛋练习的成果）；宏观能力 = 作品的时代精神与艺术风格", "keywords": ["产品能力的三层结构", "自我诊断", "补齐短板", "若缺中观", "若缺微观", "若缺宏观", "刻意练习", "武术领域"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0202看产品的微观、中观与宏观视角"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/中观能力.md"}, {"id": "右脑思维.md", "label": "右脑思维", "title": "右脑思维", "type": "book", "degree": 6, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "核心概念：自我与自律是两种截然不同的思维与行为模式，分别对应着右脑与左脑的思维主导。产品精神的核心更倾向于“自我”，因为它驱动创造力；而管理精神则更倾向于“自律”，因为它驱动控制力与效率。优秀的產品經理通常是“自我”的人，他们感受力强、情绪化、时间观念差、甚至自私，但这些特质正是创造力的源泉。底层逻辑：课程的核心逻辑建立在大脑分工（左脑/右脑） 与行为驱动力（愉悦/恐惧） 两个模型之上。原因（右脑主导 + 愉悦驱动） → 结果（自我特质） → 优势（创造力强，能做出打动人心的产品） → 劣势（难以合作，破坏团队规则）", "keywords": ["核心概念", "主要论点", "自我", "自律", "产品精神", "创造力"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0112自我与自律，哪一种更贴近产品精神"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/右脑思维.md"}, {"id": "连接客观世界.md", "label": "连接客观世界", "title": "连接客观世界", "type": "book", "degree": 8, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "核心概念：产品经理的核心使命是通过专业化的视角和能力，连接客观世界（资源）、过去（历史）与将来（趋势），将一个有价值的“东西”创造出来，从而优化世界。专业化的力量：缺乏专业视角，即使面对资源（如海水中的盐）也无法识别和利用。专业能力是化平凡为神奇、从0到1创造价值的关键。因为缺乏专业化视角（如古代渔民），所以只能“守着资源受穷”，导致国家工业基础薄弱，国民缺乏自信。因为拥有专业化能力并敢于行动（如范旭东、张小龙、雷军），所以能从无到有创造出改变世界的产品，进而推动产业升级、普惠大众、建立自信", "keywords": ["认知与行动的鸿沟", "缺乏专业化视角", "专业化的力量", "自信源于创造", "方法论提炼", "核心概念", "主要论点", "底层逻辑"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0205-30 产品连接客观世界、过去与将来"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/连接客观世界.md"}, {"id": "交付价值.md", "label": "交付价值", "title": "交付价值", "type": "book", "degree": 8, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "产品能力：一种将信息、资源整合打包，向世界交付价值并获取回报的底层生存能力。产品人：拥有产品能力，并以此为思维和行为模式的人。用户驱动：产品人的唯一信仰和行动准则，即所有决策和行动都围绕满足用户需求展开。从普通人到产品人的过程，是建立个人认知框架、处理信息、建立内心秩序的过程。不确定性对抗逻辑：世界充满不确定性和负面信息，产品能力提供了一套“认知框架”，将混乱的信息秩序化，从而获得掌控感和确定性", "keywords": ["不确定性对抗逻辑", "系统对抗个体逻辑", "可执行的行动步骤", "建立信息处理日志", "与其他领域的联系", "价值创造逻辑", "类似概念对比", "与商业管理"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0108发刊词-产品能力是每个人的底层能力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/交付价值.md"}, {"id": "自我.md", "label": "自我", "title": "自我", "type": "book", "degree": 6, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "核心概念：自我与自律是两种截然不同的思维与行为模式，分别对应着右脑与左脑的思维主导。产品精神的核心更倾向于“自我”，因为它驱动创造力；而管理精神则更倾向于“自律”，因为它驱动控制力与效率。优秀的產品經理通常是“自我”的人，他们感受力强、情绪化、时间观念差、甚至自私，但这些特质正是创造力的源泉。底层逻辑：课程的核心逻辑建立在大脑分工（左脑/右脑） 与行为驱动力（愉悦/恐惧） 两个模型之上。原因（右脑主导 + 愉悦驱动） → 结果（自我特质） → 优势（创造力强，能做出打动人心的产品） → 劣势（难以合作，破坏团队规则）", "keywords": ["核心概念", "主要论点", "自我", "自律", "产品精神", "创造力"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0112自我与自律，哪一种更贴近产品精神"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/自我.md"}, {"id": "自我与自律.md", "label": "自我与自律", "title": "自我与自律", "type": "book", "degree": 6, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "核心概念：自我与自律是两种截然不同的思维与行为模式，分别对应着右脑与左脑的思维主导。产品精神的核心更倾向于“自我”，因为它驱动创造力；而管理精神则更倾向于“自律”，因为它驱动控制力与效率。优秀的產品經理通常是“自我”的人，他们感受力强、情绪化、时间观念差、甚至自私，但这些特质正是创造力的源泉。底层逻辑：课程的核心逻辑建立在大脑分工（左脑/右脑） 与行为驱动力（愉悦/恐惧） 两个模型之上。行为驱动力模型解释了“自我”与“自律”的根源：愉悦感驱动的人，做事的出发点是“我喜不喜欢”，因此会不断追求自我感受的满足，显得“自我”；恐惧感驱动的人，做事的出发点是“什么是对的/安全的”，因此会严格遵守规则以", "keywords": ["核心概念", "主要论点", "自我", "自律", "产品精神", "我与自"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0112自我与自律，哪一种更贴近产品精神"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/自我与自律.md"}, {"id": "认知与行动.md", "label": "认知与行动", "title": "认知与行动", "type": "book", "degree": 8, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "核心概念：产品经理的核心使命是通过专业化的视角和能力，连接客观世界（资源）、过去（历史）与将来（趋势），将一个有价值的“东西”创造出来，从而优化世界。专业化的力量：缺乏专业视角，即使面对资源（如海水中的盐）也无法识别和利用。专业能力是化平凡为神奇、从0到1创造价值的关键。因为拥有专业化能力并敢于行动（如范旭东、张小龙、雷军），所以能从无到有创造出改变世界的产品，进而推动产业升级、普惠大众、建立自信。产品经理的“需求分析”如同科学发现，而“产品实现”则如同工程建造", "keywords": ["认知与行动的鸿沟", "缺乏专业化视角", "专业化的力量", "自信源于创造", "方法论提炼", "核心概念", "主要论点", "底层逻辑"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0205-30 产品连接客观世界、过去与将来"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/认知与行动.md"}, {"id": "左右脑思维.md", "label": "左右脑思维", "title": "左右脑思维", "type": "book", "degree": 6, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "核心概念：自我与自律是两种截然不同的思维与行为模式，分别对应着右脑与左脑的思维主导。产品精神的核心更倾向于“自我”，因为它驱动创造力；而管理精神则更倾向于“自律”，因为它驱动控制力与效率。优秀的產品經理通常是“自我”的人，他们感受力强、情绪化、时间观念差、甚至自私，但这些特质正是创造力的源泉。底层逻辑：课程的核心逻辑建立在大脑分工（左脑/右脑） 与行为驱动力（愉悦/恐惧） 两个模型之上。原因（右脑主导 + 愉悦驱动） → 结果（自我特质） → 优势（创造力强，能做出打动人心的产品） → 劣势（难以合作，破坏团队规则）", "keywords": ["核心概念", "主要论点", "自我", "自律", "产品精神", "创造力"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0112自我与自律，哪一种更贴近产品精神"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/左右脑思维.md"}, {"id": "愉悦感与恐惧感驱动.md", "label": "愉悦感与恐惧感驱动", "title": "愉悦感与恐惧感驱动", "type": "book", "degree": 6, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "核心概念：自我与自律是两种截然不同的思维与行为模式，分别对应着右脑与左脑的思维主导。产品精神的核心更倾向于“自我”，因为它驱动创造力；而管理精神则更倾向于“自律”，因为它驱动控制力与效率。优秀的產品經理通常是“自我”的人，他们感受力强、情绪化、时间观念差、甚至自私，但这些特质正是创造力的源泉。一个人是“自我”还是“自律”，根本上是由驱动其行为的底层情绪决定的：愉悦感驱动自我，恐惧感。行为驱动力模型解释了“自我”与“自律”的根源：愉悦感驱动的人，做事的出发点是“我喜不喜欢”，因此会不断追求自我感受的满足，显得“自我”；恐惧感驱动的人，做事的出发点是“什么是对的/安全的”，因此会严格遵守规则以避免", "keywords": ["核心概念", "主要论点", "自我", "自律", "产品精神", "感驱动"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0112自我与自律，哪一种更贴近产品精神"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/愉悦感与恐惧感驱动.md"}, {"id": "认知框架.md", "label": "认知框架", "title": "认知框架", "type": "book", "degree": 8, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "产品能力：一种将信息、资源整合打包，向世界交付价值并获取回报的底层生存能力。产品人：拥有产品能力，并以此为思维和行为模式的人。用户驱动：产品人的唯一信仰和行动准则，即所有决策和行动都围绕满足用户需求展开。从普通人到产品人的过程，是建立个人认知框架、处理信息、建立内心秩序的过程。不确定性对抗逻辑：世界充满不确定性和负面信息，产品能力提供了一套“认知框架”，将混乱的信息秩序化，从而获得掌控感和确定性", "keywords": ["不确定性对抗逻辑", "系统对抗个体逻辑", "可执行的行动步骤", "建立信息处理日志", "与其他领域的联系", "价值创造逻辑", "类似概念对比", "与商业管理"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0108发刊词-产品能力是每个人的底层能力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/认知框架.md"}, {"id": "服务思维.md", "label": "服务思维", "title": "服务思维", "type": "book", "degree": 4, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "系统能力： 产品并非孤立的一个“点”，而是由一系列相互关联、协同运作的环节（如战略、运营、技术、客服等）组成的“系统”所产生的结果。苹果树能结出苹果，不是因为它有“苹果点”，而是因为它拥有从土壤、阳光到光合作用的完整系统。服务 vs. 产品： 产品思维是以“我”为中心（我要做一个打孔机），而服务思维是以“用户”为中心（用户需要墙上的一个洞）。确定性： 用户对一个产品产生依赖的根本原因，在于它能持续、稳定地提供预期的结果。因（追求确定性） -> 果（用户依赖）： 为什么我们会依赖一个产品", "keywords": ["确定性", "确定性", "服务", "一个产品"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0118怎样用"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/服务思维.md"}, {"id": "自律.md", "label": "自律", "title": "自律", "type": "book", "degree": 6, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "核心概念：自我与自律是两种截然不同的思维与行为模式，分别对应着右脑与左脑的思维主导。产品精神的核心更倾向于“自我”，因为它驱动创造力；而管理精神则更倾向于“自律”，因为它驱动控制力与效率。优秀的產品經理通常是“自我”的人，他们感受力强、情绪化、时间观念差、甚至自私，但这些特质正是创造力的源泉。底层逻辑：课程的核心逻辑建立在大脑分工（左脑/右脑） 与行为驱动力（愉悦/恐惧） 两个模型之上。原因（右脑主导 + 愉悦驱动） → 结果（自我特质） → 优势（创造力强，能做出打动人心的产品） → 劣势（难以合作，破坏团队规则）", "keywords": ["核心概念", "主要论点", "自我", "自律", "产品精神", "创造力"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0112自我与自律，哪一种更贴近产品精神"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/自律.md"}, {"id": "专业化视角.md", "label": "专业化视角", "title": "专业化视角", "type": "book", "degree": 8, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "核心概念：产品经理的核心使命是通过专业化的视角和能力，连接客观世界（资源）、过去（历史）与将来（趋势），将一个有价值的“东西”创造出来，从而优化世界。专业化的力量：缺乏专业视角，即使面对资源（如海水中的盐）也无法识别和利用。专业能力是化平凡为神奇、从0到1创造价值的关键。因为缺乏专业化视角（如古代渔民），所以只能“守着资源受穷”，导致国家工业基础薄弱，国民缺乏自信。产品经理的“需求分析”如同科学发现，而“产品实现”则如同工程建造", "keywords": ["认知与行动的鸿沟", "缺乏专业化视角", "专业化的力量", "自信源于创造", "方法论提炼", "核心概念", "主要论点", "底层逻辑"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0205-30 产品连接客观世界、过去与将来"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/专业化视角.md"}, {"id": "显性特性.md", "label": "显性特性", "title": "显性特性", "type": "book", "degree": 4, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "系统能力： 产品并非孤立的一个“点”，而是由一系列相互关联、协同运作的环节（如战略、运营、技术、客服等）组成的“系统”所产生的结果。苹果树能结出苹果，不是因为它有“苹果点”，而是因为它拥有从土壤、阳光到光合作用的完整系统。服务 vs. 产品： 产品思维是以“我”为中心（我要做一个打孔机），而服务思维是以“用户”为中心（用户需要墙上的一个洞）。确定性： 用户对一个产品产生依赖的根本原因，在于它能持续、稳定地提供预期的结果。系统能力的涌现性： 产品的最终价值（确定性）不是某个单一环节能创造的，而是整个系统（所有环节）协同配合后“涌现”出来的整体特性", "keywords": ["确定性", "确定性", "服务", "一个产品"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0118怎样用"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/显性特性.md"}, {"id": "创造力与控制力.md", "label": "创造力与控制力", "title": "创造力与控制力", "type": "book", "degree": 6, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "核心概念：自我与自律是两种截然不同的思维与行为模式，分别对应着右脑与左脑的思维主导。产品精神的核心更倾向于“自我”，因为它驱动创造力；而管理精神则更倾向于“自律”，因为它驱动控制力与效率。优秀的產品經理通常是“自我”的人，他们感受力强、情绪化、时间观念差、甚至自私，但这些特质正是创造力的源泉。底层逻辑：课程的核心逻辑建立在大脑分工（左脑/右脑） 与行为驱动力（愉悦/恐惧） 两个模型之上。原因（右脑主导 + 愉悦驱动） → 结果（自我特质） → 优势（创造力强，能做出打动人心的产品） → 劣势（难以合作，破坏团队规则）", "keywords": ["核心概念", "主要论点", "自我", "自律", "产品精神", "创造力"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0112自我与自律，哪一种更贴近产品精神"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/创造力与控制力.md"}, {"id": "抗挫力.md", "label": "抗挫力", "title": "抗挫力", "type": "book", "degree": 8, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "产品能力：一种将信息、资源整合打包，向世界交付价值并获取回报的底层生存能力。产品人：拥有产品能力，并以此为思维和行为模式的人。用户驱动：产品人的唯一信仰和行动准则，即所有决策和行动都围绕满足用户需求展开。产品能力是每个人都应该具备的底层能力，它能带来脚踏实地的自信和生存底气。不确定性对抗逻辑：世界充满不确定性和负面信息，产品能力提供了一套“认知框架”，将混乱的信息秩序化，从而获得掌控感和确定性", "keywords": ["不确定性对抗逻辑", "系统对抗个体逻辑", "可执行的行动步骤", "建立信息处理日志", "与其他领域的联系", "价值创造逻辑", "类似概念对比", "与商业管理"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0108发刊词-产品能力是每个人的底层能力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/抗挫力.md"}, {"id": "确定性.md", "label": "确定性", "title": "确定性", "type": "book", "degree": 4, "cluster": "产品思维", "domain": "产品", "sub_domain": "产品思维", "summary": "系统能力： 产品并非孤立的一个“点”，而是由一系列相互关联、协同运作的环节（如战略、运营、技术、客服等）组成的“系统”所产生的结果。苹果树能结出苹果，不是因为它有“苹果点”，而是因为它拥有从土壤、阳光到光合作用的完整系统。服务 vs. 产品： 产品思维是以“我”为中心（我要做一个打孔机），而服务思维是以“用户”为中心（用户需要墙上的一个洞）。确定性： 用户对一个产品产生依赖的根本原因，在于它能持续、稳定地提供预期的结果。系统能力的涌现性： 产品的最终价值（确定性）不是某个单一环节能创造的，而是整个系统（所有环节）协同配合后“涌现”出来的整体特性", "keywords": ["确定性", "确定性", "服务", "一个产品"], "tags": ["domain/产品", "sub_domain/产品思维", "type/concept", "source/ln0118怎样用"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/产品/产品思维/确定性.md"}];
+var LINKS = [{"source": "创造价值.md", "target": "极致化单品.md", "value": 8, "shared": ["主要论点", "认知与行动的鸿沟", "核心概念", "自信源于创造", "相关笔记"]}, {"source": "创造价值.md", "target": "产品精神.md", "value": 3, "shared": ["核心概念", "主要论点", "相关笔记"]}, {"source": "创造价值.md", "target": "愉悦与恐惧驱动.md", "value": 3, "shared": ["核心概念", "主要论点", "相关笔记"]}, {"source": "创造价值.md", "target": "左脑与右脑思维.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "创造价值.md", "target": "左脑思维.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "创造价值.md", "target": "右脑思维.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "创造价值.md", "target": "连接客观世界.md", "value": 7, "shared": ["主要论点", "认知与行动的鸿沟", "核心概念", "自信源于创造", "专业化的力量"]}, {"source": "创造价值.md", "target": "自我.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "创造价值.md", "target": "自我与自律.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "创造价值.md", "target": "认知与行动.md", "value": 7, "shared": ["主要论点", "认知与行动的鸿沟", "核心概念", "自信源于创造", "专业化的力量"]}, {"source": "创造价值.md", "target": "左右脑思维.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "创造价值.md", "target": "愉悦感与恐惧感驱动.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "创造价值.md", "target": "自律.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "创造价值.md", "target": "专业化视角.md", "value": 7, "shared": ["主要论点", "认知与行动的鸿沟", "核心概念", "自信源于创造", "专业化的力量"]}, {"source": "创造价值.md", "target": "创造力与控制力.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "极致化单品.md", "target": "产品精神.md", "value": 3, "shared": ["核心概念", "主要论点", "相关笔记"]}, {"source": "极致化单品.md", "target": "愉悦与恐惧驱动.md", "value": 3, "shared": ["核心概念", "主要论点", "相关笔记"]}, {"source": "极致化单品.md", "target": "左脑与右脑思维.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "极致化单品.md", "target": "左脑思维.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "极致化单品.md", "target": "右脑思维.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "极致化单品.md", "target": "连接客观世界.md", "value": 7, "shared": ["主要论点", "认知与行动的鸿沟", "核心概念", "自信源于创造", "专业化的力量"]}, {"source": "极致化单品.md", "target": "自我.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "极致化单品.md", "target": "自我与自律.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "极致化单品.md", "target": "认知与行动.md", "value": 7, "shared": ["主要论点", "认知与行动的鸿沟", "核心概念", "自信源于创造", "专业化的力量"]}, {"source": "极致化单品.md", "target": "左右脑思维.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "极致化单品.md", "target": "愉悦感与恐惧感驱动.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "极致化单品.md", "target": "自律.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "极致化单品.md", "target": "专业化视角.md", "value": 7, "shared": ["主要论点", "认知与行动的鸿沟", "核心概念", "自信源于创造", "专业化的力量"]}, {"source": "极致化单品.md", "target": "创造力与控制力.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "产品精神.md", "target": "愉悦与恐惧驱动.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "相关笔记", "自我"]}, {"source": "产品精神.md", "target": "左脑与右脑思维.md", "value": 4, "shared": ["核心概念", "自律", "主要论点", "自我"]}, {"source": "产品精神.md", "target": "左脑思维.md", "value": 4, "shared": ["核心概念", "自律", "主要论点", "自我"]}, {"source": "产品精神.md", "target": "右脑思维.md", "value": 4, "shared": ["核心概念", "自律", "主要论点", "自我"]}, {"source": "产品精神.md", "target": "连接客观世界.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "产品精神.md", "target": "自我.md", "value": 4, "shared": ["核心概念", "自律", "主要论点", "自我"]}, {"source": "产品精神.md", "target": "自我与自律.md", "value": 4, "shared": ["核心概念", "自律", "主要论点", "自我"]}, {"source": "产品精神.md", "target": "认知与行动.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "产品精神.md", "target": "左右脑思维.md", "value": 4, "shared": ["核心概念", "自律", "主要论点", "自我"]}, {"source": "产品精神.md", "target": "愉悦感与恐惧感驱动.md", "value": 4, "shared": ["核心概念", "自律", "主要论点", "自我"]}, {"source": "产品精神.md", "target": "自律.md", "value": 4, "shared": ["核心概念", "自律", "主要论点", "自我"]}, {"source": "产品精神.md", "target": "专业化视角.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "产品精神.md", "target": "创造力与控制力.md", "value": 4, "shared": ["核心概念", "自律", "主要论点", "自我"]}, {"source": "微观体感.md", "target": "点线面体.md", "value": 7, "shared": ["若缺宏观", "若缺中观", "若缺微观", "产品能力的三层结构", "自我诊断"]}, {"source": "微观体感.md", "target": "宏观能力.md", "value": 7, "shared": ["若缺宏观", "若缺中观", "若缺微观", "产品能力的三层结构", "自我诊断"]}, {"source": "微观体感.md", "target": "中观能力.md", "value": 7, "shared": ["若缺宏观", "若缺中观", "若缺微观", "产品能力的三层结构", "自我诊断"]}, {"source": "愉悦与恐惧驱动.md", "target": "左脑与右脑思维.md", "value": 4, "shared": ["核心概念", "自律", "主要论点", "自我"]}, {"source": "愉悦与恐惧驱动.md", "target": "左脑思维.md", "value": 4, "shared": ["核心概念", "自律", "主要论点", "自我"]}, {"source": "愉悦与恐惧驱动.md", "target": "右脑思维.md", "value": 4, "shared": ["核心概念", "自律", "主要论点", "自我"]}, {"source": "愉悦与恐惧驱动.md", "target": "连接客观世界.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "愉悦与恐惧驱动.md", "target": "自我.md", "value": 4, "shared": ["核心概念", "自律", "主要论点", "自我"]}, {"source": "愉悦与恐惧驱动.md", "target": "自我与自律.md", "value": 4, "shared": ["核心概念", "自律", "主要论点", "自我"]}, {"source": "愉悦与恐惧驱动.md", "target": "认知与行动.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "愉悦与恐惧驱动.md", "target": "左右脑思维.md", "value": 4, "shared": ["核心概念", "自律", "主要论点", "自我"]}, {"source": "愉悦与恐惧驱动.md", "target": "愉悦感与恐惧感驱动.md", "value": 4, "shared": ["核心概念", "自律", "主要论点", "自我"]}, {"source": "愉悦与恐惧驱动.md", "target": "自律.md", "value": 4, "shared": ["核心概念", "自律", "主要论点", "自我"]}, {"source": "愉悦与恐惧驱动.md", "target": "专业化视角.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "愉悦与恐惧驱动.md", "target": "创造力与控制力.md", "value": 4, "shared": ["核心概念", "自律", "主要论点", "自我"]}, {"source": "左脑与右脑思维.md", "target": "左脑思维.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "左脑与右脑思维.md", "target": "右脑思维.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "左脑与右脑思维.md", "target": "连接客观世界.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "左脑与右脑思维.md", "target": "自我.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "左脑与右脑思维.md", "target": "自我与自律.md", "value": 5, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "左脑与右脑思维.md", "target": "认知与行动.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "左脑与右脑思维.md", "target": "左右脑思维.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "左脑与右脑思维.md", "target": "愉悦感与恐惧感驱动.md", "value": 5, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "左脑与右脑思维.md", "target": "自律.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "左脑与右脑思维.md", "target": "专业化视角.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "左脑与右脑思维.md", "target": "创造力与控制力.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "左脑思维.md", "target": "右脑思维.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "左脑思维.md", "target": "连接客观世界.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "左脑思维.md", "target": "自我.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "左脑思维.md", "target": "自我与自律.md", "value": 5, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "左脑思维.md", "target": "认知与行动.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "左脑思维.md", "target": "左右脑思维.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "左脑思维.md", "target": "愉悦感与恐惧感驱动.md", "value": 5, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "左脑思维.md", "target": "自律.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "左脑思维.md", "target": "专业化视角.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "左脑思维.md", "target": "创造力与控制力.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "老鼠尾巴.md", "target": "系统能力.md", "value": 3, "shared": ["服务", "确定性", "一个产品"]}, {"source": "老鼠尾巴.md", "target": "服务思维.md", "value": 3, "shared": ["服务", "确定性", "一个产品"]}, {"source": "老鼠尾巴.md", "target": "显性特性.md", "value": 3, "shared": ["服务", "确定性", "一个产品"]}, {"source": "老鼠尾巴.md", "target": "确定性.md", "value": 3, "shared": ["服务", "确定性", "一个产品"]}, {"source": "用户驱动.md", "target": "产品能力.md", "value": 8, "shared": ["价值创造逻辑", "不确定性对抗逻辑", "系统对抗个体逻辑", "建立信息处理日志", "可执行的行动步骤"]}, {"source": "用户驱动.md", "target": "交付价值.md", "value": 8, "shared": ["价值创造逻辑", "不确定性对抗逻辑", "系统对抗个体逻辑", "建立信息处理日志", "可执行的行动步骤"]}, {"source": "用户驱动.md", "target": "认知框架.md", "value": 8, "shared": ["价值创造逻辑", "不确定性对抗逻辑", "系统对抗个体逻辑", "建立信息处理日志", "可执行的行动步骤"]}, {"source": "用户驱动.md", "target": "抗挫力.md", "value": 8, "shared": ["价值创造逻辑", "不确定性对抗逻辑", "系统对抗个体逻辑", "建立信息处理日志", "可执行的行动步骤"]}, {"source": "产品能力.md", "target": "交付价值.md", "value": 8, "shared": ["价值创造逻辑", "不确定性对抗逻辑", "系统对抗个体逻辑", "建立信息处理日志", "可执行的行动步骤"]}, {"source": "产品能力.md", "target": "认知框架.md", "value": 8, "shared": ["价值创造逻辑", "不确定性对抗逻辑", "系统对抗个体逻辑", "建立信息处理日志", "可执行的行动步骤"]}, {"source": "产品能力.md", "target": "抗挫力.md", "value": 8, "shared": ["价值创造逻辑", "不确定性对抗逻辑", "系统对抗个体逻辑", "建立信息处理日志", "可执行的行动步骤"]}, {"source": "点线面体.md", "target": "宏观能力.md", "value": 8, "shared": ["若缺宏观", "若缺中观", "若缺微观", "产品能力的三层结构", "自我诊断"]}, {"source": "点线面体.md", "target": "中观能力.md", "value": 8, "shared": ["若缺宏观", "若缺中观", "若缺微观", "产品能力的三层结构", "自我诊断"]}, {"source": "宏观能力.md", "target": "中观能力.md", "value": 8, "shared": ["若缺宏观", "若缺中观", "若缺微观", "产品能力的三层结构", "自我诊断"]}, {"source": "系统能力.md", "target": "服务思维.md", "value": 3, "shared": ["服务", "确定性", "一个产品"]}, {"source": "系统能力.md", "target": "显性特性.md", "value": 3, "shared": ["服务", "确定性", "一个产品"]}, {"source": "系统能力.md", "target": "确定性.md", "value": 3, "shared": ["服务", "确定性", "一个产品"]}, {"source": "右脑思维.md", "target": "连接客观世界.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "右脑思维.md", "target": "自我.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "右脑思维.md", "target": "自我与自律.md", "value": 5, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "右脑思维.md", "target": "认知与行动.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "右脑思维.md", "target": "左右脑思维.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "右脑思维.md", "target": "愉悦感与恐惧感驱动.md", "value": 5, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "右脑思维.md", "target": "自律.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "右脑思维.md", "target": "专业化视角.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "右脑思维.md", "target": "创造力与控制力.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "连接客观世界.md", "target": "自我.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "连接客观世界.md", "target": "自我与自律.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "连接客观世界.md", "target": "认知与行动.md", "value": 8, "shared": ["主要论点", "认知与行动的鸿沟", "核心概念", "自信源于创造", "底层逻辑"]}, {"source": "连接客观世界.md", "target": "左右脑思维.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "连接客观世界.md", "target": "愉悦感与恐惧感驱动.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "连接客观世界.md", "target": "自律.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "连接客观世界.md", "target": "专业化视角.md", "value": 8, "shared": ["主要论点", "认知与行动的鸿沟", "核心概念", "自信源于创造", "底层逻辑"]}, {"source": "连接客观世界.md", "target": "创造力与控制力.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "交付价值.md", "target": "认知框架.md", "value": 8, "shared": ["价值创造逻辑", "不确定性对抗逻辑", "系统对抗个体逻辑", "建立信息处理日志", "可执行的行动步骤"]}, {"source": "交付价值.md", "target": "抗挫力.md", "value": 8, "shared": ["价值创造逻辑", "不确定性对抗逻辑", "系统对抗个体逻辑", "建立信息处理日志", "可执行的行动步骤"]}, {"source": "自我.md", "target": "自我与自律.md", "value": 5, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "自我.md", "target": "认知与行动.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "自我.md", "target": "左右脑思维.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "自我.md", "target": "愉悦感与恐惧感驱动.md", "value": 5, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "自我.md", "target": "自律.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "自我.md", "target": "专业化视角.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "自我.md", "target": "创造力与控制力.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "自我与自律.md", "target": "认知与行动.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "自我与自律.md", "target": "左右脑思维.md", "value": 5, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "自我与自律.md", "target": "愉悦感与恐惧感驱动.md", "value": 5, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "自我与自律.md", "target": "自律.md", "value": 5, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "自我与自律.md", "target": "专业化视角.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "自我与自律.md", "target": "创造力与控制力.md", "value": 5, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "认知与行动.md", "target": "左右脑思维.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "认知与行动.md", "target": "愉悦感与恐惧感驱动.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "认知与行动.md", "target": "自律.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "认知与行动.md", "target": "专业化视角.md", "value": 8, "shared": ["主要论点", "认知与行动的鸿沟", "核心概念", "自信源于创造", "底层逻辑"]}, {"source": "认知与行动.md", "target": "创造力与控制力.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "左右脑思维.md", "target": "愉悦感与恐惧感驱动.md", "value": 5, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "左右脑思维.md", "target": "自律.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "左右脑思维.md", "target": "专业化视角.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "左右脑思维.md", "target": "创造力与控制力.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "愉悦感与恐惧感驱动.md", "target": "自律.md", "value": 5, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "愉悦感与恐惧感驱动.md", "target": "专业化视角.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "愉悦感与恐惧感驱动.md", "target": "创造力与控制力.md", "value": 5, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "认知框架.md", "target": "抗挫力.md", "value": 8, "shared": ["价值创造逻辑", "不确定性对抗逻辑", "系统对抗个体逻辑", "建立信息处理日志", "可执行的行动步骤"]}, {"source": "服务思维.md", "target": "显性特性.md", "value": 3, "shared": ["服务", "确定性", "一个产品"]}, {"source": "服务思维.md", "target": "确定性.md", "value": 3, "shared": ["服务", "确定性", "一个产品"]}, {"source": "自律.md", "target": "专业化视角.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "自律.md", "target": "创造力与控制力.md", "value": 6, "shared": ["自律", "主要论点", "核心概念", "产品精神", "自我"]}, {"source": "专业化视角.md", "target": "创造力与控制力.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "显性特性.md", "target": "确定性.md", "value": 3, "shared": ["服务", "确定性", "一个产品"]}];
+var CLUSTER_COLORS = {"产品思维": "#a855f7"};
+var SEARCH_DATA = [{"id": "创造价值.md", "label": "创造价值"}, {"id": "极致化单品.md", "label": "极致化单品"}, {"id": "产品精神.md", "label": "产品精神"}, {"id": "微观体感.md", "label": "微观体感"}, {"id": "愉悦与恐惧驱动.md", "label": "愉悦与恐惧驱动"}, {"id": "左脑与右脑思维.md", "label": "左脑与右脑思维"}, {"id": "左脑思维.md", "label": "左脑思维"}, {"id": "老鼠尾巴.md", "label": "老鼠尾巴"}, {"id": "用户驱动.md", "label": "用户驱动"}, {"id": "产品能力.md", "label": "产品能力"}, {"id": "点线面体.md", "label": "点线面体"}, {"id": "宏观能力.md", "label": "宏观能力"}, {"id": "系统能力.md", "label": "系统能力"}, {"id": "中观能力.md", "label": "中观能力"}, {"id": "右脑思维.md", "label": "右脑思维"}, {"id": "连接客观世界.md", "label": "连接客观世界"}, {"id": "交付价值.md", "label": "交付价值"}, {"id": "自我.md", "label": "自我"}, {"id": "自我与自律.md", "label": "自我与自律"}, {"id": "认知与行动.md", "label": "认知与行动"}, {"id": "左右脑思维.md", "label": "左右脑思维"}, {"id": "愉悦感与恐惧感驱动.md", "label": "愉悦感与恐惧感驱动"}, {"id": "认知框架.md", "label": "认知框架"}, {"id": "服务思维.md", "label": "服务思维"}, {"id": "自律.md", "label": "自律"}, {"id": "专业化视角.md", "label": "专业化视角"}, {"id": "显性特性.md", "label": "显性特性"}, {"id": "创造力与控制力.md", "label": "创造力与控制力"}, {"id": "抗挫力.md", "label": "抗挫力"}, {"id": "确定性.md", "label": "确定性"}];
+var CONCEPT_SEARCH = [];
+
+
+/* ---- 搜索 ---- */
+var searchBox = document.getElementById("search-box");
+var searchResults = document.getElementById("search-results");
+
+searchBox.addEventListener("input", function(){
+  var q = this.value.trim().toLowerCase();
+  if(!q) { searchResults.style.display="none"; return; }
+  var combined = SEARCH_DATA.concat(CONCEPT_SEARCH.map(function(c){ return {id:c,label:c,type:"concept"}; }));
+  var matches = combined.filter(function(d){ return d.label.toLowerCase().indexOf(q)>-1; }).slice(0,12);
+  if(!matches.length) { searchResults.style.display="none"; return; }
+  searchResults.innerHTML = matches.map(function(d){
+    return '<div class="sri" data-id="'+d.id+'">'+d.label+'</div>';
+  }).join("");
+  searchResults.style.display="block";
+});
+
+searchResults.addEventListener("click", function(e){
+  var el = e.target.closest(".sri");
+  if(!el) return;
+  highlightNode(el.getAttribute("data-id"));
+  searchResults.style.display="none";
+  searchBox.value="";
+});
+
+function highlightNode(id){
+  svg.selectAll(".node").classed("highlight", function(d){ return d.id===id; });
+  svg.selectAll(".link").classed("highlight", function(d){
+    return d.source.id===id || d.target.id===id;
+  });
+  var nd = nodeMap.get(id);
+  if(!nd) return;
+  var t = d3.zoomTransform(svg.node());
+  var x = -nd.x*t.k + width/2;
+  var y = -nd.y*t.k + height/2;
+  svg.transition().duration(600).call(zoom.transform, d3.zoomIdentity.translate(x,y).scale(t.k));
+}
+
+/* ---- 详情面板 ---- */
+function showDetail(d){
+  var panel = document.getElementById("detail-panel");
+  var title = document.getElementById("detail-title");
+  var body  = document.getElementById("detail-body");
+
+  title.textContent = (d.title || d.label || d.id || "").replace(/\.md$/, "");
+
+  var html = "";
+
+  /* 元信息 */
+  html += '<div class="section"><div class="meta-row"><span class="meta-label">类型</span><span>' + (d.type==="concept" ? "💡 概念" : "📖 笔记") + '</span></div>';
+  if(d.domain)   html += '<div class="meta-row"><span class="meta-label">领域</span><span>' + d.domain + '</span></div>';
+  if(d.cluster) html += '<div class="meta-row"><span class="meta-label">聚类</span><span>' + d.cluster + '</span></div>';
+  if(d.degree !== undefined) html += '<div class="meta-row"><span class="meta-label">连通度</span><span>' + d.degree + '</span></div>';
+  html += '</div>';
+
+  /* 摘要 */
+  if(d.summary){
+    html += '<div class="section"><div class="section-title">📝 摘要</div><div class="summary">' + escapeHtml(d.summary.slice(0,500)) + (d.summary.length>500 ? "..." : "") + '</div></div>';
+  }
+
+  /* 关键词 */
+  if(d.keywords && d.keywords.length){
+    html += '<div class="section"><div class="section-title">🔑 关键词</div>';
+    d.keywords.forEach(function(kw){ html += '<span class="keyword">' + escapeHtml(kw) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 标签 */
+  if(d.tags && d.tags.length){
+    html += '<div class="section"><div class="section-title">🏷️ 标签</div>';
+    d.tags.forEach(function(tg){ html += '<span class="tag">' + escapeHtml(tg) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 打开原文件：用 Obsidian URI 协议，避免浏览器 file:// 限制 */
+  if(d.path){
+    var obsidianUrl = "obsidian://open?path=" + encodeURIComponent(d.path);
+    html += '<div class="section"><a class="open-link" href="' + obsidianUrl + '">📂 在 Obsidian 中打开</a></div>';
+  }
+
+  body.innerHTML = html;
+  panel.classList.add("open");
+}
+
+function closeDetail(){
+  document.getElementById("detail-panel").classList.remove("open");
+}
+
+function escapeHtml(s){
+  if(!s) return "";
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ---- D3 力导向图 ---- */
+var width  = window.innerWidth;
+var height = window.innerHeight - 48;
+var svg = d3.select("#graph").append("svg").attr("width",width).attr("height",height);
+var g = svg.append("g");
+var zoom = d3.zoom().scaleExtent([0.05,5]).on("zoom", function(e){ g.attr("transform", e.transform); });
+svg.call(zoom);
+
+var simulation = d3.forceSimulation(NODES)
+  .force("link",    d3.forceLink(LINKS).id(function(d){ return d.id; }).distance(90))
+  .force("charge",  d3.forceManyBody().strength(-220))
+  .force("center",  d3.forceCenter(width/2, height/2))
+  .force("collision", d3.forceCollide(30))
+  .force("x",       d3.forceX(width/2).strength(0.06))
+  .force("y",       d3.forceY(height/2).strength(0.06));
+
+var link = g.append("g").attr("class","links").selectAll("line")
+  .data(LINKS).join("line")
+  .attr("class", function(d){ return "link" + ((d.type==="book-book") ? " link-book" : ""); });
+
+var node = g.append("g").attr("class","nodes").selectAll("g")
+  .data(NODES).join("g")
+  .attr("class","node")
+  .attr("data-id", function(d){ return d.id; })
+  .call(d3.drag()
+    .on("start", function(event,d){ if(!event.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+    .on("drag",  function(event,d){ d.fx=event.x; d.fy=event.y; })
+    .on("end",   function(event,d){ if(!event.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+node.append("circle")
+  .attr("r", function(d){ return d.type==="book" ? 5+Math.sqrt(d.degree||1)*1.5 : 7; })
+  .attr("fill", function(d){ return d.type==="book" ? (CLUSTER_COLORS[d.cluster]||"#94a3b8") : "#a855f7"; })
+  .attr("stroke", function(d){ return d.type==="book" ? "#0f172a" : "#d97706"; })
+  .on("mouseover", function(event,d){
+    var html = d.type==="book"
+      ? "<strong>📖 "+d.label+"</strong><br>连通度:"+d.degree+"<br>聚类:"+(d.cluster||"未分类")
+      : "<strong>💡 "+d.concept+"</strong><br>关联:"+d.book_count+" 篇";
+    d3.select("#tooltip").html(html).style("opacity",1)
+      .style("left",(event.pageX+12)+"px").style("top",(event.pageY-8)+"px");
+  })
+  .on("mouseout", function(){ d3.select("#tooltip").style("opacity",0); })
+  .on("click", function(event,d){
+    event.stopPropagation();
+    showDetail(d);
+  });
+
+node.append("text").attr("dx",11).attr("dy","0.35em").text(function(d){ return d.label; });
+
+var nodeMap = new Map();
+simulation.on("tick", function(){
+  link
+    .attr("x1", function(d){ return d.source.x; })
+    .attr("y1", function(d){ return d.source.y; })
+    .attr("x2", function(d){ return d.target.x; })
+    .attr("y2", function(d){ return d.target.y; });
+  node.attr("transform", function(d){
+    nodeMap.set(d.id, d);
+    return "translate("+d.x+","+d.y+")";
+  });
+});
+
+/* ---- 图例 ---- */
+var legendItems = d3.select("#legend").append("div").style("font-weight","bold").style("margin-bottom","8px").text("🎨 聚类").node().parentNode;
+Object.entries(CLUSTER_COLORS).forEach(function(entry){
+  var li = d3.select(legendItems).append("div").attr("class","li");
+  li.append("span").attr("class","ld").style("background",entry[1]);
+  li.append("span").text(entry[0]);
+});
+
+/* ---- 按钮 ---- */
+var conceptVisible = true;
+d3.select("#btn-toggle-concept").on("click", function(){
+  conceptVisible = !conceptVisible;
+  svg.selectAll(".node").filter(function(d){ return d.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  svg.selectAll(".link").filter(function(d){ return d.source.type==="concept"||d.target.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  d3.select(this).text(conceptVisible?"隐藏概念":"显示概念").classed("active",!conceptVisible);
+});
+d3.select("#btn-reset").on("click", function(){
+  closeDetail();
+  svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+});
+
+svg.on("click", function(){ searchResults.style.display="none"; });
+document.addEventListener("click", function(e){
+  if(!document.getElementById("detail-panel").contains(e.target) && !e.target.closest(".node")){
+    closeDetail();
+  }
+});
+
+/* 更新统计 */
+d3.select("#node-count").text(NODES.length);
+d3.select("#link-count").text(LINKS.length);
+</script>
+</body>
+</html>

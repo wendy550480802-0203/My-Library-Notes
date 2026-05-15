@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>历史 - 历史小说 - 知识图谱</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#0f172a; color:#e2e8f0; overflow:hidden; }
+
+/* 侧边栏 */
+#sidebar { position:fixed; left:0; top:0; width:220px; height:100vh; background:#1e293b; border-right:1px solid #334155; overflow-y:auto; z-index:50; transition:transform 0.3s; font-size:12px; }
+#sidebar.collapsed { transform:translateX(-220px); }
+#sidebar h2 { font-size:13px; padding:12px 14px 8px; color:#94a3b8; border-bottom:1px solid #334155; }
+#sidebar .domain-header { padding:7px 14px; cursor:pointer; font-weight:600; border-bottom:1px solid #1a2332; transition:background 0.15s; user-select:none; }
+#sidebar .domain-header:hover { background:#334155; }
+#sidebar .domain-pages { display:none; }
+#sidebar .domain-pages a { display:block; padding:5px 14px 5px 24px; color:#cbd5e1; text-decoration:none; border-bottom:1px solid #1a2332; transition:background 0.15s; font-size:11px; }
+#sidebar .domain-pages a:hover { background:#334155; color:#fff; }
+#sidebar .domain-pages a.active { font-weight:600; }
+#sidebar a.active { background:#06b6d4; color:#0f172a; }
+#sidebar-toggle { position:fixed; left:8px; top:56px; z-index:60; background:#334155; border:1px solid #475569; color:#e2e8f0; border-radius:6px; padding:4px 7px; cursor:pointer; font-size:13px; transition:left 0.3s; }
+#sidebar:not(.collapsed) ~ #sidebar-toggle { left:228px; }
+
+/* 右侧详情面板 */
+#detail-panel { position:fixed; top:0; right:-420px; width:400px; height:100vh; background:#1e293b; border-left:1px solid #334155; z-index:55; transition:right 0.3s; display:flex; flex-direction:column; }
+#detail-panel.open { right:0; }
+#detail-header { padding:14px 16px; border-bottom:1px solid #334155; display:flex; align-items:flex-start; gap:10px; }
+#detail-header h2 { flex:1; font-size:14px; line-height:1.4; margin:0; word-break:break-all; }
+#detail-close { background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer; padding:0 4px; line-height:1; }
+#detail-close:hover { color:#fff; }
+#detail-body { flex:1; overflow-y:auto; padding:16px; font-size:13px; line-height:1.7; }
+#detail-body .section { margin-bottom:16px; }
+#detail-body .section-title { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+#detail-body .tag { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#334155; border-radius:4px; font-size:11px; color:#cbd5e1; }
+#detail-body .keyword { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#06b6d422; border:1px solid #06b6d466; border-radius:4px; font-size:11px; color:#e2e8f0; }
+#detail-body .summary { color:#cbd5e1; white-space:pre-wrap; }
+#detail-body .open-link { display:inline-block; margin-top:12px; padding:6px 14px; background:#06b6d4; color:#0f172a; border-radius:6px; text-decoration:none; font-size:12px; font-weight:600; }
+#detail-body .open-link:hover { opacity:0.85; }
+#detail-body .meta-row { display:flex; gap:12px; margin-bottom:8px; font-size:12px; }
+#detail-body .meta-label { color:#94a3b8; min-width:60px; }
+#detail-body .connected-list { list-style:none; padding:0; }
+#detail-body .connected-list li { padding:4px 0; border-bottom:1px solid #1a2332; font-size:12px; cursor:pointer; }
+#detail-body .connected-list li:hover { color:#06b6d4; }
+
+#header { padding:10px 20px 10px 50px; background:#1e293b; border-bottom:1px solid #334155; display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-left:200px; transition:margin-left 0.3s; }
+#sidebar.collapsed ~ #header { margin-left:0; }
+#header h1 { margin:0; font-size:17px; color:#06b6d4; white-space:nowrap; }
+#search-wrap { position:relative; }
+#search-box { width:220px; padding:5px 10px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#e2e8f0; font-size:13px; }
+#search-results { position:absolute; top:32px; left:0; width:260px; max-height:300px; overflow-y:auto; background:#1e293b; border:1px solid #475569; border-radius:6px; display:none; z-index:100; }
+.sri { padding:7px 10px; cursor:pointer; font-size:12px; border-bottom:1px solid #334155; }
+.sri:hover { background:#334155; }
+.stats { font-size:12px; color:#94a3b8; white-space:nowrap; }
+.ctrls { display:flex; gap:6px; margin-left:auto; }
+.btn { padding:5px 12px; border-radius:6px; border:1px solid #475569; background:#334155; color:#e2e8f0; cursor:pointer; font-size:12px; }
+.btn:hover { background:#475569; }
+.btn.active { background:#06b6d4; color:#0f172a; border-color:#06b6d4; }
+#legend { position:absolute; top:52px; left:220px; background:#1e293b; border:1px solid #475569; border-radius:8px; padding:10px 14px; font-size:12px; z-index:10; }
+.li { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+.ld { width:10px; height:10px; border-radius:50%; }
+#tooltip { position:absolute; padding:8px 12px; background:#1e293b; border:1px solid #475569; border-radius:8px; font-size:12px; pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:100; box-shadow:0 4px 20px rgba(0,0,0,0.5); max-width:320px; }
+#graph { width:calc(100vw - 200px); height:calc(100vh - 48px); margin-left:200px; transition:width 0.3s, margin-left 0.3s; }
+#sidebar.collapsed ~ #graph { margin-left:0; width:100vw; }
+#detail-panel.open ~ #graph { width:calc(100vw - 200px - 400px); }
+.link { stroke:#475569; stroke-opacity:0.3; }
+.link-book { stroke-opacity:0.12; }
+.node circle { cursor:pointer; stroke-width:1.5; }
+.node text { fill:#e2e8f0; font-size:10px; pointer-events:none; }
+.highlight circle { stroke:#fff !important; stroke-width:2.5px; }
+.highlight text { fill:#fff; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>📚 藏书阁 · 知识图谱</h2>
+  <div class="domain-header" data-target="IT" style="color:#67e8f9; border-left:3px solid #67e8f9;">IT ▾</div>
+  <div class="domain-pages" id="IT">
+    <a href="IT.json" style="border-left:3px solid #67e8f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(225篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="个人成长" style="color:#fb923c; border-left:3px solid #fb923c;">个人成长 ▾</div>
+  <div class="domain-pages" id="个人成长">
+    <a href="个人成长.json" style="border-left:3px solid #fb923c; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(461篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="产品" style="color:#a855f7; border-left:3px solid #a855f7;">产品 ▾</div>
+  <div class="domain-pages" id="产品">
+    <a href="产品_(其他).json" style="border-left:3px solid #a855f7; padding-left:18px;">(其他) <span style="font-size:10px;color:#64748b;">(553篇)</span></a>
+    <a href="产品_产品思维.json" style="border-left:3px solid #a855f7; padding-left:18px;">产品思维 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="产品_小程序生态.json" style="border-left:3px solid #a855f7; padding-left:18px;">小程序生态 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="产品_用户增长.json" style="border-left:3px solid #a855f7; padding-left:18px;">用户增长 <span style="font-size:10px;color:#64748b;">(49篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="会计" style="color:#86efac; border-left:3px solid #86efac;">会计 ▾</div>
+  <div class="domain-pages" id="会计">
+    <a href="会计.json" style="border-left:3px solid #86efac; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(67篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="健康" style="color:#34d399; border-left:3px solid #34d399;">健康 ▾</div>
+  <div class="domain-pages" id="健康">
+    <a href="健康.json" style="border-left:3px solid #34d399; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(284篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="写作" style="color:#c084fc; border-left:3px solid #c084fc;">写作 ▾</div>
+  <div class="domain-pages" id="写作">
+    <a href="写作.json" style="border-left:3px solid #c084fc; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(238篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="历史" style="color:#06b6d4; border-left:3px solid #06b6d4;">历史 ▾</div>
+  <div class="domain-pages" id="历史">
+    <a href="历史_(其他)_part1.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part2.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part3.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part4.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part5.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(541篇)</span></a>
+    <a href="历史_世界史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">世界史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="历史_中国历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国历史 <span style="font-size:10px;color:#64748b;">(96篇)</span></a>
+    <a href="历史_中国古代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国古代文学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="历史_中国现代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国现代文学 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="历史_中国近代史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国近代史 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="历史_人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">人物传记 <span style="font-size:10px;color:#64748b;">(143篇)</span></a>
+    <a href="历史_军事历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">军事历史 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="历史_历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史 <span style="font-size:10px;color:#64748b;">(538篇)</span></a>
+    <a href="历史_历史与政治.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史与政治 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史人物传记 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="历史_历史学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史学 <span style="font-size:10px;color:#64748b;">(189篇)</span></a>
+    <a href="历史_历史小说.json" class="active" style="border-left:3px solid #06b6d4; padding-left:18px;">历史小说 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史研究.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史研究 <span style="font-size:10px;color:#64748b;">(162篇)</span></a>
+    <a href="历史_思想史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">思想史 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="历史_文学与历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">文学与历史 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="历史_科技史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">科技史 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="历史_艺术史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">艺术史 <span style="font-size:10px;color:#64748b;">(83篇)</span></a>
+    <a href="历史_西方哲学史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">西方哲学史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="哲学" style="color:#14b8a6; border-left:3px solid #14b8a6;">哲学 ▾</div>
+  <div class="domain-pages" id="哲学">
+    <a href="哲学_(其他)_part1.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="哲学_(其他)_part2.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(272篇)</span></a>
+    <a href="哲学_中国哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">中国哲学 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="哲学_人生哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">人生哲学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="哲学_哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">哲学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+    <a href="哲学_政治哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">政治哲学 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="哲学_生活哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">生活哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+    <a href="哲学_社会哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">社会哲学 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="哲学_科学哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">科学哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="商业" style="color:#10b981; border-left:3px solid #10b981;">商业 ▾</div>
+  <div class="domain-pages" id="商业">
+    <a href="商业_(其他)_part1.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（1/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part2.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（2/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part3.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（3/3） <span style="font-size:10px;color:#64748b;">(391篇)</span></a>
+    <a href="商业_企业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">企业管理 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="商业_健康管理.json" style="border-left:3px solid #10b981; padding-left:18px;">健康管理 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="商业_创业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">创业管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业战略.json" style="border-left:3px solid #10b981; padding-left:18px;">商业战略 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">商业管理 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="商业_投资理财.json" style="border-left:3px solid #10b981; padding-left:18px;">投资理财 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_知识管理.json" style="border-left:3px solid #10b981; padding-left:18px;">知识管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_管理.json" style="border-left:3px solid #10b981; padding-left:18px;">管理 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_组织管理.json" style="border-left:3px solid #10b981; padding-left:18px;">组织管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_经济学.json" style="border-left:3px solid #10b981; padding-left:18px;">经济学 <span style="font-size:10px;color:#64748b;">(74篇)</span></a>
+    <a href="商业_金融投资.json" style="border-left:3px solid #10b981; padding-left:18px;">金融投资 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="商业_领导力.json" style="border-left:3px solid #10b981; padding-left:18px;">领导力 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="图书馆学" style="color:#5eead4; border-left:3px solid #5eead4;">图书馆学 ▾</div>
+  <div class="domain-pages" id="图书馆学">
+    <a href="图书馆学.json" style="border-left:3px solid #5eead4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(23篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="宗教" style="color:#c4b5fd; border-left:3px solid #c4b5fd;">宗教 ▾</div>
+  <div class="domain-pages" id="宗教">
+    <a href="宗教.json" style="border-left:3px solid #c4b5fd; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(19篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="心理学" style="color:#f59e0b; border-left:3px solid #f59e0b;">心理学 ▾</div>
+  <div class="domain-pages" id="心理学">
+    <a href="心理学_(其他)_part1.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（1/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part2.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（2/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part3.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（3/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part4.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（4/4） <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="心理学_个人成长与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">个人成长与心理学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理健康.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理健康 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理学 <span style="font-size:10px;color:#64748b;">(239篇)</span></a>
+    <a href="心理学_教育心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">教育心理学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="心理学_文学与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">文学与心理学 <span style="font-size:10px;color:#64748b;">(119篇)</span></a>
+    <a href="心理学_沟通技巧.json" style="border-left:3px solid #f59e0b; padding-left:18px;">沟通技巧 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="心理学_社会心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">社会心理学 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+    <a href="心理学_认知心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知心理学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="心理学_认知科学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知科学 <span style="font-size:10px;color:#64748b;">(39篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="房地产" style="color:#6ee7b7; border-left:3px solid #6ee7b7;">房地产 ▾</div>
+  <div class="domain-pages" id="房地产">
+    <a href="房地产.json" style="border-left:3px solid #6ee7b7; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(12篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="政治" style="color:#fbbf24; border-left:3px solid #fbbf24;">政治 ▾</div>
+  <div class="domain-pages" id="政治">
+    <a href="政治.json" style="border-left:3px solid #fbbf24; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(253篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="教育" style="color:#ec4899; border-left:3px solid #ec4899;">教育 ▾</div>
+  <div class="domain-pages" id="教育">
+    <a href="教育_(其他)_part1.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="教育_(其他)_part2.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(382篇)</span></a>
+    <a href="教育_个人成长.json" style="border-left:3px solid #ec4899; padding-left:18px;">个人成长 <span style="font-size:10px;color:#64748b;">(250篇)</span></a>
+    <a href="教育_儿童教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">儿童教育 <span style="font-size:10px;color:#64748b;">(62篇)</span></a>
+    <a href="教育_家庭教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">家庭教育 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="教育_教育理念.json" style="border-left:3px solid #ec4899; padding-left:18px;">教育理念 <span style="font-size:10px;color:#64748b;">(68篇)</span></a>
+    <a href="教育_财商教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">财商教育 <span style="font-size:10px;color:#64748b;">(48篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="文学" style="color:#8b5cf6; border-left:3px solid #8b5cf6;">文学 ▾</div>
+  <div class="domain-pages" id="文学">
+    <a href="文学_(其他)_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_中国古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">中国古典文学 <span style="font-size:10px;color:#64748b;">(112篇)</span></a>
+    <a href="文学_儿童文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">儿童文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">古典文学 <span style="font-size:10px;color:#64748b;">(92篇)</span></a>
+    <a href="文学_奇幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">奇幻文学 <span style="font-size:10px;color:#64748b;">(51篇)</span></a>
+    <a href="文学_女性主义文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">女性主义文学 <span style="font-size:10px;color:#64748b;">(38篇)</span></a>
+    <a href="文学_悬疑小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">悬疑小说分析 <span style="font-size:10px;color:#64748b;">(52篇)</span></a>
+    <a href="文学_推理小说.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="文学_推理小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说分析 <span style="font-size:10px;color:#64748b;">(126篇)</span></a>
+    <a href="文学_推理文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理文学 <span style="font-size:10px;color:#64748b;">(35篇)</span></a>
+    <a href="文学_文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学 <span style="font-size:10px;color:#64748b;">(223篇)</span></a>
+    <a href="文学_文学与个人成长.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与个人成长 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="文学_文学与人生哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与人生哲学 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="文学_文学与哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与哲学 <span style="font-size:10px;color:#64748b;">(303篇)</span></a>
+    <a href="文学_文学与社会学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与社会学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="文学_文学分析_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（1/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（2/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（3/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（4/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（5/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part6.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（6/6） <span style="font-size:10px;color:#64748b;">(254篇)</span></a>
+    <a href="文学_文学批评.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学批评 <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="文学_文学理论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学理论 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_文学研究.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学研究 <span style="font-size:10px;color:#64748b;">(84篇)</span></a>
+    <a href="文学_文学经典.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学经典 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="文学_文学解读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学解读 <span style="font-size:10px;color:#64748b;">(40篇)</span></a>
+    <a href="文学_文学评论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学评论 <span style="font-size:10px;color:#64748b;">(482篇)</span></a>
+    <a href="文学_文学赏析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学赏析 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="文学_文学鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学鉴赏 <span style="font-size:10px;color:#64748b;">(82篇)</span></a>
+    <a href="文学_文学阅读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学阅读 <span style="font-size:10px;color:#64748b;">(78篇)</span></a>
+    <a href="文学_旅行文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">旅行文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_日本文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">日本文学 <span style="font-size:10px;color:#64748b;">(98篇)</span></a>
+    <a href="文学_武侠文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">武侠文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_科幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学 <span style="font-size:10px;color:#64748b;">(175篇)</span></a>
+    <a href="文学_科幻文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学分析 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="文学_网络文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">网络文学分析 <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_艺术鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">艺术鉴赏 <span style="font-size:10px;color:#64748b;">(44篇)</span></a>
+    <a href="文学_非虚构文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">非虚构文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="时尚生活" style="color:#f9a8d4; border-left:3px solid #f9a8d4;">时尚生活 ▾</div>
+  <div class="domain-pages" id="时尚生活">
+    <a href="时尚生活.json" style="border-left:3px solid #f9a8d4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(71篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="未知" style="color:#94a3b8; border-left:3px solid #94a3b8;">未知 ▾</div>
+  <div class="domain-pages" id="未知">
+    <a href="未知.json" style="border-left:3px solid #94a3b8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(16篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="法学" style="color:#fcd34d; border-left:3px solid #fcd34d;">法学 ▾</div>
+  <div class="domain-pages" id="法学">
+    <a href="法学.json" style="border-left:3px solid #fcd34d; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="社会学" style="color:#6366f1; border-left:3px solid #6366f1;">社会学 ▾</div>
+  <div class="domain-pages" id="社会学">
+    <a href="社会学_(其他)_part1.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="社会学_(其他)_part2.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(484篇)</span></a>
+    <a href="社会学_文化研究.json" style="border-left:3px solid #6366f1; padding-left:18px;">文化研究 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="社会学_社会学.json" style="border-left:3px solid #6366f1; padding-left:18px;">社会学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="科学" style="color:#f97316; border-left:3px solid #f97316;">科学 ▾</div>
+  <div class="domain-pages" id="科学">
+    <a href="科学_(其他)_part1.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="科学_(其他)_part2.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(116篇)</span></a>
+    <a href="科学_医学人文.json" style="border-left:3px solid #f97316; padding-left:18px;">医学人文 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="科学_神经科学.json" style="border-left:3px solid #f97316; padding-left:18px;">神经科学 <span style="font-size:10px;color:#64748b;">(56篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="编程" style="color:#818cf8; border-left:3px solid #818cf8;">编程 ▾</div>
+  <div class="domain-pages" id="编程">
+    <a href="编程.json" style="border-left:3px solid #818cf8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(151篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="艺术" style="color:#e879f9; border-left:3px solid #e879f9;">艺术 ▾</div>
+  <div class="domain-pages" id="艺术">
+    <a href="艺术.json" style="border-left:3px solid #e879f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(365篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="英语" style="color:#f472b6; border-left:3px solid #f472b6;">英语 ▾</div>
+  <div class="domain-pages" id="英语">
+    <a href="英语.json" style="border-left:3px solid #f472b6; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(209篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="语言文学" style="color:#d8b4fe; border-left:3px solid #d8b4fe;">语言文学 ▾</div>
+  <div class="domain-pages" id="语言文学">
+    <a href="语言文学.json" style="border-left:3px solid #d8b4fe; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="金融" style="color:#a3e635; border-left:3px solid #a3e635;">金融 ▾</div>
+  <div class="domain-pages" id="金融">
+    <a href="金融.json" style="border-left:3px solid #a3e635; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(208篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="雅思" style="color:#22d3ee; border-left:3px solid #22d3ee;">雅思 ▾</div>
+  <div class="domain-pages" id="雅思">
+    <a href="雅思.json" style="border-left:3px solid #22d3ee; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(511篇)</span></a>
+  </div>
+
+    <script>
+    document.querySelectorAll('.domain-header').forEach(function(h){
+      h.addEventListener('click', function(){
+        var t = document.getElementById(this.dataset.target);
+        t.style.display = t.style.display==='none' ? 'block' : 'none';
+        this.innerHTML = this.innerHTML.replace(/[▾▸]/, t.style.display==='none'?'▸':'▾');
+      });
+    });
+    </script>
+    
+</div>
+<button id="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">☰</button>
+
+<div id="header">
+  <h1>📚 历史 · 历史小说</h1>
+  <div id="search-wrap">
+    <input id="search-box" type="text" placeholder="🔍 搜索书名/概念...">
+    <div id="search-results"></div>
+  </div>
+  <div class="stats">
+    <span id="node-count">0</span> 节点 ·
+    <span id="link-count">0</span> 连接
+  </div>
+  <div class="ctrls">
+    <button class="btn" id="btn-toggle-concept">隐藏概念</button>
+    <button class="btn" id="btn-reset">重置视图</button>
+  </div>
+</div>
+
+<div id="graph"></div>
+<div id="tooltip"></div>
+
+<!-- 右侧详情面板 -->
+<div id="detail-panel">
+  <div id="detail-header">
+    <h2 id="detail-title"></h2>
+    <button id="detail-close" onclick="closeDetail()">✕</button>
+  </div>
+  <div id="detail-body"></div>
+</div>
+
+<script>
+var NODES = [{"id": "星象预言.md", "label": "星象预言", "title": "星象预言", "type": "book", "degree": 2, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：以秦宣太后芈月从楚国公主到秦国太后的传奇一生为主线，展现战国时期诸侯争霸、后宫权谋、家国恩怨交织的宏大历史画卷，探讨权力、情感与命运在乱世中的抉择与博弈。适合人群：历史小说爱好者、对战国时期政治文化感兴趣者、喜欢女性成长与权谋题材的读者、希望从历史中汲取处世智慧的人。小说开篇以星象预言“霸星现”为引，设定芈月出生即被赋予“横扫六国、称霸天下”的天命。芈月的生存智慧体现在：不轻易表露野心，善于观察局势、借力打力，在绝境中寻找生机——如利用义渠军力平定秦国内乱，正是她政治手腕的集中体现。楚王商因预言而宠信向氏，引发王后嫉妒；王后因恐惧而加害，迫使向氏母子在逆境中求生；这一切反而强化了芈月", "keywords": ["星象预言", "芈月传"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/芈月传(1-6)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/星象预言.md"}, {"id": "情与法.md", "label": "情与法", "title": "情与法", "type": "book", "degree": 8, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "主题领域：历史小说、中国政治史、传记文学、权谋与改革。出版信息：人民文学出版社，2013年9月第1次印刷。本书为“茅盾文学奖获奖作品全集”系列之一。核心概念相互支撑：改革是张居正的事功目标，而实现这一目标必须依赖权谋（与冯保、李太后结盟，打压政敌）。权谋的运用又深刻影响了皇权与相权的关系，最终导致了张居正的个人悲剧", "keywords": ["相关笔记", "历史小说的叙事方法", "核心概念相互支撑", "改革与守旧", "权谋与平衡", "皇权与相权", "忠奸与名节", "对立与互补"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/张居正：全4册_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/情与法.md"}, {"id": "权谋与平衡.md", "label": "权谋与平衡", "title": "权谋与平衡", "type": "book", "degree": 8, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "主题领域：历史小说、中国政治史、传记文学、权谋与改革。出版信息：人民文学出版社，2013年9月第1次印刷。本书为“茅盾文学奖获奖作品全集”系列之一。核心概念相互支撑：改革是张居正的事功目标，而实现这一目标必须依赖权谋（与冯保、李太后结盟，打压政敌）。权谋的运用又深刻影响了皇权与相权的关系，最终导致了张居正的个人悲剧", "keywords": ["相关笔记", "历史小说的叙事方法", "核心概念相互支撑", "改革与守旧", "权谋与平衡", "皇权与相权", "忠奸与名节", "对立与互补"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/张居正：全4册_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/权谋与平衡.md"}, {"id": "盗家.md", "label": "盗家", "title": "盗家", "type": "book", "degree": 2, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：本书以东汉班超出使西域的历史为背景，融合墨家、盗家等江湖门派与百家争鸣的余韵，讲述班超兄妹招募奇人异士、组建三十六骑西行绝域的故事。核心主题是“在乱世中寻找同道，以技艺与信念突破绝境”。适合人群：历史爱好者（尤其对汉代西域、江湖文化感兴趣者）、武侠小说读者、对“团队组建”与“领导力”感兴趣的读者、喜欢智谋与机关术的读者。面对齐欢的机关阵（虎乱、轮违、大妄阵）与杀招“三十六瓣寒刀”，班超以自创剑法“惘然十一”破解——此剑法以“剑意”笼罩对手，令刀阵“空自消沉”落地。班超对齐欢说“不知去向、有去无回”，对柳盆子则设计“同伴被困”的困境，本质是用“探索未知”或“拯救同伴”的使命感打动对方，", "keywords": ["相关笔记", "三十六"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/三十六骑"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/盗家.md"}, {"id": "人性百态.md", "label": "人性百态", "title": "人性百态", "type": "book", "degree": 3, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "书名：二月河文集 共17册 含康熙大帝4册、雍正皇帝3册、乾隆皇帝6册、密云不雨、随性随缘 、二月河妙解《红楼梦》、人间世。核心主题：本书以宏大的历史叙事，通过“帝王三部曲”（康熙、雍正、乾隆）的艺术再现，深刻剖析了中国封建王朝末期政治斗争的残酷性、权谋的复杂性以及帝王心术的运用，展现了“家天下”体制下个人命运与历史洪流的交织。历史小说爱好者，尤其是对清史、帝王传记感兴趣的读者。例如，康熙在《夺宫初政》中，面对权倾朝野的鳌拜，并未急于硬碰，而是通过“拜师学艺”（伍次友）、“秘密训练力士”（魏东亭）、“夜探鳌府”稳住对手，最终在毓庆宫以迅雷不及掩耳之势一击制胜，这正是“帝王心术”中“示弱待机、一", "keywords": ["相关笔记", "行动建议", "二月河"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/二月河文集 共17册"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/人性百态.md"}, {"id": "民族大义.md", "label": "民族大义", "title": "民族大义", "type": "book", "degree": 4, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "书名：盐战完结珍藏版套装（全二册）。核心主题：以抗战时期国民党内部权力斗争、国共暗战以及日本间谍渗透为背景，通过主人公黎天成在国民党中央党部的潜伏与周旋，揭示历史洪流中个体在情报战、派系博弈与民族大义间的艰难抉择。适合人群：历史爱好者、谍战小说读者、对民国政治与国共关系感兴趣的读者、追求情节紧凑与人性深度叙事的文学爱好者。黎天成在国民党内部周旋时，始终以“民族大义”为最高准则，避免被派系利益同化。黎天成在国民党中央党部工作，却为中共提供情报，长期处于“认知失调”状态：他必须公开拥护“一个领袖", "keywords": ["国民党", "黎天成", "冯承泰", "民族大"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/盐战完结珍藏版套装（全二册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/民族大义.md"}, {"id": "墨家与盗家.md", "label": "墨家与盗家", "title": "墨家与盗家", "type": "book", "degree": 4, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：本书以东汉班超出使西域的历史为背景，融合墨家、盗家等江湖门派与百家争鸣的余韵，讲述班超兄妹招募奇人异士、组建三十六骑西行绝域的故事。核心主题是“在乱世中寻找同道，以技艺与信念突破绝境”。适合人群：历史爱好者（尤其对汉代西域、江湖文化感兴趣者）、武侠小说读者、对“团队组建”与“领导力”感兴趣的读者、喜欢智谋与机关术的读者。面对齐欢的机关阵（虎乱、轮违、大妄阵）与杀招“三十六瓣寒刀”，班超以自创剑法“惘然十一”破解——此剑法以“剑意”笼罩对手，令刀阵“空自消沉”落地。班超的“惘然十一”剑法以“剑意”令对手恍惚空虚，本质是高度专注的“心流”状态（让自身意识与剑法合一）与“共情”能力（感知对", "keywords": ["三十六", "十六骑", "柳盆子", "对齐欢"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/三十六骑"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/墨家与盗家.md"}, {"id": "历史文学创作.md", "label": "历史文学创作", "title": "历史文学创作", "type": "book", "degree": 5, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "书名：二月河文集 共17册 含康熙大帝4册、雍正皇帝3册、乾隆皇帝6册、密云不雨、随性随缘 、二月河妙解《红楼梦》、人间世。核心主题：本书以宏大的历史叙事，通过“帝王三部曲”（康熙、雍正、乾隆）的艺术再现，深刻剖析了中国封建王朝末期政治斗争的残酷性、权谋的复杂性以及帝王心术的运用，展现了“家天下”体制下个人命运与历史洪流的交织。历史小说爱好者，尤其是对清史、帝王传记感兴趣的读者。例如，康熙在《夺宫初政》中，面对权倾朝野的鳌拜，并未急于硬碰，而是通过“拜师学艺”（伍次友）、“秘密训练力士”（魏东亭）、“夜探鳌府”稳住对手，最终在毓庆宫以迅雷不及掩耳之势一击制胜，这正是“帝王心术”中“示弱待机、一", "keywords": ["行动建议", "二月河", "伍次友", "月河文", "河文集"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/二月河文集 共17册"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/历史文学创作.md"}, {"id": "权力斗争.md", "label": "权力斗争", "title": "权力斗争", "type": "book", "degree": 5, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "书名：二月河文集 共17册 含康熙大帝4册、雍正皇帝3册、乾隆皇帝6册、密云不雨、随性随缘 、二月河妙解《红楼梦》、人间世。核心主题：本书以宏大的历史叙事，通过“帝王三部曲”（康熙、雍正、乾隆）的艺术再现，深刻剖析了中国封建王朝末期政治斗争的残酷性、权谋的复杂性以及帝王心术的运用，展现了“家天下”体制下个人命运与历史洪流的交织。历史小说爱好者，尤其是对清史、帝王传记感兴趣的读者。例如，康熙在《夺宫初政》中，面对权倾朝野的鳌拜，并未急于硬碰，而是通过“拜师学艺”（伍次友）、“秘密训练力士”（魏东亭）、“夜探鳌府”稳住对手，最终在毓庆宫以迅雷不及掩耳之势一击制胜，这正是“帝王心术”中“示弱待机、一", "keywords": ["行动建议", "二月河", "伍次友", "月河文", "河文集"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/二月河文集 共17册"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/权力斗争.md"}, {"id": "国民党派系斗争.md", "label": "国民党派系斗争", "title": "国民党派系斗争", "type": "book", "degree": 4, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "书名：盐战完结珍藏版套装（全二册）。核心主题：以抗战时期国民党内部权力斗争、国共暗战以及日本间谍渗透为背景，通过主人公黎天成在国民党中央党部的潜伏与周旋，揭示历史洪流中个体在情报战、派系博弈与民族大义间的艰难抉择。适合人群：历史爱好者、谍战小说读者、对民国政治与国共关系感兴趣的读者、追求情节紧凑与人性深度叙事的文学爱好者。黎天成在国民党内部周旋时，始终以“民族大义”为最高准则，避免被派系利益同化。黎天成在国民党中央党部工作，却为中共提供情报，长期处于“认知失调”状态：他必须公开拥护“一个领袖", "keywords": ["国民党", "黎天成", "冯承泰", "盐战完"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/盐战完结珍藏版套装（全二册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/国民党派系斗争.md"}, {"id": "战国历史.md", "label": "战国历史", "title": "战国历史", "type": "book", "degree": 2, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：以秦宣太后芈月从楚国公主到秦国太后的传奇一生为主线，展现战国时期诸侯争霸、后宫权谋、家国恩怨交织的宏大历史画卷，探讨权力、情感与命运在乱世中的抉择与博弈。适合人群：历史小说爱好者、对战国时期政治文化感兴趣者、喜欢女性成长与权谋题材的读者、希望从历史中汲取处世智慧的人。小说开篇以星象预言“霸星现”为引，设定芈月出生即被赋予“横扫六国、称霸天下”的天命。芈月的生存智慧体现在：不轻易表露野心，善于观察局势、借力打力，在绝境中寻找生机——如利用义渠军力平定秦国内乱，正是她政治手腕的集中体现。芈月的情感线复杂而深刻：与黄歇的青梅竹马、与秦王嬴驷的君臣/夫妻之情、与义渠王的现实联盟，构成了她个人", "keywords": ["星象预言", "芈月传"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/芈月传(1-6)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/战国历史.md"}, {"id": "飞鸟时代.md", "label": "飞鸟时代", "title": "飞鸟时代", "type": "book", "degree": 2, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：本书以日本飞鸟时代为背景，通过“白雉”祥瑞的进献与朝堂解读，揭示了“大化改新”后日本政治格局的剧烈动荡、权力斗争的残酷，以及时代洪流中个体命运的脆弱与无常。它并非聚焦于额田女王本人，而是描绘了她所身处的那个充满变革、阴谋与不安的时代画卷。对日本古代史，特别是飞鸟时代、大化改新时期感兴趣的读者。他通过这场仪式，向所有豪族与平民宣示：一个由中大兄皇子和自己主导的“崭新时代”已经开启，旧时代的权力格局（如苏我氏）已被彻底终结，新政权的权威不容置疑。社会学-变革时代的集体焦虑与谣言传播：书中提到，在石川麻吕事件后，“坊间还流传起了另一个蜚语”，将中大兄皇子与更早的山背大兄王之死联系起来", "keywords": ["大兄皇子", "额田女"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/额田女王"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/飞鸟时代.md"}, {"id": "历史转型.md", "label": "历史转型", "title": "历史转型", "type": "book", "degree": 4, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "作者：李纲, ePUBw.COM。核心主题：以北魏孝文帝迁都洛阳后的政治动荡为背景，通过一桩四夷馆离奇命案，揭示宫廷权力斗争、新旧贵族矛盾、改革与守旧势力的激烈碰撞，展现历史转型期的复杂人性与权谋博弈。适合人群：历史小说爱好者、对北魏历史或中国古代政治变革感兴趣的读者、喜欢悬疑推理与权谋题材的读者。穆泰向咸阳王透露的“黄白之术”极具象征意义：东宫詹事黄腾之掌握寇谦之嫡传的“点铜成金”秘术，实则是权力依附与利益输送的隐喻。从制度经济学视角看，北魏迁都改革面临典型的“路径依赖”困境：平城旧贵族在旧制度下拥有既得利益（如八姓勋贵），迁都意味着其权力基础被削弱", "keywords": ["孝文帝", "咸阳王", "点铜成", "铜成金"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/洛阳危机：孝文帝密使"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/历史转型.md"}, {"id": "曹家隐喻.md", "label": "曹家隐喻", "title": "曹家隐喻", "type": "book", "degree": 2, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：以清朝雍正、乾隆更迭之际的宫廷权力斗争为核心，通过描写雍正驾崩、乾隆继位这一惊心动魄的历史事件，揭示了皇权更迭背后的残酷、权谋与人性的复杂，并以此为背景，影射出曹雪芹家族“三春去后诸芳尽”的悲剧命运。适合人群：历史小说爱好者、对清朝宫廷政治与权力斗争感兴趣的读者、研究《红楼梦》及其创作背景的学者和爱好者、喜欢阅读权谋与人性深度剖析作品的读者。要点1：皇位继承的偶然性与戏剧性。从雍正驾崩到乾隆继位，短短几个时辰内，权力集团内部的博弈惊心动魄。面对雍正驾崩的突发危机，鄂尔泰的决策过程值得学习：快速判断形势，找到关键盟友（纳亲），明确核心目标（确保弘历继位），并制定多套预案（安抚弘昼）", "keywords": ["雍正驾崩", "鄂尔泰"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/三春争及初春景（全三册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/曹家隐喻.md"}, {"id": "权力博弈.md", "label": "权力博弈", "title": "权力博弈", "type": "book", "degree": 2, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：以清朝雍正、乾隆更迭之际的宫廷权力斗争为核心，通过描写雍正驾崩、乾隆继位这一惊心动魄的历史事件，揭示了皇权更迭背后的残酷、权谋与人性的复杂，并以此为背景，影射出曹雪芹家族“三春去后诸芳尽”的悲剧命运。适合人群：历史小说爱好者、对清朝宫廷政治与权力斗争感兴趣的读者、研究《红楼梦》及其创作背景的学者和爱好者、喜欢阅读权谋与人性深度剖析作品的读者。要点1：皇位继承的偶然性与戏剧性。从雍正驾崩到乾隆继位，短短几个时辰内，权力集团内部的博弈惊心动魄。面对雍正驾崩的突发危机，鄂尔泰的决策过程值得学习：快速判断形势，找到关键盟友（纳亲），明确核心目标（确保弘历继位），并制定多套预案（安抚弘昼）", "keywords": ["雍正驾崩", "鄂尔泰"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/三春争及初春景（全三册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/权力博弈.md"}, {"id": "雍正心理.md", "label": "雍正心理", "title": "雍正心理", "type": "book", "degree": 2, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：以清朝雍正、乾隆更迭之际的宫廷权力斗争为核心，通过描写雍正驾崩、乾隆继位这一惊心动魄的历史事件，揭示了皇权更迭背后的残酷、权谋与人性的复杂，并以此为背景，影射出曹雪芹家族“三春去后诸芳尽”的悲剧命运。适合人群：历史小说爱好者、对清朝宫廷政治与权力斗争感兴趣的读者、研究《红楼梦》及其创作背景的学者和爱好者、喜欢阅读权谋与人性深度剖析作品的读者。要点1：皇位继承的偶然性与戏剧性。从雍正驾崩到乾隆继位，短短几个时辰内，权力集团内部的博弈惊心动魄。面对雍正驾崩的突发危机，鄂尔泰的决策过程值得学习：快速判断形势，找到关键盟友（纳亲），明确核心目标（确保弘历继位），并制定多套预案（安抚弘昼）", "keywords": ["雍正驾崩", "鄂尔泰"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/三春争及初春景（全三册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/雍正心理.md"}, {"id": "大化改新.md", "label": "大化改新", "title": "大化改新", "type": "book", "degree": 2, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：本书以日本飞鸟时代为背景，通过“白雉”祥瑞的进献与朝堂解读，揭示了“大化改新”后日本政治格局的剧烈动荡、权力斗争的残酷，以及时代洪流中个体命运的脆弱与无常。它并非聚焦于额田女王本人，而是描绘了她所身处的那个充满变革、阴谋与不安的时代画卷。对日本古代史，特别是飞鸟时代、大化改新时期感兴趣的读者。他通过这场仪式，向所有豪族与平民宣示：一个由中大兄皇子和自己主导的“崭新时代”已经开启，旧时代的权力格局（如苏我氏）已被彻底终结，新政权的权威不容置疑。社会学-变革时代的集体焦虑与谣言传播：书中提到，在石川麻吕事件后，“坊间还流传起了另一个蜚语”，将中大兄皇子与更早的山背大兄王之死联系起来", "keywords": ["大兄皇子", "大化改"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/额田女王"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/大化改新.md"}, {"id": "班超出使西域.md", "label": "班超出使西域", "title": "班超出使西域", "type": "book", "degree": 4, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：本书以东汉班超出使西域的历史为背景，融合墨家、盗家等江湖门派与百家争鸣的余韵，讲述班超兄妹招募奇人异士、组建三十六骑西行绝域的故事。核心主题是“在乱世中寻找同道，以技艺与信念突破绝境”。适合人群：历史爱好者（尤其对汉代西域、江湖文化感兴趣者）、武侠小说读者、对“团队组建”与“领导力”感兴趣的读者、喜欢智谋与机关术的读者。面对齐欢的机关阵（虎乱、轮违、大妄阵）与杀招“三十六瓣寒刀”，班超以自创剑法“惘然十一”破解——此剑法以“剑意”笼罩对手，令刀阵“空自消沉”落地。班超的剑意不是蛮力，而是对对手心理的精准把握——这启示现实中的谈判、领导力：真正的说服力源于对对方需求的深刻理解，而非单纯", "keywords": ["三十六", "十六骑", "柳盆子", "出使西"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/三十六骑"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/班超出使西域.md"}, {"id": "国共谍战.md", "label": "国共谍战", "title": "国共谍战", "type": "book", "degree": 4, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "书名：盐战完结珍藏版套装（全二册）。核心主题：本书以抗日战争初期国民党政权迁都重庆为背景，通过主人公黎天成（中共地下党员）在国民党中央组织部内部的潜伏与斗争，深刻揭示了国共两党在“抗日民族统一战线”表面下，围绕意识形态、组织渗透、地方控制权展开的激烈暗战，以及日本特务势力的趁虚而入。适合人群：对民国历史、谍战题材、国共关系史感兴趣的读者；喜欢《北平无战事》、《潜伏》等作品，追求复杂人物塑造和权谋博弈的读者。冯承泰与陈公博（汪精卫系）争夺四川省党部主任委员的失败，以及中央组织部与中统局联手“空降下派”青壮干部以对抗四川本土派系（武德励进会），生动展现了国民党内部“中央”与“地方”、“CC系”与“", "keywords": ["国民党", "冯承泰", "黎天成", "降下派"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/盐战完结珍藏版套装（全二册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/国共谍战.md"}, {"id": "边缘群体创新.md", "label": "边缘群体创新", "title": "边缘群体创新", "type": "book", "degree": 4, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：本书以东汉班超出使西域的历史为背景，融合墨家、盗家等江湖门派与百家争鸣的余韵，讲述班超兄妹招募奇人异士、组建三十六骑西行绝域的故事。核心主题是“在乱世中寻找同道，以技艺与信念突破绝境”。适合人群：历史爱好者（尤其对汉代西域、江湖文化感兴趣者）、武侠小说读者、对“团队组建”与“领导力”感兴趣的读者、喜欢智谋与机关术的读者。面对齐欢的机关阵（虎乱、轮违、大妄阵）与杀招“三十六瓣寒刀”，班超以自创剑法“惘然十一”破解——此剑法以“剑意”笼罩对手，令刀阵“空自消沉”落地。班超的“惘然十一”剑法以“剑意”令对手恍惚空虚，本质是高度专注的“心流”状态（让自身意识与剑法合一）与“共情”能力（感知对", "keywords": ["三十六", "十六骑", "柳盆子", "对齐欢"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/三十六骑"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/边缘群体创新.md"}, {"id": "人治矛盾.md", "label": "人治矛盾", "title": "人治矛盾", "type": "book", "degree": 5, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "书名：二月河文集 共17册 含康熙大帝4册、雍正皇帝3册、乾隆皇帝6册、密云不雨、随性随缘 、二月河妙解《红楼梦》、人间世。核心主题：本书以宏大的历史叙事，通过“帝王三部曲”（康熙、雍正、乾隆）的艺术再现，深刻剖析了中国封建王朝末期政治斗争的残酷性、权谋的复杂性以及帝王心术的运用，展现了“家天下”体制下个人命运与历史洪流的交织。历史小说爱好者，尤其是对清史、帝王传记感兴趣的读者。例如，康熙在《夺宫初政》中，面对权倾朝野的鳌拜，并未急于硬碰，而是通过“拜师学艺”（伍次友）、“秘密训练力士”（魏东亭）、“夜探鳌府”稳住对手，最终在毓庆宫以迅雷不及掩耳之势一击制胜，这正是“帝王心术”中“示弱待机、一", "keywords": ["行动建议", "二月河", "伍次友", "月河文", "河文集"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/二月河文集 共17册"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/人治矛盾.md"}, {"id": "剑意与心流.md", "label": "剑意与心流", "title": "剑意与心流", "type": "book", "degree": 4, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：本书以东汉班超出使西域的历史为背景，融合墨家、盗家等江湖门派与百家争鸣的余韵，讲述班超兄妹招募奇人异士、组建三十六骑西行绝域的故事。核心主题是“在乱世中寻找同道，以技艺与信念突破绝境”。适合人群：历史爱好者（尤其对汉代西域、江湖文化感兴趣者）、武侠小说读者、对“团队组建”与“领导力”感兴趣的读者、喜欢智谋与机关术的读者。面对齐欢的机关阵（虎乱、轮违、大妄阵）与杀招“三十六瓣寒刀”，班超以自创剑法“惘然十一”破解——此剑法以“剑意”笼罩对手，令刀阵“空自消沉”落地。班超的“惘然十一”剑法以“剑意”令对手恍惚空虚，本质是高度专注的“心流”状态（让自身意识与剑法合一）与“共情”能力（感知对", "keywords": ["三十六", "十六骑", "柳盆子", "对齐欢"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/三十六骑"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/剑意与心流.md"}, {"id": "人物关系.md", "label": "人物关系", "title": "人物关系", "type": "book", "degree": 4, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "书名：盐战完结珍藏版套装（全二册）。核心主题：本书以抗日战争初期国民党政权迁都重庆为背景，通过主人公黎天成（中共地下党员）在国民党中央组织部内部的潜伏与斗争，深刻揭示了国共两党在“抗日民族统一战线”表面下，围绕意识形态、组织渗透、地方控制权展开的激烈暗战，以及日本特务势力的趁虚而入。适合人群：对民国历史、谍战题材、国共关系史感兴趣的读者；喜欢《北平无战事》、《潜伏》等作品，追求复杂人物塑造和权谋博弈的读者。冯承泰与陈公博（汪精卫系）争夺四川省党部主任委员的失败，以及中央组织部与中统局联手“空降下派”青壮干部以对抗四川本土派系（武德励进会），生动展现了国民党内部“中央”与“地方”、“CC系”与“", "keywords": ["国民党", "冯承泰", "黎天成", "降下派"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/盐战完结珍藏版套装（全二册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/人物关系.md"}, {"id": "皇权与相权.md", "label": "皇权与相权", "title": "皇权与相权", "type": "book", "degree": 8, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "主题领域：历史小说、中国政治史、传记文学、权谋与改革。出版信息：人民文学出版社，2013年9月第1次印刷。本书为“茅盾文学奖获奖作品全集”系列之一。权谋的运用又深刻影响了皇权与相权的关系，最终导致了张居正的个人悲剧。李太后则在皇权与相权之间起到关键的平衡与裁决作用", "keywords": ["历史小说的叙事方法", "核心概念相互支撑", "改革与守旧", "权谋与平衡", "皇权与相权", "忠奸与名节", "对立与互补", "皇权与相权"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/张居正：全4册_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/皇权与相权.md"}, {"id": "剑意.md", "label": "剑意", "title": "剑意", "type": "book", "degree": 4, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：本书以东汉班超出使西域的历史为背景，融合墨家、盗家等江湖门派与百家争鸣的余韵，讲述班超兄妹招募奇人异士、组建三十六骑西行绝域的故事。核心主题是“在乱世中寻找同道，以技艺与信念突破绝境”。适合人群：历史爱好者（尤其对汉代西域、江湖文化感兴趣者）、武侠小说读者、对“团队组建”与“领导力”感兴趣的读者、喜欢智谋与机关术的读者。面对齐欢的机关阵（虎乱、轮违、大妄阵）与杀招“三十六瓣寒刀”，班超以自创剑法“惘然十一”破解——此剑法以“剑意”笼罩对手，令刀阵“空自消沉”落地。班超的“惘然十一”剑法以“剑意”令对手恍惚空虚，本质是高度专注的“心流”状态（让自身意识与剑法合一）与“共情”能力（感知对", "keywords": ["三十六", "十六骑", "柳盆子", "对齐欢"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/三十六骑"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/剑意.md"}, {"id": "人性博弈.md", "label": "人性博弈", "title": "人性博弈", "type": "book", "degree": 5, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "书名：二月河文集 共17册 含康熙大帝4册、雍正皇帝3册、乾隆皇帝6册、密云不雨、随性随缘 、二月河妙解《红楼梦》、人间世。核心主题：本书以宏大的历史叙事，通过“帝王三部曲”（康熙、雍正、乾隆）的艺术再现，深刻剖析了中国封建王朝末期政治斗争的残酷性、权谋的复杂性以及帝王心术的运用，展现了“家天下”体制下个人命运与历史洪流的交织。历史小说爱好者，尤其是对清史、帝王传记感兴趣的读者。例如，康熙在《夺宫初政》中，面对权倾朝野的鳌拜，并未急于硬碰，而是通过“拜师学艺”（伍次友）、“秘密训练力士”（魏东亭）、“夜探鳌府”稳住对手，最终在毓庆宫以迅雷不及掩耳之势一击制胜，这正是“帝王心术”中“示弱待机、一", "keywords": ["行动建议", "二月河", "伍次友", "月河文", "河文集"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/二月河文集 共17册"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/人性博弈.md"}, {"id": "团队招募.md", "label": "团队招募", "title": "团队招募", "type": "book", "degree": 4, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：本书以东汉班超出使西域的历史为背景，融合墨家、盗家等江湖门派与百家争鸣的余韵，讲述班超兄妹招募奇人异士、组建三十六骑西行绝域的故事。核心主题是“在乱世中寻找同道，以技艺与信念突破绝境”。适合人群：历史爱好者（尤其对汉代西域、江湖文化感兴趣者）、武侠小说读者、对“团队组建”与“领导力”感兴趣的读者、喜欢智谋与机关术的读者。面对齐欢的机关阵（虎乱、轮违、大妄阵）与杀招“三十六瓣寒刀”，班超以自创剑法“惘然十一”破解——此剑法以“剑意”笼罩对手，令刀阵“空自消沉”落地。班超的“惘然十一”剑法以“剑意”令对手恍惚空虚，本质是高度专注的“心流”状态（让自身意识与剑法合一）与“共情”能力（感知对", "keywords": ["三十六", "十六骑", "柳盆子", "对齐欢"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/三十六骑"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/团队招募.md"}, {"id": "政治心理学.md", "label": "政治心理学", "title": "政治心理学", "type": "book", "degree": 2, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：以清朝雍正、乾隆更迭之际的宫廷权力斗争为核心，通过描写雍正驾崩、乾隆继位这一惊心动魄的历史事件，揭示了皇权更迭背后的残酷、权谋与人性的复杂，并以此为背景，影射出曹雪芹家族“三春去后诸芳尽”的悲剧命运。适合人群：历史小说爱好者、对清朝宫廷政治与权力斗争感兴趣的读者、研究《红楼梦》及其创作背景的学者和爱好者、喜欢阅读权谋与人性深度剖析作品的读者。要点1：皇位继承的偶然性与戏剧性。从雍正驾崩到乾隆继位，短短几个时辰内，权力集团内部的博弈惊心动魄。面对雍正驾崩的突发危机，鄂尔泰的决策过程值得学习：快速判断形势，找到关键盟友（纳亲），明确核心目标（确保弘历继位），并制定多套预案（安抚弘昼）", "keywords": ["雍正驾崩", "心理学"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/三春争及初春景（全三册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/政治心理学.md"}, {"id": "双重身份.md", "label": "双重身份", "title": "双重身份", "type": "book", "degree": 4, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "书名：盐战完结珍藏版套装（全二册）。核心主题：以抗战时期国民党内部权力斗争、国共暗战以及日本间谍渗透为背景，通过主人公黎天成在国民党中央党部的潜伏与周旋，揭示历史洪流中个体在情报战、派系博弈与民族大义间的艰难抉择。适合人群：历史爱好者、谍战小说读者、对民国政治与国共关系感兴趣的读者、追求情节紧凑与人性深度叙事的文学爱好者。黎天成在国民党内部周旋时，始终以“民族大义”为最高准则，避免被派系利益同化。黎天成在国民党中央党部工作，却为中共提供情报，长期处于“认知失调”状态：他必须公开拥护“一个领袖", "keywords": ["国民党", "黎天成", "冯承泰", "盐战完"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/盐战完结珍藏版套装（全二册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/双重身份.md"}, {"id": "墨家.md", "label": "墨家", "title": "墨家", "type": "book", "degree": 4, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：本书以东汉班超出使西域的历史为背景，融合墨家、盗家等江湖门派与百家争鸣的余韵，讲述班超兄妹招募奇人异士、组建三十六骑西行绝域的故事。核心主题是“在乱世中寻找同道，以技艺与信念突破绝境”。适合人群：历史爱好者（尤其对汉代西域、江湖文化感兴趣者）、武侠小说读者、对“团队组建”与“领导力”感兴趣的读者、喜欢智谋与机关术的读者。面对齐欢的机关阵（虎乱、轮违、大妄阵）与杀招“三十六瓣寒刀”，班超以自创剑法“惘然十一”破解——此剑法以“剑意”笼罩对手，令刀阵“空自消沉”落地。班超的“惘然十一”剑法以“剑意”令对手恍惚空虚，本质是高度专注的“心流”状态（让自身意识与剑法合一）与“共情”能力（感知对", "keywords": ["三十六", "十六骑", "柳盆子", "对齐欢"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/三十六骑"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/墨家.md"}, {"id": "互文叙事.md", "label": "互文叙事", "title": "互文叙事", "type": "book", "degree": 2, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：以清朝雍正、乾隆更迭之际的宫廷权力斗争为核心，通过描写雍正驾崩、乾隆继位这一惊心动魄的历史事件，揭示了皇权更迭背后的残酷、权谋与人性的复杂，并以此为背景，影射出曹雪芹家族“三春去后诸芳尽”的悲剧命运。适合人群：历史小说爱好者、对清朝宫廷政治与权力斗争感兴趣的读者、研究《红楼梦》及其创作背景的学者和爱好者、喜欢阅读权谋与人性深度剖析作品的读者。要点1：皇位继承的偶然性与戏剧性。从雍正驾崩到乾隆继位，短短几个时辰内，权力集团内部的博弈惊心动魄。面对雍正驾崩的突发危机，鄂尔泰的决策过程值得学习：快速判断形势，找到关键盟友（纳亲），明确核心目标（确保弘历继位），并制定多套预案（安抚弘昼）", "keywords": ["雍正驾崩", "鄂尔泰"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/三春争及初春景（全三册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/互文叙事.md"}, {"id": "红楼梦互文.md", "label": "红楼梦互文", "title": "红楼梦互文", "type": "book", "degree": 2, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：以清朝雍正、乾隆更迭之际的宫廷权力斗争为核心，通过描写雍正驾崩、乾隆继位这一惊心动魄的历史事件，揭示了皇权更迭背后的残酷、权谋与人性的复杂，并以此为背景，影射出曹雪芹家族“三春去后诸芳尽”的悲剧命运。适合人群：历史小说爱好者、对清朝宫廷政治与权力斗争感兴趣的读者、研究《红楼梦》及其创作背景的学者和爱好者、喜欢阅读权谋与人性深度剖析作品的读者。要点1：皇位继承的偶然性与戏剧性。从雍正驾崩到乾隆继位，短短几个时辰内，权力集团内部的博弈惊心动魄。面对雍正驾崩的突发危机，鄂尔泰的决策过程值得学习：快速判断形势，找到关键盟友（纳亲），明确核心目标（确保弘历继位），并制定多套预案（安抚弘昼）", "keywords": ["雍正驾崩", "鄂尔泰"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/三春争及初春景（全三册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/红楼梦互文.md"}, {"id": "国共暗战.md", "label": "国共暗战", "title": "国共暗战", "type": "book", "degree": 4, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "书名：盐战完结珍藏版套装（全二册）。核心主题：以抗战时期国民党内部权力斗争、国共暗战以及日本间谍渗透为背景，通过主人公黎天成在国民党中央党部的潜伏与周旋，揭示历史洪流中个体在情报战、派系博弈与民族大义间的艰难抉择。适合人群：历史爱好者、谍战小说读者、对民国政治与国共关系感兴趣的读者、追求情节紧凑与人性深度叙事的文学爱好者。黎天成在国民党内部周旋时，始终以“民族大义”为最高准则，避免被派系利益同化。黎天成在国民党中央党部工作，却为中共提供情报，长期处于“认知失调”状态：他必须公开拥护“一个领袖", "keywords": ["国民党", "黎天成", "冯承泰", "国共暗"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/盐战完结珍藏版套装（全二册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/国共暗战.md"}, {"id": "女性政治家.md", "label": "女性政治家", "title": "女性政治家", "type": "book", "degree": 2, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：以秦宣太后芈月从楚国公主到秦国太后的传奇一生为主线，展现战国时期诸侯争霸、后宫权谋、家国恩怨交织的宏大历史画卷，探讨权力、情感与命运在乱世中的抉择与博弈。适合人群：历史小说爱好者、对战国时期政治文化感兴趣者、喜欢女性成长与权谋题材的读者、希望从历史中汲取处世智慧的人。小说开篇以星象预言“霸星现”为引，设定芈月出生即被赋予“横扫六国、称霸天下”的天命。芈月的生存智慧体现在：不轻易表露野心，善于观察局势、借力打力，在绝境中寻找生机——如利用义渠军力平定秦国内乱，正是她政治手腕的集中体现。楚王商因预言而宠信向氏，引发王后嫉妒；王后因恐惧而加害，迫使向氏母子在逆境中求生；这一切反而强化了芈月", "keywords": ["星象预言", "芈月传"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/芈月传(1-6)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/女性政治家.md"}, {"id": "迁都洛阳.md", "label": "迁都洛阳", "title": "迁都洛阳", "type": "book", "degree": 4, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "作者：李纲, ePUBw.COM。核心主题：以北魏孝文帝迁都洛阳后的政治动荡为背景，通过一桩四夷馆离奇命案，揭示宫廷权力斗争、新旧贵族矛盾、改革与守旧势力的激烈碰撞，展现历史转型期的复杂人性与权谋博弈。适合人群：历史小说爱好者、对北魏历史或中国古代政治变革感兴趣的读者、喜欢悬疑推理与权谋题材的读者。通过咸阳王元禧与冯翊侯穆泰的对话，生动呈现了守旧派“怀念平城骑射生活”与改革派“定鼎嵩洛、混一天下”的意识形态对立。穆泰向咸阳王透露的“黄白之术”极具象征意义：东宫詹事黄腾之掌握寇谦之嫡传的“点铜成金”秘术，实则是权力依附与利益输送的隐喻", "keywords": ["孝文帝", "咸阳王", "迁都洛", "都洛阳"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/洛阳危机：孝文帝密使"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/迁都洛阳.md"}, {"id": "边缘群体.md", "label": "边缘群体", "title": "边缘群体", "type": "book", "degree": 4, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：本书以东汉班超出使西域的历史为背景，融合墨家、盗家等江湖门派与百家争鸣的余韵，讲述班超兄妹招募奇人异士、组建三十六骑西行绝域的故事。核心主题是“在乱世中寻找同道，以技艺与信念突破绝境”。适合人群：历史爱好者（尤其对汉代西域、江湖文化感兴趣者）、武侠小说读者、对“团队组建”与“领导力”感兴趣的读者、喜欢智谋与机关术的读者。面对齐欢的机关阵（虎乱、轮违、大妄阵）与杀招“三十六瓣寒刀”，班超以自创剑法“惘然十一”破解——此剑法以“剑意”笼罩对手，令刀阵“空自消沉”落地。班超的“惘然十一”剑法以“剑意”令对手恍惚空虚，本质是高度专注的“心流”状态（让自身意识与剑法合一）与“共情”能力（感知对", "keywords": ["三十六", "十六骑", "柳盆子", "对齐欢"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/三十六骑"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/边缘群体.md"}, {"id": "历史偶然性.md", "label": "历史偶然性", "title": "历史偶然性", "type": "book", "degree": 2, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：以清朝雍正、乾隆更迭之际的宫廷权力斗争为核心，通过描写雍正驾崩、乾隆继位这一惊心动魄的历史事件，揭示了皇权更迭背后的残酷、权谋与人性的复杂，并以此为背景，影射出曹雪芹家族“三春去后诸芳尽”的悲剧命运。适合人群：历史小说爱好者、对清朝宫廷政治与权力斗争感兴趣的读者、研究《红楼梦》及其创作背景的学者和爱好者、喜欢阅读权谋与人性深度剖析作品的读者。要点1：皇位继承的偶然性与戏剧性。从雍正驾崩到乾隆继位，短短几个时辰内，权力集团内部的博弈惊心动魄。面对雍正驾崩的突发危机，鄂尔泰的决策过程值得学习：快速判断形势，找到关键盟友（纳亲），明确核心目标（确保弘历继位），并制定多套预案（安抚弘昼）", "keywords": ["雍正驾崩", "鄂尔泰"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/三春争及初春景（全三册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/历史偶然性.md"}, {"id": "皇权更迭.md", "label": "皇权更迭", "title": "皇权更迭", "type": "book", "degree": 2, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：以清朝雍正、乾隆更迭之际的宫廷权力斗争为核心，通过描写雍正驾崩、乾隆继位这一惊心动魄的历史事件，揭示了皇权更迭背后的残酷、权谋与人性的复杂，并以此为背景，影射出曹雪芹家族“三春去后诸芳尽”的悲剧命运。适合人群：历史小说爱好者、对清朝宫廷政治与权力斗争感兴趣的读者、研究《红楼梦》及其创作背景的学者和爱好者、喜欢阅读权谋与人性深度剖析作品的读者。要点1：皇位继承的偶然性与戏剧性。从雍正驾崩到乾隆继位，短短几个时辰内，权力集团内部的博弈惊心动魄。面对雍正驾崩的突发危机，鄂尔泰的决策过程值得学习：快速判断形势，找到关键盟友（纳亲），明确核心目标（确保弘历继位），并制定多套预案（安抚弘昼）", "keywords": ["雍正驾崩", "鄂尔泰"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/三春争及初春景（全三册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/皇权更迭.md"}, {"id": "帝王心术.md", "label": "帝王心术", "title": "帝王心术", "type": "book", "degree": 3, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "书名：二月河文集 共17册 含康熙大帝4册、雍正皇帝3册、乾隆皇帝6册、密云不雨、随性随缘 、二月河妙解《红楼梦》、人间世。核心主题：本书以宏大的历史叙事，通过“帝王三部曲”（康熙、雍正、乾隆）的艺术再现，深刻剖析了中国封建王朝末期政治斗争的残酷性、权谋的复杂性以及帝王心术的运用，展现了“家天下”体制下个人命运与历史洪流的交织。历史小说爱好者，尤其是对清史、帝王传记感兴趣的读者。例如，康熙在《夺宫初政》中，面对权倾朝野的鳌拜，并未急于硬碰，而是通过“拜师学艺”（伍次友）、“秘密训练力士”（魏东亭）、“夜探鳌府”稳住对手，最终在毓庆宫以迅雷不及掩耳之势一击制胜，这正是“帝王心术”中“示弱待机、一", "keywords": ["行动建议", "二月河", "帝王心术"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/二月河文集 共17册"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/帝王心术.md"}, {"id": "后宫权谋.md", "label": "后宫权谋", "title": "后宫权谋", "type": "book", "degree": 2, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：以秦宣太后芈月从楚国公主到秦国太后的传奇一生为主线，展现战国时期诸侯争霸、后宫权谋、家国恩怨交织的宏大历史画卷，探讨权力、情感与命运在乱世中的抉择与博弈。适合人群：历史小说爱好者、对战国时期政治文化感兴趣者、喜欢女性成长与权谋题材的读者、希望从历史中汲取处世智慧的人。小说开篇以星象预言“霸星现”为引，设定芈月出生即被赋予“横扫六国、称霸天下”的天命。芈月的生存智慧体现在：不轻易表露野心，善于观察局势、借力打力，在绝境中寻找生机——如利用义渠军力平定秦国内乱，正是她政治手腕的集中体现。楚王商因预言而宠信向氏，引发王后嫉妒；王后因恐惧而加害，迫使向氏母子在逆境中求生；这一切反而强化了芈月", "keywords": ["星象预言", "芈月传"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/芈月传(1-6)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/后宫权谋.md"}, {"id": "井上靖.md", "label": "井上靖", "title": "井上靖", "type": "book", "degree": 2, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：本书以日本飞鸟时代为背景，通过“白雉”祥瑞的进献与朝堂解读，揭示了“大化改新”后日本政治格局的剧烈动荡、权力斗争的残酷，以及时代洪流中个体命运的脆弱与无常。它并非聚焦于额田女王本人，而是描绘了她所身处的那个充满变革、阴谋与不安的时代画卷。对日本古代史，特别是飞鸟时代、大化改新时期感兴趣的读者。他通过这场仪式，向所有豪族与平民宣示：一个由中大兄皇子和自己主导的“崭新时代”已经开启，旧时代的权力格局（如苏我氏）已被彻底终结，新政权的权威不容置疑。社会学-变革时代的集体焦虑与谣言传播：书中提到，在石川麻吕事件后，“坊间还流传起了另一个蜚语”，将中大兄皇子与更早的山背大兄王之死联系起来", "keywords": ["大兄皇子", "额田女"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/额田女王"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/井上靖.md"}, {"id": "地下工作.md", "label": "地下工作", "title": "地下工作", "type": "book", "degree": 4, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "书名：盐战完结珍藏版套装（全二册）。核心主题：本书以抗日战争初期国民党政权迁都重庆为背景，通过主人公黎天成（中共地下党员）在国民党中央组织部内部的潜伏与斗争，深刻揭示了国共两党在“抗日民族统一战线”表面下，围绕意识形态、组织渗透、地方控制权展开的激烈暗战，以及日本特务势力的趁虚而入。适合人群：对民国历史、谍战题材、国共关系史感兴趣的读者；喜欢《北平无战事》、《潜伏》等作品，追求复杂人物塑造和权谋博弈的读者。冯承泰与陈公博（汪精卫系）争夺四川省党部主任委员的失败，以及中央组织部与中统局联手“空降下派”青壮干部以对抗四川本土派系（武德励进会），生动展现了国民党内部“中央”与“地方”、“CC系”与“", "keywords": ["国民党", "冯承泰", "黎天成", "降下派"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/盐战完结珍藏版套装（全二册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/地下工作.md"}, {"id": "改革与守旧.md", "label": "改革与守旧", "title": "改革与守旧", "type": "book", "degree": 8, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "主题领域：历史小说、中国政治史、传记文学、权谋与改革。出版信息：人民文学出版社，2013年9月第1次印刷。本书为“茅盾文学奖获奖作品全集”系列之一。核心概念相互支撑：改革是张居正的事功目标，而实现这一目标必须依赖权谋（与冯保、李太后结盟，打压政敌）。人物塑造的复杂性：成功塑造了张居正、冯保、李太后、万历皇帝等一系列立体、复杂、充满矛盾的人物形象，避", "keywords": ["历史小说的叙事方法", "核心概念相互支撑", "改革与守旧", "权谋与平衡", "皇权与相权", "忠奸与名节", "对立与互补", "改革与守旧"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/张居正：全4册_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/改革与守旧.md"}, {"id": "制度与人治.md", "label": "制度与人治", "title": "制度与人治", "type": "book", "degree": 5, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "书名：二月河文集 共17册 含康熙大帝4册、雍正皇帝3册、乾隆皇帝6册、密云不雨、随性随缘 、二月河妙解《红楼梦》、人间世。核心主题：本书以宏大的历史叙事，通过“帝王三部曲”（康熙、雍正、乾隆）的艺术再现，深刻剖析了中国封建王朝末期政治斗争的残酷性、权谋的复杂性以及帝王心术的运用，展现了“家天下”体制下个人命运与历史洪流的交织。历史小说爱好者，尤其是对清史、帝王传记感兴趣的读者。例如，康熙在《夺宫初政》中，面对权倾朝野的鳌拜，并未急于硬碰，而是通过“拜师学艺”（伍次友）、“秘密训练力士”（魏东亭）、“夜探鳌府”稳住对手，最终在毓庆宫以迅雷不及掩耳之势一击制胜，这正是“帝王心术”中“示弱待机、一", "keywords": ["行动建议", "二月河", "伍次友", "月河文", "河文集"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/二月河文集 共17册"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/制度与人治.md"}, {"id": "北魏孝文帝改革.md", "label": "北魏孝文帝改革", "title": "北魏孝文帝改革", "type": "book", "degree": 4, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "作者：李纲, ePUBw.COM。核心主题：以北魏孝文帝迁都洛阳后的政治动荡为背景，通过一桩四夷馆离奇命案，揭示宫廷权力斗争、新旧贵族矛盾、改革与守旧势力的激烈碰撞，展现历史转型期的复杂人性与权谋博弈。适合人群：历史小说爱好者、对北魏历史或中国古代政治变革感兴趣的读者、喜欢悬疑推理与权谋题材的读者。穆泰向咸阳王透露的“黄白之术”极具象征意义：东宫詹事黄腾之掌握寇谦之嫡传的“点铜成金”秘术，实则是权力依附与利益输送的隐喻。从制度经济学视角看，北魏迁都改革面临典型的“路径依赖”困境：平城旧贵族在旧制度下拥有既得利益（如八姓勋贵），迁都意味着其权力基础被削弱", "keywords": ["孝文帝", "咸阳王", "点铜成", "铜成金"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/洛阳危机：孝文帝密使"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/北魏孝文帝改革.md"}, {"id": "忠奸与名节.md", "label": "忠奸与名节", "title": "忠奸与名节", "type": "book", "degree": 8, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "主题领域：历史小说、中国政治史、传记文学、权谋与改革。出版信息：人民文学出版社，2013年9月第1次印刷。本书为“茅盾文学奖获奖作品全集”系列之一。核心概念相互支撑：改革是张居正的事功目标，而实现这一目标必须依赖权谋（与冯保、李太后结盟，打压政敌）。人物塑造的复杂性：成功塑造了张居正、冯保、李太后、万历皇帝等一系列立体、复杂、充满矛盾的人物形象，避", "keywords": ["历史小说的叙事方法", "核心概念相互支撑", "改革与守旧", "权谋与平衡", "皇权与相权", "忠奸与名节", "对立与互补", "忠奸与名节"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/张居正：全4册_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/忠奸与名节.md"}, {"id": "情报工作.md", "label": "情报工作", "title": "情报工作", "type": "book", "degree": 4, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "书名：盐战完结珍藏版套装（全二册）。核心主题：以抗战时期国民党内部权力斗争、国共暗战以及日本间谍渗透为背景，通过主人公黎天成在国民党中央党部的潜伏与周旋，揭示历史洪流中个体在情报战、派系博弈与民族大义间的艰难抉择。适合人群：历史爱好者、谍战小说读者、对民国政治与国共关系感兴趣的读者、追求情节紧凑与人性深度叙事的文学爱好者。黎天成在国民党内部周旋时，始终以“民族大义”为最高准则，避免被派系利益同化。黎天成在国民党中央党部工作，却为中共提供情报，长期处于“认知失调”状态：他必须公开拥护“一个领袖", "keywords": ["国民党", "黎天成", "冯承泰", "盐战完"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/盐战完结珍藏版套装（全二册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/情报工作.md"}, {"id": "组织渗透.md", "label": "组织渗透", "title": "组织渗透", "type": "book", "degree": 4, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "书名：盐战完结珍藏版套装（全二册）。核心主题：本书以抗日战争初期国民党政权迁都重庆为背景，通过主人公黎天成（中共地下党员）在国民党中央组织部内部的潜伏与斗争，深刻揭示了国共两党在“抗日民族统一战线”表面下，围绕意识形态、组织渗透、地方控制权展开的激烈暗战，以及日本特务势力的趁虚而入。适合人群：对民国历史、谍战题材、国共关系史感兴趣的读者；喜欢《北平无战事》、《潜伏》等作品，追求复杂人物塑造和权谋博弈的读者。冯承泰与陈公博（汪精卫系）争夺四川省党部主任委员的失败，以及中央组织部与中统局联手“空降下派”青壮干部以对抗四川本土派系（武德励进会），生动展现了国民党内部“中央”与“地方”、“CC系”与“", "keywords": ["国民党", "冯承泰", "黎天成", "降下派"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/盐战完结珍藏版套装（全二册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/组织渗透.md"}, {"id": "历史叙事.md", "label": "历史叙事", "title": "历史叙事", "type": "book", "degree": 5, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "书名：二月河文集 共17册 含康熙大帝4册、雍正皇帝3册、乾隆皇帝6册、密云不雨、随性随缘 、二月河妙解《红楼梦》、人间世。核心主题：本书以宏大的历史叙事，通过“帝王三部曲”（康熙、雍正、乾隆）的艺术再现，深刻剖析了中国封建王朝末期政治斗争的残酷性、权谋的复杂性以及帝王心术的运用，展现了“家天下”体制下个人命运与历史洪流的交织。历史小说爱好者，尤其是对清史、帝王传记感兴趣的读者。例如，康熙在《夺宫初政》中，面对权倾朝野的鳌拜，并未急于硬碰，而是通过“拜师学艺”（伍次友）、“秘密训练力士”（魏东亭）、“夜探鳌府”稳住对手，最终在毓庆宫以迅雷不及掩耳之势一击制胜，这正是“帝王心术”中“示弱待机、一", "keywords": ["行动建议", "二月河", "伍次友", "月河文", "河文集"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/二月河文集 共17册"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/历史叙事.md"}, {"id": "政治符号.md", "label": "政治符号", "title": "政治符号", "type": "book", "degree": 2, "cluster": "历史小说", "domain": "历史", "sub_domain": "历史小说", "summary": "核心主题：本书以日本飞鸟时代为背景，通过“白雉”祥瑞的进献与朝堂解读，揭示了“大化改新”后日本政治格局的剧烈动荡、权力斗争的残酷，以及时代洪流中个体命运的脆弱与无常。它并非聚焦于额田女王本人，而是描绘了她所身处的那个充满变革、阴谋与不安的时代画卷。对日本古代史，特别是飞鸟时代、大化改新时期感兴趣的读者。他通过这场仪式，向所有豪族与平民宣示：一个由中大兄皇子和自己主导的“崭新时代”已经开启，旧时代的权力格局（如苏我氏）已被彻底终结，新政权的权威不容置疑。社会学-变革时代的集体焦虑与谣言传播：书中提到，在石川麻吕事件后，“坊间还流传起了另一个蜚语”，将中大兄皇子与更早的山背大兄王之死联系起来", "keywords": ["大兄皇子", "额田女"], "tags": ["domain/历史", "sub_domain/历史小说", "type/concept", "source/额田女王"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/历史小说/政治符号.md"}];
+var LINKS = [{"source": "星象预言.md", "target": "战国历史.md", "value": 2, "shared": ["星象预言", "芈月传"]}, {"source": "星象预言.md", "target": "女性政治家.md", "value": 2, "shared": ["星象预言", "芈月传"]}, {"source": "星象预言.md", "target": "后宫权谋.md", "value": 2, "shared": ["星象预言", "芈月传"]}, {"source": "情与法.md", "target": "权谋与平衡.md", "value": 8, "shared": ["核心概念相互支撑", "对立与互补", "改革与守旧", "忠奸与名节", "相关笔记"]}, {"source": "情与法.md", "target": "皇权与相权.md", "value": 7, "shared": ["核心概念相互支撑", "对立与互补", "改革与守旧", "忠奸与名节", "皇权与相权"]}, {"source": "情与法.md", "target": "改革与守旧.md", "value": 7, "shared": ["核心概念相互支撑", "对立与互补", "改革与守旧", "忠奸与名节", "皇权与相权"]}, {"source": "情与法.md", "target": "忠奸与名节.md", "value": 7, "shared": ["核心概念相互支撑", "对立与互补", "改革与守旧", "忠奸与名节", "皇权与相权"]}, {"source": "权谋与平衡.md", "target": "皇权与相权.md", "value": 7, "shared": ["核心概念相互支撑", "对立与互补", "改革与守旧", "忠奸与名节", "皇权与相权"]}, {"source": "权谋与平衡.md", "target": "改革与守旧.md", "value": 7, "shared": ["核心概念相互支撑", "对立与互补", "改革与守旧", "忠奸与名节", "皇权与相权"]}, {"source": "权谋与平衡.md", "target": "忠奸与名节.md", "value": 7, "shared": ["核心概念相互支撑", "对立与互补", "改革与守旧", "忠奸与名节", "皇权与相权"]}, {"source": "人性百态.md", "target": "历史文学创作.md", "value": 2, "shared": ["行动建议", "二月河"]}, {"source": "人性百态.md", "target": "权力斗争.md", "value": 2, "shared": ["行动建议", "二月河"]}, {"source": "人性百态.md", "target": "人治矛盾.md", "value": 2, "shared": ["行动建议", "二月河"]}, {"source": "人性百态.md", "target": "人性博弈.md", "value": 2, "shared": ["行动建议", "二月河"]}, {"source": "人性百态.md", "target": "帝王心术.md", "value": 2, "shared": ["行动建议", "二月河"]}, {"source": "人性百态.md", "target": "制度与人治.md", "value": 2, "shared": ["行动建议", "二月河"]}, {"source": "人性百态.md", "target": "历史叙事.md", "value": 2, "shared": ["行动建议", "二月河"]}, {"source": "民族大义.md", "target": "国民党派系斗争.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "民族大义.md", "target": "国共谍战.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "民族大义.md", "target": "人物关系.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "民族大义.md", "target": "双重身份.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "民族大义.md", "target": "国共暗战.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "民族大义.md", "target": "地下工作.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "民族大义.md", "target": "情报工作.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "民族大义.md", "target": "组织渗透.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "墨家与盗家.md", "target": "班超出使西域.md", "value": 3, "shared": ["三十六", "十六骑", "柳盆子"]}, {"source": "墨家与盗家.md", "target": "边缘群体创新.md", "value": 4, "shared": ["三十六", "十六骑", "柳盆子", "对齐欢"]}, {"source": "墨家与盗家.md", "target": "剑意与心流.md", "value": 4, "shared": ["三十六", "十六骑", "柳盆子", "对齐欢"]}, {"source": "墨家与盗家.md", "target": "剑意.md", "value": 4, "shared": ["三十六", "十六骑", "柳盆子", "对齐欢"]}, {"source": "墨家与盗家.md", "target": "团队招募.md", "value": 4, "shared": ["三十六", "十六骑", "柳盆子", "对齐欢"]}, {"source": "墨家与盗家.md", "target": "墨家.md", "value": 4, "shared": ["三十六", "十六骑", "柳盆子", "对齐欢"]}, {"source": "墨家与盗家.md", "target": "边缘群体.md", "value": 4, "shared": ["三十六", "十六骑", "柳盆子", "对齐欢"]}, {"source": "历史文学创作.md", "target": "权力斗争.md", "value": 5, "shared": ["行动建议", "二月河", "月河文", "河文集", "伍次友"]}, {"source": "历史文学创作.md", "target": "人治矛盾.md", "value": 5, "shared": ["行动建议", "二月河", "月河文", "河文集", "伍次友"]}, {"source": "历史文学创作.md", "target": "人性博弈.md", "value": 5, "shared": ["行动建议", "二月河", "月河文", "河文集", "伍次友"]}, {"source": "历史文学创作.md", "target": "帝王心术.md", "value": 2, "shared": ["行动建议", "二月河"]}, {"source": "历史文学创作.md", "target": "制度与人治.md", "value": 5, "shared": ["行动建议", "二月河", "月河文", "河文集", "伍次友"]}, {"source": "历史文学创作.md", "target": "历史叙事.md", "value": 5, "shared": ["行动建议", "二月河", "月河文", "河文集", "伍次友"]}, {"source": "权力斗争.md", "target": "人治矛盾.md", "value": 5, "shared": ["行动建议", "二月河", "月河文", "河文集", "伍次友"]}, {"source": "权力斗争.md", "target": "人性博弈.md", "value": 5, "shared": ["行动建议", "二月河", "月河文", "河文集", "伍次友"]}, {"source": "权力斗争.md", "target": "帝王心术.md", "value": 2, "shared": ["行动建议", "二月河"]}, {"source": "权力斗争.md", "target": "制度与人治.md", "value": 5, "shared": ["行动建议", "二月河", "月河文", "河文集", "伍次友"]}, {"source": "权力斗争.md", "target": "历史叙事.md", "value": 5, "shared": ["行动建议", "二月河", "月河文", "河文集", "伍次友"]}, {"source": "国民党派系斗争.md", "target": "国共谍战.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "国民党派系斗争.md", "target": "人物关系.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "国民党派系斗争.md", "target": "双重身份.md", "value": 4, "shared": ["黎天成", "国民党", "盐战完", "冯承泰"]}, {"source": "国民党派系斗争.md", "target": "国共暗战.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "国民党派系斗争.md", "target": "地下工作.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "国民党派系斗争.md", "target": "情报工作.md", "value": 4, "shared": ["黎天成", "国民党", "盐战完", "冯承泰"]}, {"source": "国民党派系斗争.md", "target": "组织渗透.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "战国历史.md", "target": "女性政治家.md", "value": 2, "shared": ["星象预言", "芈月传"]}, {"source": "战国历史.md", "target": "后宫权谋.md", "value": 2, "shared": ["星象预言", "芈月传"]}, {"source": "飞鸟时代.md", "target": "井上靖.md", "value": 2, "shared": ["大兄皇子", "额田女"]}, {"source": "飞鸟时代.md", "target": "政治符号.md", "value": 2, "shared": ["大兄皇子", "额田女"]}, {"source": "历史转型.md", "target": "迁都洛阳.md", "value": 2, "shared": ["咸阳王", "孝文帝"]}, {"source": "历史转型.md", "target": "北魏孝文帝改革.md", "value": 4, "shared": ["铜成金", "咸阳王", "点铜成", "孝文帝"]}, {"source": "曹家隐喻.md", "target": "权力博弈.md", "value": 2, "shared": ["鄂尔泰", "雍正驾崩"]}, {"source": "曹家隐喻.md", "target": "雍正心理.md", "value": 2, "shared": ["鄂尔泰", "雍正驾崩"]}, {"source": "曹家隐喻.md", "target": "互文叙事.md", "value": 2, "shared": ["鄂尔泰", "雍正驾崩"]}, {"source": "曹家隐喻.md", "target": "红楼梦互文.md", "value": 2, "shared": ["鄂尔泰", "雍正驾崩"]}, {"source": "曹家隐喻.md", "target": "历史偶然性.md", "value": 2, "shared": ["鄂尔泰", "雍正驾崩"]}, {"source": "曹家隐喻.md", "target": "皇权更迭.md", "value": 2, "shared": ["鄂尔泰", "雍正驾崩"]}, {"source": "权力博弈.md", "target": "雍正心理.md", "value": 2, "shared": ["鄂尔泰", "雍正驾崩"]}, {"source": "权力博弈.md", "target": "互文叙事.md", "value": 2, "shared": ["鄂尔泰", "雍正驾崩"]}, {"source": "权力博弈.md", "target": "红楼梦互文.md", "value": 2, "shared": ["鄂尔泰", "雍正驾崩"]}, {"source": "权力博弈.md", "target": "历史偶然性.md", "value": 2, "shared": ["鄂尔泰", "雍正驾崩"]}, {"source": "权力博弈.md", "target": "皇权更迭.md", "value": 2, "shared": ["鄂尔泰", "雍正驾崩"]}, {"source": "雍正心理.md", "target": "互文叙事.md", "value": 2, "shared": ["鄂尔泰", "雍正驾崩"]}, {"source": "雍正心理.md", "target": "红楼梦互文.md", "value": 2, "shared": ["鄂尔泰", "雍正驾崩"]}, {"source": "雍正心理.md", "target": "历史偶然性.md", "value": 2, "shared": ["鄂尔泰", "雍正驾崩"]}, {"source": "雍正心理.md", "target": "皇权更迭.md", "value": 2, "shared": ["鄂尔泰", "雍正驾崩"]}, {"source": "班超出使西域.md", "target": "边缘群体创新.md", "value": 3, "shared": ["三十六", "十六骑", "柳盆子"]}, {"source": "班超出使西域.md", "target": "剑意与心流.md", "value": 3, "shared": ["三十六", "十六骑", "柳盆子"]}, {"source": "班超出使西域.md", "target": "剑意.md", "value": 3, "shared": ["三十六", "十六骑", "柳盆子"]}, {"source": "班超出使西域.md", "target": "团队招募.md", "value": 3, "shared": ["三十六", "十六骑", "柳盆子"]}, {"source": "班超出使西域.md", "target": "墨家.md", "value": 3, "shared": ["三十六", "十六骑", "柳盆子"]}, {"source": "班超出使西域.md", "target": "边缘群体.md", "value": 3, "shared": ["三十六", "十六骑", "柳盆子"]}, {"source": "国共谍战.md", "target": "人物关系.md", "value": 4, "shared": ["黎天成", "国民党", "降下派", "冯承泰"]}, {"source": "国共谍战.md", "target": "双重身份.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "国共谍战.md", "target": "国共暗战.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "国共谍战.md", "target": "地下工作.md", "value": 4, "shared": ["黎天成", "国民党", "降下派", "冯承泰"]}, {"source": "国共谍战.md", "target": "情报工作.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "国共谍战.md", "target": "组织渗透.md", "value": 4, "shared": ["黎天成", "国民党", "降下派", "冯承泰"]}, {"source": "边缘群体创新.md", "target": "剑意与心流.md", "value": 4, "shared": ["三十六", "十六骑", "柳盆子", "对齐欢"]}, {"source": "边缘群体创新.md", "target": "剑意.md", "value": 4, "shared": ["三十六", "十六骑", "柳盆子", "对齐欢"]}, {"source": "边缘群体创新.md", "target": "团队招募.md", "value": 4, "shared": ["三十六", "十六骑", "柳盆子", "对齐欢"]}, {"source": "边缘群体创新.md", "target": "墨家.md", "value": 4, "shared": ["三十六", "十六骑", "柳盆子", "对齐欢"]}, {"source": "边缘群体创新.md", "target": "边缘群体.md", "value": 4, "shared": ["三十六", "十六骑", "柳盆子", "对齐欢"]}, {"source": "人治矛盾.md", "target": "人性博弈.md", "value": 5, "shared": ["行动建议", "二月河", "月河文", "河文集", "伍次友"]}, {"source": "人治矛盾.md", "target": "帝王心术.md", "value": 2, "shared": ["行动建议", "二月河"]}, {"source": "人治矛盾.md", "target": "制度与人治.md", "value": 5, "shared": ["行动建议", "二月河", "月河文", "河文集", "伍次友"]}, {"source": "人治矛盾.md", "target": "历史叙事.md", "value": 5, "shared": ["行动建议", "二月河", "月河文", "河文集", "伍次友"]}, {"source": "剑意与心流.md", "target": "剑意.md", "value": 4, "shared": ["三十六", "十六骑", "柳盆子", "对齐欢"]}, {"source": "剑意与心流.md", "target": "团队招募.md", "value": 4, "shared": ["三十六", "十六骑", "柳盆子", "对齐欢"]}, {"source": "剑意与心流.md", "target": "墨家.md", "value": 4, "shared": ["三十六", "十六骑", "柳盆子", "对齐欢"]}, {"source": "剑意与心流.md", "target": "边缘群体.md", "value": 4, "shared": ["三十六", "十六骑", "柳盆子", "对齐欢"]}, {"source": "人物关系.md", "target": "双重身份.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "人物关系.md", "target": "国共暗战.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "人物关系.md", "target": "地下工作.md", "value": 4, "shared": ["黎天成", "国民党", "降下派", "冯承泰"]}, {"source": "人物关系.md", "target": "情报工作.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "人物关系.md", "target": "组织渗透.md", "value": 4, "shared": ["黎天成", "国民党", "降下派", "冯承泰"]}, {"source": "皇权与相权.md", "target": "改革与守旧.md", "value": 7, "shared": ["核心概念相互支撑", "对立与互补", "改革与守旧", "忠奸与名节", "皇权与相权"]}, {"source": "皇权与相权.md", "target": "忠奸与名节.md", "value": 7, "shared": ["核心概念相互支撑", "对立与互补", "改革与守旧", "忠奸与名节", "皇权与相权"]}, {"source": "剑意.md", "target": "团队招募.md", "value": 4, "shared": ["三十六", "十六骑", "柳盆子", "对齐欢"]}, {"source": "剑意.md", "target": "墨家.md", "value": 4, "shared": ["三十六", "十六骑", "柳盆子", "对齐欢"]}, {"source": "剑意.md", "target": "边缘群体.md", "value": 4, "shared": ["三十六", "十六骑", "柳盆子", "对齐欢"]}, {"source": "人性博弈.md", "target": "帝王心术.md", "value": 2, "shared": ["行动建议", "二月河"]}, {"source": "人性博弈.md", "target": "制度与人治.md", "value": 5, "shared": ["行动建议", "二月河", "月河文", "河文集", "伍次友"]}, {"source": "人性博弈.md", "target": "历史叙事.md", "value": 5, "shared": ["行动建议", "二月河", "月河文", "河文集", "伍次友"]}, {"source": "团队招募.md", "target": "墨家.md", "value": 4, "shared": ["三十六", "十六骑", "柳盆子", "对齐欢"]}, {"source": "团队招募.md", "target": "边缘群体.md", "value": 4, "shared": ["三十六", "十六骑", "柳盆子", "对齐欢"]}, {"source": "双重身份.md", "target": "国共暗战.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "双重身份.md", "target": "地下工作.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "双重身份.md", "target": "情报工作.md", "value": 4, "shared": ["黎天成", "国民党", "盐战完", "冯承泰"]}, {"source": "双重身份.md", "target": "组织渗透.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "墨家.md", "target": "边缘群体.md", "value": 4, "shared": ["三十六", "十六骑", "柳盆子", "对齐欢"]}, {"source": "互文叙事.md", "target": "红楼梦互文.md", "value": 2, "shared": ["鄂尔泰", "雍正驾崩"]}, {"source": "互文叙事.md", "target": "历史偶然性.md", "value": 2, "shared": ["鄂尔泰", "雍正驾崩"]}, {"source": "互文叙事.md", "target": "皇权更迭.md", "value": 2, "shared": ["鄂尔泰", "雍正驾崩"]}, {"source": "红楼梦互文.md", "target": "历史偶然性.md", "value": 2, "shared": ["鄂尔泰", "雍正驾崩"]}, {"source": "红楼梦互文.md", "target": "皇权更迭.md", "value": 2, "shared": ["鄂尔泰", "雍正驾崩"]}, {"source": "国共暗战.md", "target": "地下工作.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "国共暗战.md", "target": "情报工作.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "国共暗战.md", "target": "组织渗透.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "女性政治家.md", "target": "后宫权谋.md", "value": 2, "shared": ["星象预言", "芈月传"]}, {"source": "迁都洛阳.md", "target": "北魏孝文帝改革.md", "value": 2, "shared": ["咸阳王", "孝文帝"]}, {"source": "历史偶然性.md", "target": "皇权更迭.md", "value": 2, "shared": ["鄂尔泰", "雍正驾崩"]}, {"source": "帝王心术.md", "target": "制度与人治.md", "value": 2, "shared": ["行动建议", "二月河"]}, {"source": "帝王心术.md", "target": "历史叙事.md", "value": 2, "shared": ["行动建议", "二月河"]}, {"source": "井上靖.md", "target": "政治符号.md", "value": 2, "shared": ["大兄皇子", "额田女"]}, {"source": "地下工作.md", "target": "情报工作.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}, {"source": "地下工作.md", "target": "组织渗透.md", "value": 4, "shared": ["黎天成", "国民党", "降下派", "冯承泰"]}, {"source": "改革与守旧.md", "target": "忠奸与名节.md", "value": 7, "shared": ["核心概念相互支撑", "对立与互补", "改革与守旧", "忠奸与名节", "皇权与相权"]}, {"source": "制度与人治.md", "target": "历史叙事.md", "value": 5, "shared": ["行动建议", "二月河", "月河文", "河文集", "伍次友"]}, {"source": "情报工作.md", "target": "组织渗透.md", "value": 3, "shared": ["黎天成", "国民党", "冯承泰"]}];
+var CLUSTER_COLORS = {"历史小说": "#06b6d4"};
+var SEARCH_DATA = [{"id": "星象预言.md", "label": "星象预言"}, {"id": "情与法.md", "label": "情与法"}, {"id": "权谋与平衡.md", "label": "权谋与平衡"}, {"id": "盗家.md", "label": "盗家"}, {"id": "人性百态.md", "label": "人性百态"}, {"id": "民族大义.md", "label": "民族大义"}, {"id": "墨家与盗家.md", "label": "墨家与盗家"}, {"id": "历史文学创作.md", "label": "历史文学创作"}, {"id": "权力斗争.md", "label": "权力斗争"}, {"id": "国民党派系斗争.md", "label": "国民党派系斗争"}, {"id": "战国历史.md", "label": "战国历史"}, {"id": "飞鸟时代.md", "label": "飞鸟时代"}, {"id": "历史转型.md", "label": "历史转型"}, {"id": "曹家隐喻.md", "label": "曹家隐喻"}, {"id": "权力博弈.md", "label": "权力博弈"}, {"id": "雍正心理.md", "label": "雍正心理"}, {"id": "大化改新.md", "label": "大化改新"}, {"id": "班超出使西域.md", "label": "班超出使西域"}, {"id": "国共谍战.md", "label": "国共谍战"}, {"id": "边缘群体创新.md", "label": "边缘群体创新"}, {"id": "人治矛盾.md", "label": "人治矛盾"}, {"id": "剑意与心流.md", "label": "剑意与心流"}, {"id": "人物关系.md", "label": "人物关系"}, {"id": "皇权与相权.md", "label": "皇权与相权"}, {"id": "剑意.md", "label": "剑意"}, {"id": "人性博弈.md", "label": "人性博弈"}, {"id": "团队招募.md", "label": "团队招募"}, {"id": "政治心理学.md", "label": "政治心理学"}, {"id": "双重身份.md", "label": "双重身份"}, {"id": "墨家.md", "label": "墨家"}, {"id": "互文叙事.md", "label": "互文叙事"}, {"id": "红楼梦互文.md", "label": "红楼梦互文"}, {"id": "国共暗战.md", "label": "国共暗战"}, {"id": "女性政治家.md", "label": "女性政治家"}, {"id": "迁都洛阳.md", "label": "迁都洛阳"}, {"id": "边缘群体.md", "label": "边缘群体"}, {"id": "历史偶然性.md", "label": "历史偶然性"}, {"id": "皇权更迭.md", "label": "皇权更迭"}, {"id": "帝王心术.md", "label": "帝王心术"}, {"id": "后宫权谋.md", "label": "后宫权谋"}, {"id": "井上靖.md", "label": "井上靖"}, {"id": "地下工作.md", "label": "地下工作"}, {"id": "改革与守旧.md", "label": "改革与守旧"}, {"id": "制度与人治.md", "label": "制度与人治"}, {"id": "北魏孝文帝改革.md", "label": "北魏孝文帝改革"}, {"id": "忠奸与名节.md", "label": "忠奸与名节"}, {"id": "情报工作.md", "label": "情报工作"}, {"id": "组织渗透.md", "label": "组织渗透"}, {"id": "历史叙事.md", "label": "历史叙事"}, {"id": "政治符号.md", "label": "政治符号"}];
+var CONCEPT_SEARCH = [];
+
+
+/* ---- 搜索 ---- */
+var searchBox = document.getElementById("search-box");
+var searchResults = document.getElementById("search-results");
+
+searchBox.addEventListener("input", function(){
+  var q = this.value.trim().toLowerCase();
+  if(!q) { searchResults.style.display="none"; return; }
+  var combined = SEARCH_DATA.concat(CONCEPT_SEARCH.map(function(c){ return {id:c,label:c,type:"concept"}; }));
+  var matches = combined.filter(function(d){ return d.label.toLowerCase().indexOf(q)>-1; }).slice(0,12);
+  if(!matches.length) { searchResults.style.display="none"; return; }
+  searchResults.innerHTML = matches.map(function(d){
+    return '<div class="sri" data-id="'+d.id+'">'+d.label+'</div>';
+  }).join("");
+  searchResults.style.display="block";
+});
+
+searchResults.addEventListener("click", function(e){
+  var el = e.target.closest(".sri");
+  if(!el) return;
+  highlightNode(el.getAttribute("data-id"));
+  searchResults.style.display="none";
+  searchBox.value="";
+});
+
+function highlightNode(id){
+  svg.selectAll(".node").classed("highlight", function(d){ return d.id===id; });
+  svg.selectAll(".link").classed("highlight", function(d){
+    return d.source.id===id || d.target.id===id;
+  });
+  var nd = nodeMap.get(id);
+  if(!nd) return;
+  var t = d3.zoomTransform(svg.node());
+  var x = -nd.x*t.k + width/2;
+  var y = -nd.y*t.k + height/2;
+  svg.transition().duration(600).call(zoom.transform, d3.zoomIdentity.translate(x,y).scale(t.k));
+}
+
+/* ---- 详情面板 ---- */
+function showDetail(d){
+  var panel = document.getElementById("detail-panel");
+  var title = document.getElementById("detail-title");
+  var body  = document.getElementById("detail-body");
+
+  title.textContent = (d.title || d.label || d.id || "").replace(/\.md$/, "");
+
+  var html = "";
+
+  /* 元信息 */
+  html += '<div class="section"><div class="meta-row"><span class="meta-label">类型</span><span>' + (d.type==="concept" ? "💡 概念" : "📖 笔记") + '</span></div>';
+  if(d.domain)   html += '<div class="meta-row"><span class="meta-label">领域</span><span>' + d.domain + '</span></div>';
+  if(d.cluster) html += '<div class="meta-row"><span class="meta-label">聚类</span><span>' + d.cluster + '</span></div>';
+  if(d.degree !== undefined) html += '<div class="meta-row"><span class="meta-label">连通度</span><span>' + d.degree + '</span></div>';
+  html += '</div>';
+
+  /* 摘要 */
+  if(d.summary){
+    html += '<div class="section"><div class="section-title">📝 摘要</div><div class="summary">' + escapeHtml(d.summary.slice(0,500)) + (d.summary.length>500 ? "..." : "") + '</div></div>';
+  }
+
+  /* 关键词 */
+  if(d.keywords && d.keywords.length){
+    html += '<div class="section"><div class="section-title">🔑 关键词</div>';
+    d.keywords.forEach(function(kw){ html += '<span class="keyword">' + escapeHtml(kw) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 标签 */
+  if(d.tags && d.tags.length){
+    html += '<div class="section"><div class="section-title">🏷️ 标签</div>';
+    d.tags.forEach(function(tg){ html += '<span class="tag">' + escapeHtml(tg) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 打开原文件：用 Obsidian URI 协议，避免浏览器 file:// 限制 */
+  if(d.path){
+    var obsidianUrl = "obsidian://open?path=" + encodeURIComponent(d.path);
+    html += '<div class="section"><a class="open-link" href="' + obsidianUrl + '">📂 在 Obsidian 中打开</a></div>';
+  }
+
+  body.innerHTML = html;
+  panel.classList.add("open");
+}
+
+function closeDetail(){
+  document.getElementById("detail-panel").classList.remove("open");
+}
+
+function escapeHtml(s){
+  if(!s) return "";
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ---- D3 力导向图 ---- */
+var width  = window.innerWidth;
+var height = window.innerHeight - 48;
+var svg = d3.select("#graph").append("svg").attr("width",width).attr("height",height);
+var g = svg.append("g");
+var zoom = d3.zoom().scaleExtent([0.05,5]).on("zoom", function(e){ g.attr("transform", e.transform); });
+svg.call(zoom);
+
+var simulation = d3.forceSimulation(NODES)
+  .force("link",    d3.forceLink(LINKS).id(function(d){ return d.id; }).distance(90))
+  .force("charge",  d3.forceManyBody().strength(-220))
+  .force("center",  d3.forceCenter(width/2, height/2))
+  .force("collision", d3.forceCollide(30))
+  .force("x",       d3.forceX(width/2).strength(0.06))
+  .force("y",       d3.forceY(height/2).strength(0.06));
+
+var link = g.append("g").attr("class","links").selectAll("line")
+  .data(LINKS).join("line")
+  .attr("class", function(d){ return "link" + ((d.type==="book-book") ? " link-book" : ""); });
+
+var node = g.append("g").attr("class","nodes").selectAll("g")
+  .data(NODES).join("g")
+  .attr("class","node")
+  .attr("data-id", function(d){ return d.id; })
+  .call(d3.drag()
+    .on("start", function(event,d){ if(!event.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+    .on("drag",  function(event,d){ d.fx=event.x; d.fy=event.y; })
+    .on("end",   function(event,d){ if(!event.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+node.append("circle")
+  .attr("r", function(d){ return d.type==="book" ? 5+Math.sqrt(d.degree||1)*1.5 : 7; })
+  .attr("fill", function(d){ return d.type==="book" ? (CLUSTER_COLORS[d.cluster]||"#94a3b8") : "#06b6d4"; })
+  .attr("stroke", function(d){ return d.type==="book" ? "#0f172a" : "#d97706"; })
+  .on("mouseover", function(event,d){
+    var html = d.type==="book"
+      ? "<strong>📖 "+d.label+"</strong><br>连通度:"+d.degree+"<br>聚类:"+(d.cluster||"未分类")
+      : "<strong>💡 "+d.concept+"</strong><br>关联:"+d.book_count+" 篇";
+    d3.select("#tooltip").html(html).style("opacity",1)
+      .style("left",(event.pageX+12)+"px").style("top",(event.pageY-8)+"px");
+  })
+  .on("mouseout", function(){ d3.select("#tooltip").style("opacity",0); })
+  .on("click", function(event,d){
+    event.stopPropagation();
+    showDetail(d);
+  });
+
+node.append("text").attr("dx",11).attr("dy","0.35em").text(function(d){ return d.label; });
+
+var nodeMap = new Map();
+simulation.on("tick", function(){
+  link
+    .attr("x1", function(d){ return d.source.x; })
+    .attr("y1", function(d){ return d.source.y; })
+    .attr("x2", function(d){ return d.target.x; })
+    .attr("y2", function(d){ return d.target.y; });
+  node.attr("transform", function(d){
+    nodeMap.set(d.id, d);
+    return "translate("+d.x+","+d.y+")";
+  });
+});
+
+/* ---- 图例 ---- */
+var legendItems = d3.select("#legend").append("div").style("font-weight","bold").style("margin-bottom","8px").text("🎨 聚类").node().parentNode;
+Object.entries(CLUSTER_COLORS).forEach(function(entry){
+  var li = d3.select(legendItems).append("div").attr("class","li");
+  li.append("span").attr("class","ld").style("background",entry[1]);
+  li.append("span").text(entry[0]);
+});
+
+/* ---- 按钮 ---- */
+var conceptVisible = true;
+d3.select("#btn-toggle-concept").on("click", function(){
+  conceptVisible = !conceptVisible;
+  svg.selectAll(".node").filter(function(d){ return d.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  svg.selectAll(".link").filter(function(d){ return d.source.type==="concept"||d.target.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  d3.select(this).text(conceptVisible?"隐藏概念":"显示概念").classed("active",!conceptVisible);
+});
+d3.select("#btn-reset").on("click", function(){
+  closeDetail();
+  svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+});
+
+svg.on("click", function(){ searchResults.style.display="none"; });
+document.addEventListener("click", function(e){
+  if(!document.getElementById("detail-panel").contains(e.target) && !e.target.closest(".node")){
+    closeDetail();
+  }
+});
+
+/* 更新统计 */
+d3.select("#node-count").text(NODES.length);
+d3.select("#link-count").text(LINKS.length);
+</script>
+</body>
+</html>

@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>心理学 - 教育心理学 - 知识图谱</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#0f172a; color:#e2e8f0; overflow:hidden; }
+
+/* 侧边栏 */
+#sidebar { position:fixed; left:0; top:0; width:220px; height:100vh; background:#1e293b; border-right:1px solid #334155; overflow-y:auto; z-index:50; transition:transform 0.3s; font-size:12px; }
+#sidebar.collapsed { transform:translateX(-220px); }
+#sidebar h2 { font-size:13px; padding:12px 14px 8px; color:#94a3b8; border-bottom:1px solid #334155; }
+#sidebar .domain-header { padding:7px 14px; cursor:pointer; font-weight:600; border-bottom:1px solid #1a2332; transition:background 0.15s; user-select:none; }
+#sidebar .domain-header:hover { background:#334155; }
+#sidebar .domain-pages { display:none; }
+#sidebar .domain-pages a { display:block; padding:5px 14px 5px 24px; color:#cbd5e1; text-decoration:none; border-bottom:1px solid #1a2332; transition:background 0.15s; font-size:11px; }
+#sidebar .domain-pages a:hover { background:#334155; color:#fff; }
+#sidebar .domain-pages a.active { font-weight:600; }
+#sidebar a.active { background:#f59e0b; color:#0f172a; }
+#sidebar-toggle { position:fixed; left:8px; top:56px; z-index:60; background:#334155; border:1px solid #475569; color:#e2e8f0; border-radius:6px; padding:4px 7px; cursor:pointer; font-size:13px; transition:left 0.3s; }
+#sidebar:not(.collapsed) ~ #sidebar-toggle { left:228px; }
+
+/* 右侧详情面板 */
+#detail-panel { position:fixed; top:0; right:-420px; width:400px; height:100vh; background:#1e293b; border-left:1px solid #334155; z-index:55; transition:right 0.3s; display:flex; flex-direction:column; }
+#detail-panel.open { right:0; }
+#detail-header { padding:14px 16px; border-bottom:1px solid #334155; display:flex; align-items:flex-start; gap:10px; }
+#detail-header h2 { flex:1; font-size:14px; line-height:1.4; margin:0; word-break:break-all; }
+#detail-close { background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer; padding:0 4px; line-height:1; }
+#detail-close:hover { color:#fff; }
+#detail-body { flex:1; overflow-y:auto; padding:16px; font-size:13px; line-height:1.7; }
+#detail-body .section { margin-bottom:16px; }
+#detail-body .section-title { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+#detail-body .tag { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#334155; border-radius:4px; font-size:11px; color:#cbd5e1; }
+#detail-body .keyword { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#f59e0b22; border:1px solid #f59e0b66; border-radius:4px; font-size:11px; color:#e2e8f0; }
+#detail-body .summary { color:#cbd5e1; white-space:pre-wrap; }
+#detail-body .open-link { display:inline-block; margin-top:12px; padding:6px 14px; background:#f59e0b; color:#0f172a; border-radius:6px; text-decoration:none; font-size:12px; font-weight:600; }
+#detail-body .open-link:hover { opacity:0.85; }
+#detail-body .meta-row { display:flex; gap:12px; margin-bottom:8px; font-size:12px; }
+#detail-body .meta-label { color:#94a3b8; min-width:60px; }
+#detail-body .connected-list { list-style:none; padding:0; }
+#detail-body .connected-list li { padding:4px 0; border-bottom:1px solid #1a2332; font-size:12px; cursor:pointer; }
+#detail-body .connected-list li:hover { color:#f59e0b; }
+
+#header { padding:10px 20px 10px 50px; background:#1e293b; border-bottom:1px solid #334155; display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-left:200px; transition:margin-left 0.3s; }
+#sidebar.collapsed ~ #header { margin-left:0; }
+#header h1 { margin:0; font-size:17px; color:#f59e0b; white-space:nowrap; }
+#search-wrap { position:relative; }
+#search-box { width:220px; padding:5px 10px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#e2e8f0; font-size:13px; }
+#search-results { position:absolute; top:32px; left:0; width:260px; max-height:300px; overflow-y:auto; background:#1e293b; border:1px solid #475569; border-radius:6px; display:none; z-index:100; }
+.sri { padding:7px 10px; cursor:pointer; font-size:12px; border-bottom:1px solid #334155; }
+.sri:hover { background:#334155; }
+.stats { font-size:12px; color:#94a3b8; white-space:nowrap; }
+.ctrls { display:flex; gap:6px; margin-left:auto; }
+.btn { padding:5px 12px; border-radius:6px; border:1px solid #475569; background:#334155; color:#e2e8f0; cursor:pointer; font-size:12px; }
+.btn:hover { background:#475569; }
+.btn.active { background:#f59e0b; color:#0f172a; border-color:#f59e0b; }
+#legend { position:absolute; top:52px; left:220px; background:#1e293b; border:1px solid #475569; border-radius:8px; padding:10px 14px; font-size:12px; z-index:10; }
+.li { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+.ld { width:10px; height:10px; border-radius:50%; }
+#tooltip { position:absolute; padding:8px 12px; background:#1e293b; border:1px solid #475569; border-radius:8px; font-size:12px; pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:100; box-shadow:0 4px 20px rgba(0,0,0,0.5); max-width:320px; }
+#graph { width:calc(100vw - 200px); height:calc(100vh - 48px); margin-left:200px; transition:width 0.3s, margin-left 0.3s; }
+#sidebar.collapsed ~ #graph { margin-left:0; width:100vw; }
+#detail-panel.open ~ #graph { width:calc(100vw - 200px - 400px); }
+.link { stroke:#475569; stroke-opacity:0.3; }
+.link-book { stroke-opacity:0.12; }
+.node circle { cursor:pointer; stroke-width:1.5; }
+.node text { fill:#e2e8f0; font-size:10px; pointer-events:none; }
+.highlight circle { stroke:#fff !important; stroke-width:2.5px; }
+.highlight text { fill:#fff; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>📚 藏书阁 · 知识图谱</h2>
+  <div class="domain-header" data-target="IT" style="color:#67e8f9; border-left:3px solid #67e8f9;">IT ▾</div>
+  <div class="domain-pages" id="IT">
+    <a href="IT.json" style="border-left:3px solid #67e8f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(225篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="个人成长" style="color:#fb923c; border-left:3px solid #fb923c;">个人成长 ▾</div>
+  <div class="domain-pages" id="个人成长">
+    <a href="个人成长.json" style="border-left:3px solid #fb923c; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(461篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="产品" style="color:#a855f7; border-left:3px solid #a855f7;">产品 ▾</div>
+  <div class="domain-pages" id="产品">
+    <a href="产品_(其他).json" style="border-left:3px solid #a855f7; padding-left:18px;">(其他) <span style="font-size:10px;color:#64748b;">(553篇)</span></a>
+    <a href="产品_产品思维.json" style="border-left:3px solid #a855f7; padding-left:18px;">产品思维 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="产品_小程序生态.json" style="border-left:3px solid #a855f7; padding-left:18px;">小程序生态 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="产品_用户增长.json" style="border-left:3px solid #a855f7; padding-left:18px;">用户增长 <span style="font-size:10px;color:#64748b;">(49篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="会计" style="color:#86efac; border-left:3px solid #86efac;">会计 ▾</div>
+  <div class="domain-pages" id="会计">
+    <a href="会计.json" style="border-left:3px solid #86efac; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(67篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="健康" style="color:#34d399; border-left:3px solid #34d399;">健康 ▾</div>
+  <div class="domain-pages" id="健康">
+    <a href="健康.json" style="border-left:3px solid #34d399; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(284篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="写作" style="color:#c084fc; border-left:3px solid #c084fc;">写作 ▾</div>
+  <div class="domain-pages" id="写作">
+    <a href="写作.json" style="border-left:3px solid #c084fc; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(238篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="历史" style="color:#06b6d4; border-left:3px solid #06b6d4;">历史 ▾</div>
+  <div class="domain-pages" id="历史">
+    <a href="历史_(其他)_part1.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part2.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part3.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part4.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part5.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(541篇)</span></a>
+    <a href="历史_世界史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">世界史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="历史_中国历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国历史 <span style="font-size:10px;color:#64748b;">(96篇)</span></a>
+    <a href="历史_中国古代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国古代文学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="历史_中国现代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国现代文学 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="历史_中国近代史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国近代史 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="历史_人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">人物传记 <span style="font-size:10px;color:#64748b;">(143篇)</span></a>
+    <a href="历史_军事历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">军事历史 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="历史_历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史 <span style="font-size:10px;color:#64748b;">(538篇)</span></a>
+    <a href="历史_历史与政治.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史与政治 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史人物传记 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="历史_历史学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史学 <span style="font-size:10px;color:#64748b;">(189篇)</span></a>
+    <a href="历史_历史小说.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史小说 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史研究.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史研究 <span style="font-size:10px;color:#64748b;">(162篇)</span></a>
+    <a href="历史_思想史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">思想史 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="历史_文学与历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">文学与历史 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="历史_科技史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">科技史 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="历史_艺术史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">艺术史 <span style="font-size:10px;color:#64748b;">(83篇)</span></a>
+    <a href="历史_西方哲学史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">西方哲学史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="哲学" style="color:#14b8a6; border-left:3px solid #14b8a6;">哲学 ▾</div>
+  <div class="domain-pages" id="哲学">
+    <a href="哲学_(其他)_part1.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="哲学_(其他)_part2.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(272篇)</span></a>
+    <a href="哲学_中国哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">中国哲学 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="哲学_人生哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">人生哲学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="哲学_哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">哲学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+    <a href="哲学_政治哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">政治哲学 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="哲学_生活哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">生活哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+    <a href="哲学_社会哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">社会哲学 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="哲学_科学哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">科学哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="商业" style="color:#10b981; border-left:3px solid #10b981;">商业 ▾</div>
+  <div class="domain-pages" id="商业">
+    <a href="商业_(其他)_part1.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（1/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part2.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（2/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part3.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（3/3） <span style="font-size:10px;color:#64748b;">(391篇)</span></a>
+    <a href="商业_企业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">企业管理 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="商业_健康管理.json" style="border-left:3px solid #10b981; padding-left:18px;">健康管理 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="商业_创业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">创业管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业战略.json" style="border-left:3px solid #10b981; padding-left:18px;">商业战略 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">商业管理 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="商业_投资理财.json" style="border-left:3px solid #10b981; padding-left:18px;">投资理财 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_知识管理.json" style="border-left:3px solid #10b981; padding-left:18px;">知识管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_管理.json" style="border-left:3px solid #10b981; padding-left:18px;">管理 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_组织管理.json" style="border-left:3px solid #10b981; padding-left:18px;">组织管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_经济学.json" style="border-left:3px solid #10b981; padding-left:18px;">经济学 <span style="font-size:10px;color:#64748b;">(74篇)</span></a>
+    <a href="商业_金融投资.json" style="border-left:3px solid #10b981; padding-left:18px;">金融投资 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="商业_领导力.json" style="border-left:3px solid #10b981; padding-left:18px;">领导力 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="图书馆学" style="color:#5eead4; border-left:3px solid #5eead4;">图书馆学 ▾</div>
+  <div class="domain-pages" id="图书馆学">
+    <a href="图书馆学.json" style="border-left:3px solid #5eead4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(23篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="宗教" style="color:#c4b5fd; border-left:3px solid #c4b5fd;">宗教 ▾</div>
+  <div class="domain-pages" id="宗教">
+    <a href="宗教.json" style="border-left:3px solid #c4b5fd; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(19篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="心理学" style="color:#f59e0b; border-left:3px solid #f59e0b;">心理学 ▾</div>
+  <div class="domain-pages" id="心理学">
+    <a href="心理学_(其他)_part1.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（1/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part2.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（2/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part3.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（3/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part4.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（4/4） <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="心理学_个人成长与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">个人成长与心理学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理健康.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理健康 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理学 <span style="font-size:10px;color:#64748b;">(239篇)</span></a>
+    <a href="心理学_教育心理学.json" class="active" style="border-left:3px solid #f59e0b; padding-left:18px;">教育心理学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="心理学_文学与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">文学与心理学 <span style="font-size:10px;color:#64748b;">(119篇)</span></a>
+    <a href="心理学_沟通技巧.json" style="border-left:3px solid #f59e0b; padding-left:18px;">沟通技巧 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="心理学_社会心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">社会心理学 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+    <a href="心理学_认知心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知心理学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="心理学_认知科学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知科学 <span style="font-size:10px;color:#64748b;">(39篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="房地产" style="color:#6ee7b7; border-left:3px solid #6ee7b7;">房地产 ▾</div>
+  <div class="domain-pages" id="房地产">
+    <a href="房地产.json" style="border-left:3px solid #6ee7b7; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(12篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="政治" style="color:#fbbf24; border-left:3px solid #fbbf24;">政治 ▾</div>
+  <div class="domain-pages" id="政治">
+    <a href="政治.json" style="border-left:3px solid #fbbf24; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(253篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="教育" style="color:#ec4899; border-left:3px solid #ec4899;">教育 ▾</div>
+  <div class="domain-pages" id="教育">
+    <a href="教育_(其他)_part1.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="教育_(其他)_part2.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(382篇)</span></a>
+    <a href="教育_个人成长.json" style="border-left:3px solid #ec4899; padding-left:18px;">个人成长 <span style="font-size:10px;color:#64748b;">(250篇)</span></a>
+    <a href="教育_儿童教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">儿童教育 <span style="font-size:10px;color:#64748b;">(62篇)</span></a>
+    <a href="教育_家庭教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">家庭教育 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="教育_教育理念.json" style="border-left:3px solid #ec4899; padding-left:18px;">教育理念 <span style="font-size:10px;color:#64748b;">(68篇)</span></a>
+    <a href="教育_财商教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">财商教育 <span style="font-size:10px;color:#64748b;">(48篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="文学" style="color:#8b5cf6; border-left:3px solid #8b5cf6;">文学 ▾</div>
+  <div class="domain-pages" id="文学">
+    <a href="文学_(其他)_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_中国古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">中国古典文学 <span style="font-size:10px;color:#64748b;">(112篇)</span></a>
+    <a href="文学_儿童文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">儿童文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">古典文学 <span style="font-size:10px;color:#64748b;">(92篇)</span></a>
+    <a href="文学_奇幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">奇幻文学 <span style="font-size:10px;color:#64748b;">(51篇)</span></a>
+    <a href="文学_女性主义文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">女性主义文学 <span style="font-size:10px;color:#64748b;">(38篇)</span></a>
+    <a href="文学_悬疑小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">悬疑小说分析 <span style="font-size:10px;color:#64748b;">(52篇)</span></a>
+    <a href="文学_推理小说.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="文学_推理小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说分析 <span style="font-size:10px;color:#64748b;">(126篇)</span></a>
+    <a href="文学_推理文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理文学 <span style="font-size:10px;color:#64748b;">(35篇)</span></a>
+    <a href="文学_文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学 <span style="font-size:10px;color:#64748b;">(223篇)</span></a>
+    <a href="文学_文学与个人成长.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与个人成长 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="文学_文学与人生哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与人生哲学 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="文学_文学与哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与哲学 <span style="font-size:10px;color:#64748b;">(303篇)</span></a>
+    <a href="文学_文学与社会学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与社会学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="文学_文学分析_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（1/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（2/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（3/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（4/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（5/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part6.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（6/6） <span style="font-size:10px;color:#64748b;">(254篇)</span></a>
+    <a href="文学_文学批评.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学批评 <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="文学_文学理论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学理论 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_文学研究.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学研究 <span style="font-size:10px;color:#64748b;">(84篇)</span></a>
+    <a href="文学_文学经典.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学经典 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="文学_文学解读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学解读 <span style="font-size:10px;color:#64748b;">(40篇)</span></a>
+    <a href="文学_文学评论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学评论 <span style="font-size:10px;color:#64748b;">(482篇)</span></a>
+    <a href="文学_文学赏析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学赏析 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="文学_文学鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学鉴赏 <span style="font-size:10px;color:#64748b;">(82篇)</span></a>
+    <a href="文学_文学阅读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学阅读 <span style="font-size:10px;color:#64748b;">(78篇)</span></a>
+    <a href="文学_旅行文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">旅行文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_日本文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">日本文学 <span style="font-size:10px;color:#64748b;">(98篇)</span></a>
+    <a href="文学_武侠文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">武侠文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_科幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学 <span style="font-size:10px;color:#64748b;">(175篇)</span></a>
+    <a href="文学_科幻文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学分析 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="文学_网络文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">网络文学分析 <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_艺术鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">艺术鉴赏 <span style="font-size:10px;color:#64748b;">(44篇)</span></a>
+    <a href="文学_非虚构文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">非虚构文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="时尚生活" style="color:#f9a8d4; border-left:3px solid #f9a8d4;">时尚生活 ▾</div>
+  <div class="domain-pages" id="时尚生活">
+    <a href="时尚生活.json" style="border-left:3px solid #f9a8d4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(71篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="未知" style="color:#94a3b8; border-left:3px solid #94a3b8;">未知 ▾</div>
+  <div class="domain-pages" id="未知">
+    <a href="未知.json" style="border-left:3px solid #94a3b8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(16篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="法学" style="color:#fcd34d; border-left:3px solid #fcd34d;">法学 ▾</div>
+  <div class="domain-pages" id="法学">
+    <a href="法学.json" style="border-left:3px solid #fcd34d; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="社会学" style="color:#6366f1; border-left:3px solid #6366f1;">社会学 ▾</div>
+  <div class="domain-pages" id="社会学">
+    <a href="社会学_(其他)_part1.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="社会学_(其他)_part2.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(484篇)</span></a>
+    <a href="社会学_文化研究.json" style="border-left:3px solid #6366f1; padding-left:18px;">文化研究 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="社会学_社会学.json" style="border-left:3px solid #6366f1; padding-left:18px;">社会学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="科学" style="color:#f97316; border-left:3px solid #f97316;">科学 ▾</div>
+  <div class="domain-pages" id="科学">
+    <a href="科学_(其他)_part1.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="科学_(其他)_part2.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(116篇)</span></a>
+    <a href="科学_医学人文.json" style="border-left:3px solid #f97316; padding-left:18px;">医学人文 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="科学_神经科学.json" style="border-left:3px solid #f97316; padding-left:18px;">神经科学 <span style="font-size:10px;color:#64748b;">(56篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="编程" style="color:#818cf8; border-left:3px solid #818cf8;">编程 ▾</div>
+  <div class="domain-pages" id="编程">
+    <a href="编程.json" style="border-left:3px solid #818cf8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(151篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="艺术" style="color:#e879f9; border-left:3px solid #e879f9;">艺术 ▾</div>
+  <div class="domain-pages" id="艺术">
+    <a href="艺术.json" style="border-left:3px solid #e879f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(365篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="英语" style="color:#f472b6; border-left:3px solid #f472b6;">英语 ▾</div>
+  <div class="domain-pages" id="英语">
+    <a href="英语.json" style="border-left:3px solid #f472b6; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(209篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="语言文学" style="color:#d8b4fe; border-left:3px solid #d8b4fe;">语言文学 ▾</div>
+  <div class="domain-pages" id="语言文学">
+    <a href="语言文学.json" style="border-left:3px solid #d8b4fe; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="金融" style="color:#a3e635; border-left:3px solid #a3e635;">金融 ▾</div>
+  <div class="domain-pages" id="金融">
+    <a href="金融.json" style="border-left:3px solid #a3e635; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(208篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="雅思" style="color:#22d3ee; border-left:3px solid #22d3ee;">雅思 ▾</div>
+  <div class="domain-pages" id="雅思">
+    <a href="雅思.json" style="border-left:3px solid #22d3ee; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(511篇)</span></a>
+  </div>
+
+    <script>
+    document.querySelectorAll('.domain-header').forEach(function(h){
+      h.addEventListener('click', function(){
+        var t = document.getElementById(this.dataset.target);
+        t.style.display = t.style.display==='none' ? 'block' : 'none';
+        this.innerHTML = this.innerHTML.replace(/[▾▸]/, t.style.display==='none'?'▸':'▾');
+      });
+    });
+    </script>
+    
+</div>
+<button id="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">☰</button>
+
+<div id="header">
+  <h1>📚 心理学 · 教育心理学</h1>
+  <div id="search-wrap">
+    <input id="search-box" type="text" placeholder="🔍 搜索书名/概念...">
+    <div id="search-results"></div>
+  </div>
+  <div class="stats">
+    <span id="node-count">0</span> 节点 ·
+    <span id="link-count">0</span> 连接
+  </div>
+  <div class="ctrls">
+    <button class="btn" id="btn-toggle-concept">隐藏概念</button>
+    <button class="btn" id="btn-reset">重置视图</button>
+  </div>
+</div>
+
+<div id="graph"></div>
+<div id="tooltip"></div>
+
+<!-- 右侧详情面板 -->
+<div id="detail-panel">
+  <div id="detail-header">
+    <h2 id="detail-title"></h2>
+    <button id="detail-close" onclick="closeDetail()">✕</button>
+  </div>
+  <div id="detail-body"></div>
+</div>
+
+<script>
+var NODES = [{"id": "非标准化成长.md", "label": "非标准化成长", "title": "非标准化成长", "type": "book", "degree": 2, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "《我牙齿的故事》通过主人公古斯塔沃·桑切斯·桑切斯（高速路）的成长叙事，揭示了一个深刻的教育核心观点：个体的“缺陷”与“不完美”是建构独特人格与创造力的核心资源，而非需要被修正或掩盖的障碍。作者以牙齿为隐喻，强调儿童在成长过程中所经历的生理、家庭、社会层面的“异常”——如先天乳牙、丑陋外貌、父亲冷漠、贫困环境等——恰恰构成了自我认知与生命叙事的起点。教育不应致力于消除差异或追求标准化完美，而应引导儿童将自身的“边缘性”转化为叙事动力和身份认同的基石。这一对教育者（父母）截然不同的态度，暗示了儿童心理韧性培养的关键：不是消除差异，而是赋予差异以意义。高速路的成长历程完美诠释了阿德勒的个体心理学：", "keywords": ["相关笔记", "高速路"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/我牙齿的故事_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/非标准化成长.md"}, {"id": "叙事隐喻.md", "label": "叙事隐喻", "title": "叙事隐喻", "type": "book", "degree": 6, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "《伊索寓言》作为西方最古老的寓言集之一，其核心教育理念在于通过简洁、生动的动物与人物故事，向儿童传递关于善恶、智慧、因果与处世之道的道德判断。本书不依赖抽象说教，而是以“叙事隐喻”的方式，让读者在具体情境中自行领悟教训。全书贯穿三条主线：善与恶的博弈（如“善与恶”一则直接点明“人很不容易遇到善，却每日为恶所侵袭”）、弱者的生存智慧（如鹰与蜣螂、狐狸与葡萄等故事强调以智补弱、不可轻视他人）、因果报应与自我反省（如破坏友谊的鹰最终被烧死，拔羽毛的鹰提醒恩仇分明）。《伊索寓言》的叙事结构在本质上与皮亚杰（Jean Piaget）的道德发展理论高度契合。伊索寓言恰恰以“结果决定评价”为主导：鹰吃掉了狐", "keywords": ["相关笔记", "伊索寓", "因果报应与自我反省", "鲜明的功利主义倾向", "弱者的生存智慧", "善与恶的博弈"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/伊索寓言_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/叙事隐喻.md"}, {"id": "因果逻辑.md", "label": "因果逻辑", "title": "因果逻辑", "type": "book", "degree": 6, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "《伊索寓言》作为西方最古老的寓言集之一，其核心教育理念在于通过简洁、生动的动物与人物故事，向儿童传递关于善恶、智慧、因果与处世之道的道德判断。本书不依赖抽象说教，而是以“叙事隐喻”的方式，让读者在具体情境中自行领悟教训。全书贯穿三条主线：善与恶的博弈（如“善与恶”一则直接点明“人很不容易遇到善，却每日为恶所侵袭”）、弱者的生存智慧（如鹰与蜣螂、狐狸与葡萄等故事强调以智补弱、不可轻视他人）、因果报应与自我反省（如破坏友谊的鹰最终被烧死，拔羽毛的鹰提醒恩仇分明）。例如“鹰与蜣螂”教人不要轻视弱小，但真正的道德启发应该是“尊重是一个独立于力量的价值”，而故事只是让儿童看到“弱小者有能力报复”。《伊索", "keywords": ["伊索寓言", "因果报应与自我反省", "鲜明的功利主义倾向", "弱者的生存智慧", "善与恶的博弈", "鹰与蜣"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/伊索寓言_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/因果逻辑.md"}, {"id": "叙事重构.md", "label": "叙事重构", "title": "叙事重构", "type": "book", "degree": 4, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "《我牙齿的故事》通过主人公古斯塔沃·桑切斯·桑切斯（高速路）的成长叙事，揭示了一个深刻的教育核心观点：个体的“缺陷”与“不完美”是建构独特人格与创造力的核心资源，而非需要被修正或掩盖的障碍。作者以牙齿为隐喻，强调儿童在成长过程中所经历的生理、家庭、社会层面的“异常”——如先天乳牙、丑陋外貌、父亲冷漠、贫困环境等——恰恰构成了自我认知与生命叙事的起点。教育不应致力于消除差异或追求标准化完美，而应引导儿童将自身的“边缘性”转化为叙事动力和身份认同的基石。这一对教育者（父母）截然不同的态度，暗示了儿童心理韧性培养的关键：不是消除差异，而是赋予差异以意义。高速路的成长历程完美诠释了阿德勒的个体心理学：", "keywords": ["高速路", "教育者", "阿德勒", "我牙齿"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/我牙齿的故事_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/叙事重构.md"}, {"id": "家庭接纳与心理韧性.md", "label": "家庭接纳与心理韧性", "title": "家庭接纳与心理韧性", "type": "book", "degree": 2, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "《我牙齿的故事》通过主人公古斯塔沃·桑切斯·桑切斯（高速路）的成长叙事，揭示了一个深刻的教育核心观点：个体的“缺陷”与“不完美”是建构独特人格与创造力的核心资源，而非需要被修正或掩盖的障碍。作者以牙齿为隐喻，强调儿童在成长过程中所经历的生理、家庭、社会层面的“异常”——如先天乳牙、丑陋外貌、父亲冷漠、贫困环境等——恰恰构成了自我认知与生命叙事的起点。教育不应致力于消除差异或追求标准化完美，而应引导儿童将自身的“边缘性”转化为叙事动力和身份认同的基石。高速路的母亲无条件接纳了他的丑陋与怪异，父亲则试图拒绝和回避；两种截然不同的态度共。高速路的成长历程完美诠释了阿德勒的个体心理学：他将“丑陋外貌”", "keywords": ["相关笔记", "高速路"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/我牙齿的故事_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/家庭接纳与心理韧性.md"}, {"id": "心理韧性.md", "label": "心理韧性", "title": "心理韧性", "type": "book", "degree": 6, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书的核心健康理念可提炼为：大学的精神环境是塑造个体心理健康与认知弹性的关键“生态系统”。正如哈佛校长福斯特所言，大学“要对永恒做出承诺”，这种对历史与未来的责任感，实际上为个体提供了一个对抗现代性焦虑、身份迷茫和意义缺失的心理锚点。书中各大学的独特精神——哈佛的精英主义与自由教育、耶鲁的公民使命、斯坦福的创新孵化、牛津的绅士教养——本质上都是通过知识生产、社群归属和价值观内化，来促进个体的心智成熟与精神健康。哈佛的“自由教育”与心理免疫：书中描述的哈佛通识教育改革反复强调“自由教育”是对灵魂的关怀。哈佛的“自由教育”培养学生“独立之精神，自由之思想”，类似于中医“志定则神安”；而过度功利化（", "keywords": ["证据等级与适用人群", "忽视负面效应", "选择性偏见", "局限性", "自由教育", "心理健"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/大学的精神_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/心理韧性.md"}, {"id": "身份冲突.md", "label": "身份冲突", "title": "身份冲突", "type": "book", "degree": 3, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书的核心教育论点并非关于具体的育儿技巧或学业成就，而是指向一个更根本、也更复杂的命题：家庭作为最奇特的人类机构，其内部的爱与黑暗、理想与创伤、言语与沉默，如何共同塑造了一个儿童的灵魂，并决定了他理解世界与自我的方式。奥兹指出，这本书旨在揭示一个谜：两个聪慧、慷慨、儒雅的好人（他的父母），为何共同酿造了一场悲剧。他提出的悖论性公式“好和好相加等于坏”，直接挑战了传统教育中“好父母”必然带来“好孩子”的线性因果关系。这揭示了教育中一个关键矛盾：为了保护而进行的隔离，同时也在剥夺孩子理解父母、理解自己出身的能力，导致一种“单恋”式的情感继承——孩子继承了父母的渴望，却不知道渴望的对象是什么。教育的", "keywords": ["爱与黑暗", "造了一", "悲剧性"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/爱与黑暗的故事_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/身份冲突.md"}, {"id": "意义建构.md", "label": "意义建构", "title": "意义建构", "type": "book", "degree": 6, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书的核心健康理念可提炼为：大学的精神环境是塑造个体心理健康与认知弹性的关键“生态系统”。正如哈佛校长福斯特所言，大学“要对永恒做出承诺”，这种对历史与未来的责任感，实际上为个体提供了一个对抗现代性焦虑、身份迷茫和意义缺失的心理锚点。书中各大学的独特精神——哈佛的精英主义与自由教育、耶鲁的公民使命、斯坦福的创新孵化、牛津的绅士教养——本质上都是通过知识生产、社群归属和价值观内化，来促进个体的心智成熟与精神健康。哈佛的“自由教育”与心理免疫：书中描述的哈佛通识教育改革反复强调“自由教育”是对灵魂的关怀。哈佛的“自由教育”培养学生“独立之精神，自由之思想”，类似于中医“志定则神安”；而过度功利化（", "keywords": ["证据等级与适用人群", "忽视负面效应", "选择性偏见", "局限性", "自由教育", "心理健"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/大学的精神_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/意义建构.md"}, {"id": "社会支持与归属感.md", "label": "社会支持与归属感", "title": "社会支持与归属感", "type": "book", "degree": 6, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书的核心健康理念可提炼为：大学的精神环境是塑造个体心理健康与认知弹性的关键“生态系统”。正如哈佛校长福斯特所言，大学“要对永恒做出承诺”，这种对历史与未来的责任感，实际上为个体提供了一个对抗现代性焦虑、身份迷茫和意义缺失的心理锚点。书中各大学的独特精神——哈佛的精英主义与自由教育、耶鲁的公民使命、斯坦福的创新孵化、牛津的绅士教养——本质上都是通过知识生产、社群归属和价值观内化，来促进个体的心智成熟与精神健康。哈佛的“自由教育”与心理免疫：书中描述的哈佛通识教育改革反复强调“自由教育”是对灵魂的关怀。哈佛的“自由教育”培养学生“独立之精神，自由之思想”，类似于中医“志定则神安”；而过度功利化（", "keywords": ["证据等级与适用人群", "忽视负面效应", "选择性偏见", "局限性", "自由教育", "心理健"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/大学的精神_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/社会支持与归属感.md"}, {"id": "存在主义教育.md", "label": "存在主义教育", "title": "存在主义教育", "type": "book", "degree": 4, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书通过一个天生无痛觉的男孩詹姆斯·戴尔的传奇人生，揭示了一个深刻的教育与心理命题：疼痛不仅是生理体验，更是人类情感发展与同理心构建的必要基石。作者安德鲁·米勒以文学的方式论证了“皮肉之苦与心灵之痛的相通与差异”，指出缺乏疼痛体验的个体虽能获得某种“超能力”（如成为天才外科医生），却注定陷入情感隔绝与存在孤独。从教育视角看，这一核心论点挑战了当代家庭教育中过度保护、试图消除儿童一切痛苦体验的倾向，提醒我们：适度的挫折、失败甚至生理之痛，恰恰是儿童建立自我认知、理解他人、发展道德情感不可或缺的“教材”。小说中牧师的朋友伯克和罗斯医生在解剖詹姆斯时表现出的兴奋与野蛮，恰如教育者将儿童视为“等待解密", "keywords": ["詹姆斯", "无痛觉", "超能力", "蒙特梭"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/从月亮来的男孩"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/存在主义教育.md"}, {"id": "认知弹性.md", "label": "认知弹性", "title": "认知弹性", "type": "book", "degree": 6, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书的核心健康理念可提炼为：大学的精神环境是塑造个体心理健康与认知弹性的关键“生态系统”。正如哈佛校长福斯特所言，大学“要对永恒做出承诺”，这种对历史与未来的责任感，实际上为个体提供了一个对抗现代性焦虑、身份迷茫和意义缺失的心理锚点。书中各大学的独特精神——哈佛的精英主义与自由教育、耶鲁的公民使命、斯坦福的创新孵化、牛津的绅士教养——本质上都是通过知识生产、社群归属和价值观内化，来促进个体的心智成熟与精神健康。哈佛的“自由教育”与心理免疫：书中描述的哈佛通识教育改革反复强调“自由教育”是对灵魂的关怀。哈佛的“自由教育”培养学生“独立之精神，自由之思想”，类似于中医“志定则神安”；而过度功利化（", "keywords": ["证据等级与适用人群", "忽视负面效应", "选择性偏见", "局限性", "自由教育", "心理健"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/大学的精神_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/认知弹性.md"}, {"id": "家庭悖论.md", "label": "家庭悖论", "title": "家庭悖论", "type": "book", "degree": 3, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书的核心教育论点并非关于具体的育儿技巧或学业成就，而是指向一个更根本、也更复杂的命题：家庭作为最奇特的人类机构，其内部的爱与黑暗、理想与创伤、言语与沉默，如何共同塑造了一个儿童的灵魂，并决定了他理解世界与自我的方式。奥兹指出，这本书旨在揭示一个谜：两个聪慧、慷慨、儒雅的好人（他的父母），为何共同酿造了一场悲剧。他提出的悖论性公式“好和好相加等于坏”，直接挑战了传统教育中“好父母”必然带来“好孩子”的线性因果关系。更深层的教育思考在于，童年可以被悲剧性所定义，却不必是悲惨的。小主人公奥兹在家中“从来没有交谈过”，这种“无话不谈”与“无话可谈”的并行状态，塑造了一个高度理智化却情感压抑的儿童", "keywords": ["爱与黑暗", "造了一", "悲剧性"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/爱与黑暗的故事_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/家庭悖论.md"}, {"id": "角色对比.md", "label": "角色对比", "title": "角色对比", "type": "book", "degree": 6, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "《伊索寓言》作为西方最古老的寓言集之一，其核心教育理念在于通过简洁、生动的动物与人物故事，向儿童传递关于善恶、智慧、因果与处世之道的道德判断。本书不依赖抽象说教，而是以“叙事隐喻”的方式，让读者在具体情境中自行领悟教训。全书贯穿三条主线：善与恶的博弈（如“善与恶”一则直接点明“人很不容易遇到善，却每日为恶所侵袭”）、弱者的生存智慧（如鹰与蜣螂、狐狸与葡萄等故事强调以智补弱、不可轻视他人）、因果报应与自我反省（如破坏友谊的鹰最终被烧死，拔羽毛的鹰提醒恩仇分明）。例如“鹰与蜣螂”教人不要轻视弱小，但真正的道德启发应该是“尊重是一个独立于力量的价值”，而故事只是让儿童看到“弱小者有能力报复”。《伊索", "keywords": ["伊索寓言", "因果报应与自我反省", "鲜明的功利主义倾向", "弱者的生存智慧", "善与恶的博弈", "鹰与蜣"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/伊索寓言_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/角色对比.md"}, {"id": "精神生态系统.md", "label": "精神生态系统", "title": "精神生态系统", "type": "book", "degree": 6, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书的核心健康理念可提炼为：大学的精神环境是塑造个体心理健康与认知弹性的关键“生态系统”。正如哈佛校长福斯特所言，大学“要对永恒做出承诺”，这种对历史与未来的责任感，实际上为个体提供了一个对抗现代性焦虑、身份迷茫和意义缺失的心理锚点。书中各大学的独特精神——哈佛的精英主义与自由教育、耶鲁的公民使命、斯坦福的创新孵化、牛津的绅士教养——本质上都是通过知识生产、社群归属和价值观内化，来促进个体的心智成熟与精神健康。哈佛的“自由教育”与心理免疫：书中描述的哈佛通识教育改革反复强调“自由教育”是对灵魂的关怀。哈佛的“自由教育”培养学生“独立之精神，自由之思想”，类似于中医“志定则神安”；而过度功利化（", "keywords": ["证据等级与适用人群", "忽视负面效应", "选择性偏见", "局限性", "自由教育", "心理健"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/大学的精神_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/精神生态系统.md"}, {"id": "自由教育与心理免疫.md", "label": "自由教育与心理免疫", "title": "自由教育与心理免疫", "type": "book", "degree": 6, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书的核心健康理念可提炼为：大学的精神环境是塑造个体心理健康与认知弹性的关键“生态系统”。正如哈佛校长福斯特所言，大学“要对永恒做出承诺”，这种对历史与未来的责任感，实际上为个体提供了一个对抗现代性焦虑、身份迷茫和意义缺失的心理锚点。书中各大学的独特精神——哈佛的精英主义与自由教育、耶鲁的公民使命、斯坦福的创新孵化、牛津的绅士教养——本质上都是通过知识生产、社群归属和价值观内化，来促进个体的心智成熟与精神健康。哈佛的“自由教育”与心理免疫：书中描述的哈佛通识教育改革反复强调“自由教育”是对灵魂的关怀。哈佛的“自由教育”培养学生“独立之精神，自由之思想”，类似于中医“志定则神安”；而过度功利化（", "keywords": ["证据等级与适用人群", "忽视负面效应", "选择性偏见", "自由教育", "局限性", "心理健"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/大学的精神_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/自由教育与心理免疫.md"}, {"id": "道德启蒙.md", "label": "道德启蒙", "title": "道德启蒙", "type": "book", "degree": 6, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "《伊索寓言》作为西方最古老的寓言集之一，其核心教育理念在于通过简洁、生动的动物与人物故事，向儿童传递关于善恶、智慧、因果与处世之道的道德判断。本书不依赖抽象说教，而是以“叙事隐喻”的方式，让读者在具体情境中自行领悟教训。全书贯穿三条主线：善与恶的博弈（如“善与恶”一则直接点明“人很不容易遇到善，却每日为恶所侵袭”）、弱者的生存智慧（如鹰与蜣螂、狐狸与葡萄等故事强调以智补弱、不可轻视他人）、因果报应与自我反省（如破坏友谊的鹰最终被烧死，拔羽毛的鹰提醒恩仇分明）。例如“鹰与蜣螂”教人不要轻视弱小，但真正的道德启发应该是“尊重是一个独立于力量的价值”，而故事只是让儿童看到“弱小者有能力报复”。《伊索", "keywords": ["伊索寓言", "因果报应与自我反省", "鲜明的功利主义倾向", "弱者的生存智慧", "善与恶的博弈", "道德启"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/伊索寓言_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/道德启蒙.md"}, {"id": "文化编码.md", "label": "文化编码", "title": "文化编码", "type": "book", "degree": 3, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书的核心教育论点并非关于具体的育儿技巧或学业成就，而是指向一个更根本、也更复杂的命题：家庭作为最奇特的人类机构，其内部的爱与黑暗、理想与创伤、言语与沉默，如何共同塑造了一个儿童的灵魂，并决定了他理解世界与自我的方式。奥兹指出，这本书旨在揭示一个谜：两个聪慧、慷慨、儒雅的好人（他的父母），为何共同酿造了一场悲剧。他提出的悖论性公式“好和好相加等于坏”，直接挑战了传统教育中“好父母”必然带来“好孩子”的线性因果关系。这揭示了教育中一个关键矛盾：为了保护而进行的隔离，同时也在剥夺孩子理解父母、理解自己出身的能力，导致一种“单恋”式的情感继承——孩子继承了父母的渴望，却不知道渴望的对象是什么。教育的", "keywords": ["爱与黑暗", "造了一", "悲剧性"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/爱与黑暗的故事_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/文化编码.md"}, {"id": "非标准化评价.md", "label": "非标准化评价", "title": "非标准化评价", "type": "book", "degree": 4, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "《我牙齿的故事》通过主人公古斯塔沃·桑切斯·桑切斯（高速路）的成长叙事，揭示了一个深刻的教育核心观点：个体的“缺陷”与“不完美”是建构独特人格与创造力的核心资源，而非需要被修正或掩盖的障碍。作者以牙齿为隐喻，强调儿童在成长过程中所经历的生理、家庭、社会层面的“异常”——如先天乳牙、丑陋外貌、父亲冷漠、贫困环境等——恰恰构成了自我认知与生命叙事的起点。教育不应致力于消除差异或追求标准化完美，而应引导儿童将自身的“边缘性”转化为叙事动力和身份认同的基石。这一对教育者（父母）截然不同的态度，暗示了儿童心理韧性培养的关键：不是消除差异，而是赋予差异以意义。高速路的成长历程完美诠释了阿德勒的个体心理学：", "keywords": ["高速路", "教育者", "阿德勒", "标准化"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/我牙齿的故事_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/非标准化评价.md"}, {"id": "缺陷与创造力.md", "label": "缺陷与创造力", "title": "缺陷与创造力", "type": "book", "degree": 4, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "《我牙齿的故事》通过主人公古斯塔沃·桑切斯·桑切斯（高速路）的成长叙事，揭示了一个深刻的教育核心观点：个体的“缺陷”与“不完美”是建构独特人格与创造力的核心资源，而非需要被修正或掩盖的障碍。作者以牙齿为隐喻，强调儿童在成长过程中所经历的生理、家庭、社会层面的“异常”——如先天乳牙、丑陋外貌、父亲冷漠、贫困环境等——恰恰构成了自我认知与生命叙事的起点。教育不应致力于消除差异或追求标准化完美，而应引导儿童将自身的“边缘性”转化为叙事动力和身份认同的基石。这一对教育者（父母）截然不同的态度，暗示了儿童心理韧性培养的关键：不是消除差异，而是赋予差异以意义。高速路的成长历程完美诠释了阿德勒的个体心理学：", "keywords": ["高速路", "教育者", "阿德勒", "我牙齿"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/我牙齿的故事_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/缺陷与创造力.md"}, {"id": "过度保护.md", "label": "过度保护", "title": "过度保护", "type": "book", "degree": 4, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书通过一个天生无痛觉的男孩詹姆斯·戴尔的传奇人生，揭示了一个深刻的教育与心理命题：疼痛不仅是生理体验，更是人类情感发展与同理心构建的必要基石。作者安德鲁·米勒以文学的方式论证了“皮肉之苦与心灵之痛的相通与差异”，指出缺乏疼痛体验的个体虽能获得某种“超能力”（如成为天才外科医生），却注定陷入情感隔绝与存在孤独。从教育视角看，这一核心论点挑战了当代家庭教育中过度保护、试图消除儿童一切痛苦体验的倾向，提醒我们：适度的挫折、失败甚至生理之痛，恰恰是儿童建立自我认知、理解他人、发展道德情感不可或缺的“教材”。小说中牧师的朋友伯克和罗斯医生在解剖詹姆斯时表现出的兴奋与野蛮，恰如教育者将儿童视为“等待解密", "keywords": ["詹姆斯", "度保护", "无痛觉", "超能力"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/从月亮来的男孩"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/过度保护.md"}, {"id": "隐性课程.md", "label": "隐性课程", "title": "隐性课程", "type": "book", "degree": 3, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书的核心教育论点并非关于具体的育儿技巧或学业成就，而是指向一个更根本、也更复杂的命题：家庭作为最奇特的人类机构，其内部的爱与黑暗、理想与创伤、言语与沉默，如何共同塑造了一个儿童的灵魂，并决定了他理解世界与自我的方式。奥兹指出，这本书旨在揭示一个谜：两个聪慧、慷慨、儒雅的好人（他的父母），为何共同酿造了一场悲剧。他提出的悖论性公式“好和好相加等于坏”，直接挑战了传统教育中“好父母”必然带来“好孩子”的线性因果关系。这揭示了教育中一个关键矛盾：为了保护而进行的隔离，同时也在剥夺孩子理解父母、理解自己出身的能力，导致一种“单恋”式的情感继承——孩子继承了父母的渴望，却不知道渴望的对象是什么。教育的", "keywords": ["爱与黑暗", "造了一", "悲剧性"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/爱与黑暗的故事_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/隐性课程.md"}, {"id": "自我教育机制.md", "label": "自我教育机制", "title": "自我教育机制", "type": "book", "degree": 4, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "《我牙齿的故事》通过主人公古斯塔沃·桑切斯·桑切斯（高速路）的成长叙事，揭示了一个深刻的教育核心观点：个体的“缺陷”与“不完美”是建构独特人格与创造力的核心资源，而非需要被修正或掩盖的障碍。作者以牙齿为隐喻，强调儿童在成长过程中所经历的生理、家庭、社会层面的“异常”——如先天乳牙、丑陋外貌、父亲冷漠、贫困环境等——恰恰构成了自我认知与生命叙事的起点。教育不应致力于消除差异或追求标准化完美，而应引导儿童将自身的“边缘性”转化为叙事动力和身份认同的基石。这一对教育者（父母）截然不同的态度，暗示了儿童心理韧性培养的关键：不是消除差异，而是赋予差异以意义。高速路的成长历程完美诠释了阿德勒的个体心理学：", "keywords": ["高速路", "教育者", "阿德勒", "我牙齿"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/我牙齿的故事_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/自我教育机制.md"}, {"id": "心理社会合法延缓期.md", "label": "心理社会合法延缓期", "title": "心理社会合法延缓期", "type": "book", "degree": 4, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "《少女，请回答》虽以个人随笔形式呈现，但其核心教育理念暗含于作者对成长过程、人际关系的细腻剖析中。本书最主要的观点是：青春期至成年初期的成长，本质上是一场从“无限可能”到“有限选择”的自我接纳与边界确立过程。作者通过自身与两位朋友（“李先生”与Coco）的相处经历，揭示了三个关键教育命题：第一，真正的成熟不是追求完美的理想化自我，而是学会在“中场休息”后，体面地接受人生的晴雨交替，从“文艺女青年”蜕变为“成年人小张”；第二，高质量的友情关系需要建立在彼此理解与适度距离的平衡之上——相似的人不一定适合做恋人，甚至做朋友也可能因过度共鸣而失去成长空间；第三，负能量共享与批判性思维具有教育价。这种状", "keywords": ["李先生", "请回答", "场休息", "心理社"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/少女，请回答_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/心理社会合法延缓期.md"}, {"id": "分离-个体化.md", "label": "分离-个体化", "title": "分离-个体化", "type": "book", "degree": 4, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "《少女，请回答》虽以个人随笔形式呈现，但其核心教育理念暗含于作者对成长过程、人际关系的细腻剖析中。本书最主要的观点是：青春期至成年初期的成长，本质上是一场从“无限可能”到“有限选择”的自我接纳与边界确立过程。作者通过自身与两位朋友（“李先生”与Coco）的相处经历，揭示了三个关键教育命题：第一，真正的成熟不是追求完美的理想化自我，而是学会在“中场休息”后，体面地接受人生的晴雨交替，从“文艺女青年”蜕变为“成年人小张”；第二，高质量的友情关系需要建立在彼此理解与适度距离的平衡之上——相似的人不一定适合做恋人，甚至做朋友也可能因过度共鸣而失去成长空间；第三，负能量共享与批判性思维具有教育价。这种状", "keywords": ["李先生", "请回答", "场休息", "同一性"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/少女，请回答_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/分离-个体化.md"}, {"id": "疼痛与共情.md", "label": "疼痛与共情", "title": "疼痛与共情", "type": "book", "degree": 4, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书通过一个天生无痛觉的男孩詹姆斯·戴尔的传奇人生，揭示了一个深刻的教育与心理命题：疼痛不仅是生理体验，更是人类情感发展与同理心构建的必要基石。作者安德鲁·米勒以文学的方式论证了“皮肉之苦与心灵之痛的相通与差异”，指出缺乏疼痛体验的个体虽能获得某种“超能力”（如成为天才外科医生），却注定陷入情感隔绝与存在孤独。从教育视角看，这一核心论点挑战了当代家庭教育中过度保护、试图消除儿童一切痛苦体验的倾向，提醒我们：适度的挫折、失败甚至生理之痛，恰恰是儿童建立自我认知、理解他人、发展道德情感不可或缺的“教材”。小说中牧师的朋友伯克和罗斯医生在解剖詹姆斯时表现出的兴奋与野蛮，恰如教育者将儿童视为“等待解密", "keywords": ["詹姆斯", "无痛觉", "超能力", "蒙特梭"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/从月亮来的男孩"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/疼痛与共情.md"}, {"id": "社会支持网络.md", "label": "社会支持网络", "title": "社会支持网络", "type": "book", "degree": 6, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书的核心健康理念可提炼为：大学的精神环境是塑造个体心理健康与认知弹性的关键“生态系统”。正如哈佛校长福斯特所言，大学“要对永恒做出承诺”，这种对历史与未来的责任感，实际上为个体提供了一个对抗现代性焦虑、身份迷茫和意义缺失的心理锚点。书中各大学的独特精神——哈佛的精英主义与自由教育、耶鲁的公民使命、斯坦福的创新孵化、牛津的绅士教养——本质上都是通过知识生产、社群归属和价值观内化，来促进个体的心智成熟与精神健康。哈佛的“自由教育”与心理免疫：书中描述的哈佛通识教育改革反复强调“自由教育”是对灵魂的关怀。哈佛的“自由教育”培养学生“独立之精神，自由之思想”，类似于中医“志定则神安”；而过度功利化（", "keywords": ["证据等级与适用人群", "忽视负面效应", "选择性偏见", "局限性", "自由教育", "心理健"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/大学的精神_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/社会支持网络.md"}, {"id": "情感发展.md", "label": "情感发展", "title": "情感发展", "type": "book", "degree": 2, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书通过一个天生无痛觉的男孩詹姆斯·戴尔的传奇人生，揭示了一个深刻的教育与心理命题：疼痛不仅是生理体验，更是人类情感发展与同理心构建的必要基石。作者安德鲁·米勒以文学的方式论证了“皮肉之苦与心灵之痛的相通与差异”，指出缺乏疼痛体验的个体虽能获得某种“超能力”（如成为天才外科医生），却注定陷入情感隔绝与存在孤独。从教育视角看，这一核心论点挑战了当代家庭教育中过度保护、试图消除儿童一切痛苦体验的倾向，提醒我们：适度的挫折、失败甚至生理之痛，恰恰是儿童建立自我认知、理解他人、发展道德情感不可或缺的“教材”。詹姆斯因天生无痛觉，得以在医学领域展现出常人难以企及的天赋：他能够冷静地进行手术，不受患者痛苦", "keywords": ["詹姆斯", "情感发展"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/从月亮来的男孩"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/情感发展.md"}, {"id": "情景化学习.md", "label": "情景化学习", "title": "情景化学习", "type": "book", "degree": 6, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "《伊索寓言》作为西方最古老的寓言集之一，其核心教育理念在于通过简洁、生动的动物与人物故事，向儿童传递关于善恶、智慧、因果与处世之道的道德判断。本书不依赖抽象说教，而是以“叙事隐喻”的方式，让读者在具体情境中自行领悟教训。全书贯穿三条主线：善与恶的博弈（如“善与恶”一则直接点明“人很不容易遇到善，却每日为恶所侵袭”）、弱者的生存智慧（如鹰与蜣螂、狐狸与葡萄等故事强调以智补弱、不可轻视他人）、因果报应与自我反省（如破坏友谊的鹰最终被烧死，拔羽毛的鹰提醒恩仇分明）。例如“鹰与蜣螂”教人不要轻视弱小，但真正的道德启发应该是“尊重是一个独立于力量的价值”，而故事只是让儿童看到“弱小者有能力报复”。《伊索", "keywords": ["伊索寓言", "因果报应与自我反省", "鲜明的功利主义倾向", "弱者的生存智慧", "善与恶的博弈", "鹰与蜣"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/伊索寓言_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/情景化学习.md"}, {"id": "大学精神环境.md", "label": "大学精神环境", "title": "大学精神环境", "type": "book", "degree": 6, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书的核心健康理念可提炼为：大学的精神环境是塑造个体心理健康与认知弹性的关键“生态系统”。正如哈佛校长福斯特所言，大学“要对永恒做出承诺”，这种对历史与未来的责任感，实际上为个体提供了一个对抗现代性焦虑、身份迷茫和意义缺失的心理锚点。书中各大学的独特精神——哈佛的精英主义与自由教育、耶鲁的公民使命、斯坦福的创新孵化、牛津的绅士教养——本质上都是通过知识生产、社群归属和价值观内化，来促进个体的心智成熟与精神健康。哈佛的“自由教育”与心理免疫：书中描述的哈佛通识教育改革反复强调“自由教育”是对灵魂的关怀。哈佛的“自由教育”培养学生“独立之精神，自由之思想”，类似于中医“志定则神安”；而过度功利化（", "keywords": ["证据等级与适用人群", "忽视负面效应", "选择性偏见", "局限性", "自由教育", "心理健"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/大学的精神_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/大学精神环境.md"}, {"id": "因果报应.md", "label": "因果报应", "title": "因果报应", "type": "book", "degree": 6, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "《伊索寓言》作为西方最古老的寓言集之一，其核心教育理念在于通过简洁、生动的动物与人物故事，向儿童传递关于善恶、智慧、因果与处世之道的道德判断。本书不依赖抽象说教，而是以“叙事隐喻”的方式，让读者在具体情境中自行领悟教训。全书贯穿三条主线：善与恶的博弈（如“善与恶”一则直接点明“人很不容易遇到善，却每日为恶所侵袭”）、弱者的生存智慧（如鹰与蜣螂、狐狸与葡萄等故事强调以智补弱、不可轻视他人）、因果报应与自我反省（如破坏友谊的鹰最终被烧死，拔羽毛的鹰提醒恩仇分明）。例如“鹰与蜣螂”教人不要轻视弱小，但真正的道德启发应该是“尊重是一个独立于力量的价值”，而故事只是让儿童看到“弱小者有能力报复”。《伊索", "keywords": ["伊索寓言", "因果报应与自我反省", "鲜明的功利主义倾向", "弱者的生存智慧", "善与恶的博弈", "鹰与蜣"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/伊索寓言_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/因果报应.md"}, {"id": "感官教育.md", "label": "感官教育", "title": "感官教育", "type": "book", "degree": 4, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书通过一个天生无痛觉的男孩詹姆斯·戴尔的传奇人生，揭示了一个深刻的教育与心理命题：疼痛不仅是生理体验，更是人类情感发展与同理心构建的必要基石。作者安德鲁·米勒以文学的方式论证了“皮肉之苦与心灵之痛的相通与差异”，指出缺乏疼痛体验的个体虽能获得某种“超能力”（如成为天才外科医生），却注定陷入情感隔绝与存在孤独。从教育视角看，这一核心论点挑战了当代家庭教育中过度保护、试图消除儿童一切痛苦体验的倾向，提醒我们：适度的挫折、失败甚至生理之痛，恰恰是儿童建立自我认知、理解他人、发展道德情感不可或缺的“教材”。小说中牧师的朋友伯克和罗斯医生在解剖詹姆斯时表现出的兴奋与野蛮，恰如教育者将儿童视为“等待解密", "keywords": ["詹姆斯", "无痛觉", "超能力", "蒙特梭"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/从月亮来的男孩"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/感官教育.md"}, {"id": "心理健康生态系统.md", "label": "心理健康生态系统", "title": "心理健康生态系统", "type": "book", "degree": 6, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书的核心健康理念可提炼为：大学的精神环境是塑造个体心理健康与认知弹性的关键“生态系统”。正如哈佛校长福斯特所言，大学“要对永恒做出承诺”，这种对历史与未来的责任感，实际上为个体提供了一个对抗现代性焦虑、身份迷茫和意义缺失的心理锚点。书中各大学的独特精神——哈佛的精英主义与自由教育、耶鲁的公民使命、斯坦福的创新孵化、牛津的绅士教养——本质上都是通过知识生产、社群归属和价值观内化，来促进个体的心智成熟与精神健康。哈佛的“自由教育”与心理免疫：书中描述的哈佛通识教育改革反复强调“自由教育”是对灵魂的关怀。哈佛的“自由教育”培养学生“独立之精神，自由之思想”，类似于中医“志定则神安”；而过度功利化（", "keywords": ["证据等级与适用人群", "忽视负面效应", "选择性偏见", "局限性", "心理健康", "自由教"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/大学的精神_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/心理健康生态系统.md"}, {"id": "自我接纳.md", "label": "自我接纳", "title": "自我接纳", "type": "book", "degree": 4, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "《少女，请回答》虽以个人随笔形式呈现，但其核心教育理念暗含于作者对成长过程、人际关系的细腻剖析中。本书最主要的观点是：青春期至成年初期的成长，本质上是一场从“无限可能”到“有限选择”的自我接纳与边界确立过程。作者通过自身与两位朋友（“李先生”与Coco）的相处经历，揭示了三个关键教育命题：第一，真正的成熟不是追求完美的理想化自我，而是学会在“中场休息”后，体面地接受人生的晴雨交替，从“文艺女青年”蜕变为“成年人小张”；第二，高质量的友情关系需要建立在彼此理解与适度距离的平衡之上——相似的人不一定适合做恋人，甚至做朋友也可能因过度共鸣而失去成长空间；第三，负能量共享与批判性思维具有教育价。这种状", "keywords": ["李先生", "请回答", "场休息", "同一性"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/少女，请回答_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/自我接纳.md"}, {"id": "社会情感学习.md", "label": "社会情感学习", "title": "社会情感学习", "type": "book", "degree": 4, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "《少女，请回答》虽以个人随笔形式呈现，但其核心教育理念暗含于作者对成长过程、人际关系的细腻剖析中。本书最主要的观点是：青春期至成年初期的成长，本质上是一场从“无限可能”到“有限选择”的自我接纳与边界确立过程。作者通过自身与两位朋友（“李先生”与Coco）的相处经历，揭示了三个关键教育命题：第一，真正的成熟不是追求完美的理想化自我，而是学会在“中场休息”后，体面地接受人生的晴雨交替，从“文艺女青年”蜕变为“成年人小张”；第二，高质量的友情关系需要建立在彼此理解与适度距离的平衡之上——相似的人不一定适合做恋人，甚至做朋友也可能因过度共鸣而失去成长空间；第三，负能量共享与批判性思维具有教育价。这种状", "keywords": ["李先生", "请回答", "场休息", "同一性"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/少女，请回答_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/社会情感学习.md"}, {"id": "认知弹性与意义感.md", "label": "认知弹性与意义感", "title": "认知弹性与意义感", "type": "book", "degree": 6, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书的核心健康理念可提炼为：大学的精神环境是塑造个体心理健康与认知弹性的关键“生态系统”。正如哈佛校长福斯特所言，大学“要对永恒做出承诺”，这种对历史与未来的责任感，实际上为个体提供了一个对抗现代性焦虑、身份迷茫和意义缺失的心理锚点。书中各大学的独特精神——哈佛的精英主义与自由教育、耶鲁的公民使命、斯坦福的创新孵化、牛津的绅士教养——本质上都是通过知识生产、社群归属和价值观内化，来促进个体的心智成熟与精神健康。哈佛的“自由教育”与心理免疫：书中描述的哈佛通识教育改革反复强调“自由教育”是对灵魂的关怀。哈佛的“自由教育”培养学生“独立之精神，自由之思想”，类似于中医“志定则神安”；而过度功利化（", "keywords": ["证据等级与适用人群", "忽视负面效应", "选择性偏见", "局限性", "自由教育", "心理健"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/大学的精神_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/认知弹性与意义感.md"}, {"id": "道德想象力.md", "label": "道德想象力", "title": "道德想象力", "type": "book", "degree": 6, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "《伊索寓言》作为西方最古老的寓言集之一，其核心教育理念在于通过简洁、生动的动物与人物故事，向儿童传递关于善恶、智慧、因果与处世之道的道德判断。本书不依赖抽象说教，而是以“叙事隐喻”的方式，让读者在具体情境中自行领悟教训。全书贯穿三条主线：善与恶的博弈（如“善与恶”一则直接点明“人很不容易遇到善，却每日为恶所侵袭”）、弱者的生存智慧（如鹰与蜣螂、狐狸与葡萄等故事强调以智补弱、不可轻视他人）、因果报应与自我反省（如破坏友谊的鹰最终被烧死，拔羽毛的鹰提醒恩仇分明）。例如“鹰与蜣螂”教人不要轻视弱小，但真正的道德启发应该是“尊重是一个独立于力量的价值”，而故事只是让儿童看到“弱小者有能力报复”。《伊索", "keywords": ["伊索寓言", "因果报应与自我反省", "鲜明的功利主义倾向", "弱者的生存智慧", "善与恶的博弈", "鹰与蜣"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/伊索寓言_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/道德想象力.md"}, {"id": "边界确立.md", "label": "边界确立", "title": "边界确立", "type": "book", "degree": 4, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "《少女，请回答》虽以个人随笔形式呈现，但其核心教育理念暗含于作者对成长过程、人际关系的细腻剖析中。本书最主要的观点是：青春期至成年初期的成长，本质上是一场从“无限可能”到“有限选择”的自我接纳与边界确立过程。作者通过自身与两位朋友（“李先生”与Coco）的相处经历，揭示了三个关键教育命题：第一，真正的成熟不是追求完美的理想化自我，而是学会在“中场休息”后，体面地接受人生的晴雨交替，从“文艺女青年”蜕变为“成年人小张”；第二，高质量的友情关系需要建立在彼此理解与适度距离的平衡之上——相似的人不一定适合做恋人，甚至做朋友也可能因过度共鸣而失去成长空间；第三，负能量共享与批判性思维具有教育价。这种状", "keywords": ["李先生", "请回答", "场休息", "同一性"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/少女，请回答_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/边界确立.md"}, {"id": "韧性培养.md", "label": "韧性培养", "title": "韧性培养", "type": "book", "degree": 4, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书通过一个天生无痛觉的男孩詹姆斯·戴尔的传奇人生，揭示了一个深刻的教育与心理命题：疼痛不仅是生理体验，更是人类情感发展与同理心构建的必要基石。作者安德鲁·米勒以文学的方式论证了“皮肉之苦与心灵之痛的相通与差异”，指出缺乏疼痛体验的个体虽能获得某种“超能力”（如成为天才外科医生），却注定陷入情感隔绝与存在孤独。从教育视角看，这一核心论点挑战了当代家庭教育中过度保护、试图消除儿童一切痛苦体验的倾向，提醒我们：适度的挫折、失败甚至生理之痛，恰恰是儿童建立自我认知、理解他人、发展道德情感不可或缺的“教材”。小说中牧师的朋友伯克和罗斯医生在解剖詹姆斯时表现出的兴奋与野蛮，恰如教育者将儿童视为“等待解密", "keywords": ["詹姆斯", "无痛觉", "超能力", "蒙特梭"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/从月亮来的男孩"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/韧性培养.md"}, {"id": "身份认同.md", "label": "身份认同", "title": "身份认同", "type": "book", "degree": 4, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "《我牙齿的故事》通过主人公古斯塔沃·桑切斯·桑切斯（高速路）的成长叙事，揭示了一个深刻的教育核心观点：个体的“缺陷”与“不完美”是建构独特人格与创造力的核心资源，而非需要被修正或掩盖的障碍。作者以牙齿为隐喻，强调儿童在成长过程中所经历的生理、家庭、社会层面的“异常”——如先天乳牙、丑陋外貌、父亲冷漠、贫困环境等——恰恰构成了自我认知与生命叙事的起点。教育不应致力于消除差异或追求标准化完美，而应引导儿童将自身的“边缘性”转化为叙事动力和身份认同的基石。这一对教育者（父母）截然不同的态度，暗示了儿童心理韧性培养的关键：不是消除差异，而是赋予差异以意义。高速路的成长历程完美诠释了阿德勒的个体心理学：", "keywords": ["高速路", "教育者", "阿德勒", "身份认"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/我牙齿的故事_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/身份认同.md"}, {"id": "韧性理论.md", "label": "韧性理论", "title": "韧性理论", "type": "book", "degree": 4, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书通过一个天生无痛觉的男孩詹姆斯·戴尔的传奇人生，揭示了一个深刻的教育与心理命题：疼痛不仅是生理体验，更是人类情感发展与同理心构建的必要基石。作者安德鲁·米勒以文学的方式论证了“皮肉之苦与心灵之痛的相通与差异”，指出缺乏疼痛体验的个体虽能获得某种“超能力”（如成为天才外科医生），却注定陷入情感隔绝与存在孤独。从教育视角看，这一核心论点挑战了当代家庭教育中过度保护、试图消除儿童一切痛苦体验的倾向，提醒我们：适度的挫折、失败甚至生理之痛，恰恰是儿童建立自我认知、理解他人、发展道德情感不可或缺的“教材”。小说中牧师的朋友伯克和罗斯医生在解剖詹姆斯时表现出的兴奋与野蛮，恰如教育者将儿童视为“等待解密", "keywords": ["詹姆斯", "无痛觉", "超能力", "蒙特梭"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/从月亮来的男孩"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/韧性理论.md"}, {"id": "青春期成长.md", "label": "青春期成长", "title": "青春期成长", "type": "book", "degree": 4, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "《少女，请回答》虽以个人随笔形式呈现，但其核心教育理念暗含于作者对成长过程、人际关系的细腻剖析中。本书最主要的观点是：青春期至成年初期的成长，本质上是一场从“无限可能”到“有限选择”的自我接纳与边界确立过程。作者通过自身与两位朋友（“李先生”与Coco）的相处经历，揭示了三个关键教育命题：第一，真正的成熟不是追求完美的理想化自我，而是学会在“中场休息”后，体面地接受人生的晴雨交替，从“文艺女青年”蜕变为“成年人小张”；第二，高质量的友情关系需要建立在彼此理解与适度距离的平衡之上——相似的人不一定适合做恋人，甚至做朋友也可能因过度共鸣而失去成长空间；第三，负能量共享与批判性思维具有教育价。青春期", "keywords": ["李先生", "请回答", "场休息", "青春期"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/少女，请回答_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/青春期成长.md"}, {"id": "叙事身份重建.md", "label": "叙事身份重建", "title": "叙事身份重建", "type": "book", "degree": 4, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "《我牙齿的故事》通过主人公古斯塔沃·桑切斯·桑切斯（高速路）的成长叙事，揭示了一个深刻的教育核心观点：个体的“缺陷”与“不完美”是建构独特人格与创造力的核心资源，而非需要被修正或掩盖的障碍。作者以牙齿为隐喻，强调儿童在成长过程中所经历的生理、家庭、社会层面的“异常”——如先天乳牙、丑陋外貌、父亲冷漠、贫困环境等——恰恰构成了自我认知与生命叙事的起点。教育不应致力于消除差异或追求标准化完美，而应引导儿童将自身的“边缘性”转化为叙事动力和身份认同的基石。这一对教育者（父母）截然不同的态度，暗示了儿童心理韧性培养的关键：不是消除差异，而是赋予差异以意义。高速路的成长历程完美诠释了阿德勒的个体心理学：", "keywords": ["高速路", "教育者", "阿德勒", "我牙齿"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/我牙齿的故事_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/叙事身份重建.md"}, {"id": "情感缺失.md", "label": "情感缺失", "title": "情感缺失", "type": "book", "degree": 3, "cluster": "教育心理学", "domain": "心理学", "sub_domain": "教育心理学", "summary": "本书的核心教育论点并非关于具体的育儿技巧或学业成就，而是指向一个更根本、也更复杂的命题：家庭作为最奇特的人类机构，其内部的爱与黑暗、理想与创伤、言语与沉默，如何共同塑造了一个儿童的灵魂，并决定了他理解世界与自我的方式。奥兹指出，这本书旨在揭示一个谜：两个聪慧、慷慨、儒雅的好人（他的父母），为何共同酿造了一场悲剧。他提出的悖论性公式“好和好相加等于坏”，直接挑战了传统教育中“好父母”必然带来“好孩子”的线性因果关系。这揭示了教育中一个关键矛盾：为了保护而进行的隔离，同时也在剥夺孩子理解父母、理解自己出身的能力，导致一种“单恋”式的情感继承——孩子继承了父母的渴望，却不知道渴望的对象是什么。教育的", "keywords": ["爱与黑暗", "造了一", "悲剧性"], "tags": ["domain/心理学", "sub_domain/教育心理学", "type/concept", "source/爱与黑暗的故事_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/教育心理学/情感缺失.md"}];
+var LINKS = [{"source": "非标准化成长.md", "target": "家庭接纳与心理韧性.md", "value": 2, "shared": ["高速路", "相关笔记"]}, {"source": "叙事隐喻.md", "target": "因果逻辑.md", "value": 4, "shared": ["因果报应与自我反省", "善与恶的博弈", "鲜明的功利主义倾向", "弱者的生存智慧"]}, {"source": "叙事隐喻.md", "target": "角色对比.md", "value": 4, "shared": ["因果报应与自我反省", "善与恶的博弈", "鲜明的功利主义倾向", "弱者的生存智慧"]}, {"source": "叙事隐喻.md", "target": "道德启蒙.md", "value": 4, "shared": ["因果报应与自我反省", "善与恶的博弈", "鲜明的功利主义倾向", "弱者的生存智慧"]}, {"source": "叙事隐喻.md", "target": "情景化学习.md", "value": 4, "shared": ["因果报应与自我反省", "善与恶的博弈", "鲜明的功利主义倾向", "弱者的生存智慧"]}, {"source": "叙事隐喻.md", "target": "因果报应.md", "value": 4, "shared": ["因果报应与自我反省", "善与恶的博弈", "鲜明的功利主义倾向", "弱者的生存智慧"]}, {"source": "叙事隐喻.md", "target": "道德想象力.md", "value": 4, "shared": ["因果报应与自我反省", "善与恶的博弈", "鲜明的功利主义倾向", "弱者的生存智慧"]}, {"source": "因果逻辑.md", "target": "角色对比.md", "value": 6, "shared": ["因果报应与自我反省", "弱者的生存智慧", "鲜明的功利主义倾向", "鹰与蜣", "善与恶的博弈"]}, {"source": "因果逻辑.md", "target": "道德启蒙.md", "value": 5, "shared": ["因果报应与自我反省", "弱者的生存智慧", "鲜明的功利主义倾向", "善与恶的博弈", "伊索寓言"]}, {"source": "因果逻辑.md", "target": "情景化学习.md", "value": 6, "shared": ["因果报应与自我反省", "弱者的生存智慧", "鲜明的功利主义倾向", "鹰与蜣", "善与恶的博弈"]}, {"source": "因果逻辑.md", "target": "因果报应.md", "value": 6, "shared": ["因果报应与自我反省", "弱者的生存智慧", "鲜明的功利主义倾向", "鹰与蜣", "善与恶的博弈"]}, {"source": "因果逻辑.md", "target": "道德想象力.md", "value": 6, "shared": ["因果报应与自我反省", "弱者的生存智慧", "鲜明的功利主义倾向", "鹰与蜣", "善与恶的博弈"]}, {"source": "叙事重构.md", "target": "非标准化评价.md", "value": 3, "shared": ["高速路", "教育者", "阿德勒"]}, {"source": "叙事重构.md", "target": "缺陷与创造力.md", "value": 4, "shared": ["高速路", "教育者", "我牙齿", "阿德勒"]}, {"source": "叙事重构.md", "target": "自我教育机制.md", "value": 4, "shared": ["高速路", "教育者", "我牙齿", "阿德勒"]}, {"source": "叙事重构.md", "target": "身份认同.md", "value": 3, "shared": ["高速路", "教育者", "阿德勒"]}, {"source": "叙事重构.md", "target": "叙事身份重建.md", "value": 4, "shared": ["高速路", "教育者", "我牙齿", "阿德勒"]}, {"source": "心理韧性.md", "target": "意义建构.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "心理韧性.md", "target": "社会支持与归属感.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "心理韧性.md", "target": "认知弹性.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "心理韧性.md", "target": "精神生态系统.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "心理韧性.md", "target": "自由教育与心理免疫.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "心理韧性.md", "target": "社会支持网络.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "心理韧性.md", "target": "大学精神环境.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "心理韧性.md", "target": "心理健康生态系统.md", "value": 4, "shared": ["选择性偏见", "证据等级与适用人群", "忽视负面效应", "局限性"]}, {"source": "心理韧性.md", "target": "认知弹性与意义感.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "身份冲突.md", "target": "家庭悖论.md", "value": 3, "shared": ["爱与黑暗", "造了一", "悲剧性"]}, {"source": "身份冲突.md", "target": "文化编码.md", "value": 3, "shared": ["爱与黑暗", "造了一", "悲剧性"]}, {"source": "身份冲突.md", "target": "隐性课程.md", "value": 3, "shared": ["爱与黑暗", "造了一", "悲剧性"]}, {"source": "身份冲突.md", "target": "情感缺失.md", "value": 3, "shared": ["爱与黑暗", "造了一", "悲剧性"]}, {"source": "意义建构.md", "target": "社会支持与归属感.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "意义建构.md", "target": "认知弹性.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "意义建构.md", "target": "精神生态系统.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "意义建构.md", "target": "自由教育与心理免疫.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "意义建构.md", "target": "社会支持网络.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "意义建构.md", "target": "大学精神环境.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "意义建构.md", "target": "心理健康生态系统.md", "value": 4, "shared": ["选择性偏见", "证据等级与适用人群", "忽视负面效应", "局限性"]}, {"source": "意义建构.md", "target": "认知弹性与意义感.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "社会支持与归属感.md", "target": "认知弹性.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "社会支持与归属感.md", "target": "精神生态系统.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "社会支持与归属感.md", "target": "自由教育与心理免疫.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "社会支持与归属感.md", "target": "社会支持网络.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "社会支持与归属感.md", "target": "大学精神环境.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "社会支持与归属感.md", "target": "心理健康生态系统.md", "value": 4, "shared": ["选择性偏见", "证据等级与适用人群", "忽视负面效应", "局限性"]}, {"source": "社会支持与归属感.md", "target": "认知弹性与意义感.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "存在主义教育.md", "target": "过度保护.md", "value": 3, "shared": ["无痛觉", "超能力", "詹姆斯"]}, {"source": "存在主义教育.md", "target": "疼痛与共情.md", "value": 4, "shared": ["无痛觉", "超能力", "蒙特梭", "詹姆斯"]}, {"source": "存在主义教育.md", "target": "感官教育.md", "value": 4, "shared": ["无痛觉", "超能力", "蒙特梭", "詹姆斯"]}, {"source": "存在主义教育.md", "target": "韧性培养.md", "value": 4, "shared": ["无痛觉", "超能力", "蒙特梭", "詹姆斯"]}, {"source": "存在主义教育.md", "target": "韧性理论.md", "value": 4, "shared": ["无痛觉", "超能力", "蒙特梭", "詹姆斯"]}, {"source": "认知弹性.md", "target": "精神生态系统.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "认知弹性.md", "target": "自由教育与心理免疫.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "认知弹性.md", "target": "社会支持网络.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "认知弹性.md", "target": "大学精神环境.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "认知弹性.md", "target": "心理健康生态系统.md", "value": 4, "shared": ["选择性偏见", "证据等级与适用人群", "忽视负面效应", "局限性"]}, {"source": "认知弹性.md", "target": "认知弹性与意义感.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "家庭悖论.md", "target": "文化编码.md", "value": 3, "shared": ["爱与黑暗", "造了一", "悲剧性"]}, {"source": "家庭悖论.md", "target": "隐性课程.md", "value": 3, "shared": ["爱与黑暗", "造了一", "悲剧性"]}, {"source": "家庭悖论.md", "target": "情感缺失.md", "value": 3, "shared": ["爱与黑暗", "造了一", "悲剧性"]}, {"source": "角色对比.md", "target": "道德启蒙.md", "value": 5, "shared": ["因果报应与自我反省", "弱者的生存智慧", "鲜明的功利主义倾向", "善与恶的博弈", "伊索寓言"]}, {"source": "角色对比.md", "target": "情景化学习.md", "value": 6, "shared": ["因果报应与自我反省", "弱者的生存智慧", "鲜明的功利主义倾向", "鹰与蜣", "善与恶的博弈"]}, {"source": "角色对比.md", "target": "因果报应.md", "value": 6, "shared": ["因果报应与自我反省", "弱者的生存智慧", "鲜明的功利主义倾向", "鹰与蜣", "善与恶的博弈"]}, {"source": "角色对比.md", "target": "道德想象力.md", "value": 6, "shared": ["因果报应与自我反省", "弱者的生存智慧", "鲜明的功利主义倾向", "鹰与蜣", "善与恶的博弈"]}, {"source": "精神生态系统.md", "target": "自由教育与心理免疫.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "精神生态系统.md", "target": "社会支持网络.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "精神生态系统.md", "target": "大学精神环境.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "精神生态系统.md", "target": "心理健康生态系统.md", "value": 4, "shared": ["选择性偏见", "证据等级与适用人群", "忽视负面效应", "局限性"]}, {"source": "精神生态系统.md", "target": "认知弹性与意义感.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "自由教育与心理免疫.md", "target": "社会支持网络.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "自由教育与心理免疫.md", "target": "大学精神环境.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "自由教育与心理免疫.md", "target": "心理健康生态系统.md", "value": 4, "shared": ["选择性偏见", "证据等级与适用人群", "忽视负面效应", "局限性"]}, {"source": "自由教育与心理免疫.md", "target": "认知弹性与意义感.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "道德启蒙.md", "target": "情景化学习.md", "value": 5, "shared": ["因果报应与自我反省", "弱者的生存智慧", "鲜明的功利主义倾向", "善与恶的博弈", "伊索寓言"]}, {"source": "道德启蒙.md", "target": "因果报应.md", "value": 5, "shared": ["因果报应与自我反省", "弱者的生存智慧", "鲜明的功利主义倾向", "善与恶的博弈", "伊索寓言"]}, {"source": "道德启蒙.md", "target": "道德想象力.md", "value": 5, "shared": ["因果报应与自我反省", "弱者的生存智慧", "鲜明的功利主义倾向", "善与恶的博弈", "伊索寓言"]}, {"source": "文化编码.md", "target": "隐性课程.md", "value": 3, "shared": ["爱与黑暗", "造了一", "悲剧性"]}, {"source": "文化编码.md", "target": "情感缺失.md", "value": 3, "shared": ["爱与黑暗", "造了一", "悲剧性"]}, {"source": "非标准化评价.md", "target": "缺陷与创造力.md", "value": 3, "shared": ["高速路", "教育者", "阿德勒"]}, {"source": "非标准化评价.md", "target": "自我教育机制.md", "value": 3, "shared": ["高速路", "教育者", "阿德勒"]}, {"source": "非标准化评价.md", "target": "身份认同.md", "value": 3, "shared": ["高速路", "教育者", "阿德勒"]}, {"source": "非标准化评价.md", "target": "叙事身份重建.md", "value": 3, "shared": ["高速路", "教育者", "阿德勒"]}, {"source": "缺陷与创造力.md", "target": "自我教育机制.md", "value": 4, "shared": ["高速路", "教育者", "我牙齿", "阿德勒"]}, {"source": "缺陷与创造力.md", "target": "身份认同.md", "value": 3, "shared": ["高速路", "教育者", "阿德勒"]}, {"source": "缺陷与创造力.md", "target": "叙事身份重建.md", "value": 4, "shared": ["高速路", "教育者", "我牙齿", "阿德勒"]}, {"source": "过度保护.md", "target": "疼痛与共情.md", "value": 3, "shared": ["无痛觉", "超能力", "詹姆斯"]}, {"source": "过度保护.md", "target": "感官教育.md", "value": 3, "shared": ["无痛觉", "超能力", "詹姆斯"]}, {"source": "过度保护.md", "target": "韧性培养.md", "value": 3, "shared": ["无痛觉", "超能力", "詹姆斯"]}, {"source": "过度保护.md", "target": "韧性理论.md", "value": 3, "shared": ["无痛觉", "超能力", "詹姆斯"]}, {"source": "隐性课程.md", "target": "情感缺失.md", "value": 3, "shared": ["爱与黑暗", "造了一", "悲剧性"]}, {"source": "自我教育机制.md", "target": "身份认同.md", "value": 3, "shared": ["高速路", "教育者", "阿德勒"]}, {"source": "自我教育机制.md", "target": "叙事身份重建.md", "value": 4, "shared": ["高速路", "教育者", "我牙齿", "阿德勒"]}, {"source": "心理社会合法延缓期.md", "target": "分离-个体化.md", "value": 3, "shared": ["李先生", "请回答", "场休息"]}, {"source": "心理社会合法延缓期.md", "target": "自我接纳.md", "value": 3, "shared": ["李先生", "请回答", "场休息"]}, {"source": "心理社会合法延缓期.md", "target": "社会情感学习.md", "value": 3, "shared": ["李先生", "请回答", "场休息"]}, {"source": "心理社会合法延缓期.md", "target": "边界确立.md", "value": 3, "shared": ["李先生", "请回答", "场休息"]}, {"source": "心理社会合法延缓期.md", "target": "青春期成长.md", "value": 3, "shared": ["李先生", "请回答", "场休息"]}, {"source": "分离-个体化.md", "target": "自我接纳.md", "value": 4, "shared": ["李先生", "请回答", "场休息", "同一性"]}, {"source": "分离-个体化.md", "target": "社会情感学习.md", "value": 4, "shared": ["李先生", "请回答", "场休息", "同一性"]}, {"source": "分离-个体化.md", "target": "边界确立.md", "value": 4, "shared": ["李先生", "请回答", "场休息", "同一性"]}, {"source": "分离-个体化.md", "target": "青春期成长.md", "value": 3, "shared": ["李先生", "请回答", "场休息"]}, {"source": "疼痛与共情.md", "target": "感官教育.md", "value": 4, "shared": ["无痛觉", "超能力", "蒙特梭", "詹姆斯"]}, {"source": "疼痛与共情.md", "target": "韧性培养.md", "value": 4, "shared": ["无痛觉", "超能力", "蒙特梭", "詹姆斯"]}, {"source": "疼痛与共情.md", "target": "韧性理论.md", "value": 4, "shared": ["无痛觉", "超能力", "蒙特梭", "詹姆斯"]}, {"source": "社会支持网络.md", "target": "大学精神环境.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "社会支持网络.md", "target": "心理健康生态系统.md", "value": 4, "shared": ["选择性偏见", "证据等级与适用人群", "忽视负面效应", "局限性"]}, {"source": "社会支持网络.md", "target": "认知弹性与意义感.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "情景化学习.md", "target": "因果报应.md", "value": 6, "shared": ["因果报应与自我反省", "弱者的生存智慧", "鲜明的功利主义倾向", "鹰与蜣", "善与恶的博弈"]}, {"source": "情景化学习.md", "target": "道德想象力.md", "value": 6, "shared": ["因果报应与自我反省", "弱者的生存智慧", "鲜明的功利主义倾向", "鹰与蜣", "善与恶的博弈"]}, {"source": "大学精神环境.md", "target": "心理健康生态系统.md", "value": 4, "shared": ["选择性偏见", "证据等级与适用人群", "忽视负面效应", "局限性"]}, {"source": "大学精神环境.md", "target": "认知弹性与意义感.md", "value": 6, "shared": ["自由教育", "选择性偏见", "心理健", "局限性", "证据等级与适用人群"]}, {"source": "因果报应.md", "target": "道德想象力.md", "value": 6, "shared": ["因果报应与自我反省", "弱者的生存智慧", "鲜明的功利主义倾向", "鹰与蜣", "善与恶的博弈"]}, {"source": "感官教育.md", "target": "韧性培养.md", "value": 4, "shared": ["无痛觉", "超能力", "蒙特梭", "詹姆斯"]}, {"source": "感官教育.md", "target": "韧性理论.md", "value": 4, "shared": ["无痛觉", "超能力", "蒙特梭", "詹姆斯"]}, {"source": "心理健康生态系统.md", "target": "认知弹性与意义感.md", "value": 4, "shared": ["选择性偏见", "证据等级与适用人群", "忽视负面效应", "局限性"]}, {"source": "自我接纳.md", "target": "社会情感学习.md", "value": 4, "shared": ["李先生", "请回答", "场休息", "同一性"]}, {"source": "自我接纳.md", "target": "边界确立.md", "value": 4, "shared": ["李先生", "请回答", "场休息", "同一性"]}, {"source": "自我接纳.md", "target": "青春期成长.md", "value": 3, "shared": ["李先生", "请回答", "场休息"]}, {"source": "社会情感学习.md", "target": "边界确立.md", "value": 4, "shared": ["李先生", "请回答", "场休息", "同一性"]}, {"source": "社会情感学习.md", "target": "青春期成长.md", "value": 3, "shared": ["李先生", "请回答", "场休息"]}, {"source": "边界确立.md", "target": "青春期成长.md", "value": 3, "shared": ["李先生", "请回答", "场休息"]}, {"source": "韧性培养.md", "target": "韧性理论.md", "value": 4, "shared": ["无痛觉", "超能力", "蒙特梭", "詹姆斯"]}, {"source": "身份认同.md", "target": "叙事身份重建.md", "value": 3, "shared": ["高速路", "教育者", "阿德勒"]}];
+var CLUSTER_COLORS = {"教育心理学": "#f59e0b"};
+var SEARCH_DATA = [{"id": "非标准化成长.md", "label": "非标准化成长"}, {"id": "叙事隐喻.md", "label": "叙事隐喻"}, {"id": "因果逻辑.md", "label": "因果逻辑"}, {"id": "叙事重构.md", "label": "叙事重构"}, {"id": "家庭接纳与心理韧性.md", "label": "家庭接纳与心理韧性"}, {"id": "心理韧性.md", "label": "心理韧性"}, {"id": "身份冲突.md", "label": "身份冲突"}, {"id": "意义建构.md", "label": "意义建构"}, {"id": "社会支持与归属感.md", "label": "社会支持与归属感"}, {"id": "存在主义教育.md", "label": "存在主义教育"}, {"id": "认知弹性.md", "label": "认知弹性"}, {"id": "家庭悖论.md", "label": "家庭悖论"}, {"id": "角色对比.md", "label": "角色对比"}, {"id": "精神生态系统.md", "label": "精神生态系统"}, {"id": "自由教育与心理免疫.md", "label": "自由教育与心理免疫"}, {"id": "道德启蒙.md", "label": "道德启蒙"}, {"id": "文化编码.md", "label": "文化编码"}, {"id": "非标准化评价.md", "label": "非标准化评价"}, {"id": "缺陷与创造力.md", "label": "缺陷与创造力"}, {"id": "过度保护.md", "label": "过度保护"}, {"id": "隐性课程.md", "label": "隐性课程"}, {"id": "自我教育机制.md", "label": "自我教育机制"}, {"id": "心理社会合法延缓期.md", "label": "心理社会合法延缓期"}, {"id": "分离-个体化.md", "label": "分离-个体化"}, {"id": "疼痛与共情.md", "label": "疼痛与共情"}, {"id": "社会支持网络.md", "label": "社会支持网络"}, {"id": "情感发展.md", "label": "情感发展"}, {"id": "情景化学习.md", "label": "情景化学习"}, {"id": "大学精神环境.md", "label": "大学精神环境"}, {"id": "因果报应.md", "label": "因果报应"}, {"id": "感官教育.md", "label": "感官教育"}, {"id": "心理健康生态系统.md", "label": "心理健康生态系统"}, {"id": "自我接纳.md", "label": "自我接纳"}, {"id": "社会情感学习.md", "label": "社会情感学习"}, {"id": "认知弹性与意义感.md", "label": "认知弹性与意义感"}, {"id": "道德想象力.md", "label": "道德想象力"}, {"id": "边界确立.md", "label": "边界确立"}, {"id": "韧性培养.md", "label": "韧性培养"}, {"id": "身份认同.md", "label": "身份认同"}, {"id": "韧性理论.md", "label": "韧性理论"}, {"id": "青春期成长.md", "label": "青春期成长"}, {"id": "叙事身份重建.md", "label": "叙事身份重建"}, {"id": "情感缺失.md", "label": "情感缺失"}];
+var CONCEPT_SEARCH = [];
+
+
+/* ---- 搜索 ---- */
+var searchBox = document.getElementById("search-box");
+var searchResults = document.getElementById("search-results");
+
+searchBox.addEventListener("input", function(){
+  var q = this.value.trim().toLowerCase();
+  if(!q) { searchResults.style.display="none"; return; }
+  var combined = SEARCH_DATA.concat(CONCEPT_SEARCH.map(function(c){ return {id:c,label:c,type:"concept"}; }));
+  var matches = combined.filter(function(d){ return d.label.toLowerCase().indexOf(q)>-1; }).slice(0,12);
+  if(!matches.length) { searchResults.style.display="none"; return; }
+  searchResults.innerHTML = matches.map(function(d){
+    return '<div class="sri" data-id="'+d.id+'">'+d.label+'</div>';
+  }).join("");
+  searchResults.style.display="block";
+});
+
+searchResults.addEventListener("click", function(e){
+  var el = e.target.closest(".sri");
+  if(!el) return;
+  highlightNode(el.getAttribute("data-id"));
+  searchResults.style.display="none";
+  searchBox.value="";
+});
+
+function highlightNode(id){
+  svg.selectAll(".node").classed("highlight", function(d){ return d.id===id; });
+  svg.selectAll(".link").classed("highlight", function(d){
+    return d.source.id===id || d.target.id===id;
+  });
+  var nd = nodeMap.get(id);
+  if(!nd) return;
+  var t = d3.zoomTransform(svg.node());
+  var x = -nd.x*t.k + width/2;
+  var y = -nd.y*t.k + height/2;
+  svg.transition().duration(600).call(zoom.transform, d3.zoomIdentity.translate(x,y).scale(t.k));
+}
+
+/* ---- 详情面板 ---- */
+function showDetail(d){
+  var panel = document.getElementById("detail-panel");
+  var title = document.getElementById("detail-title");
+  var body  = document.getElementById("detail-body");
+
+  title.textContent = (d.title || d.label || d.id || "").replace(/\.md$/, "");
+
+  var html = "";
+
+  /* 元信息 */
+  html += '<div class="section"><div class="meta-row"><span class="meta-label">类型</span><span>' + (d.type==="concept" ? "💡 概念" : "📖 笔记") + '</span></div>';
+  if(d.domain)   html += '<div class="meta-row"><span class="meta-label">领域</span><span>' + d.domain + '</span></div>';
+  if(d.cluster) html += '<div class="meta-row"><span class="meta-label">聚类</span><span>' + d.cluster + '</span></div>';
+  if(d.degree !== undefined) html += '<div class="meta-row"><span class="meta-label">连通度</span><span>' + d.degree + '</span></div>';
+  html += '</div>';
+
+  /* 摘要 */
+  if(d.summary){
+    html += '<div class="section"><div class="section-title">📝 摘要</div><div class="summary">' + escapeHtml(d.summary.slice(0,500)) + (d.summary.length>500 ? "..." : "") + '</div></div>';
+  }
+
+  /* 关键词 */
+  if(d.keywords && d.keywords.length){
+    html += '<div class="section"><div class="section-title">🔑 关键词</div>';
+    d.keywords.forEach(function(kw){ html += '<span class="keyword">' + escapeHtml(kw) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 标签 */
+  if(d.tags && d.tags.length){
+    html += '<div class="section"><div class="section-title">🏷️ 标签</div>';
+    d.tags.forEach(function(tg){ html += '<span class="tag">' + escapeHtml(tg) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 打开原文件：用 Obsidian URI 协议，避免浏览器 file:// 限制 */
+  if(d.path){
+    var obsidianUrl = "obsidian://open?path=" + encodeURIComponent(d.path);
+    html += '<div class="section"><a class="open-link" href="' + obsidianUrl + '">📂 在 Obsidian 中打开</a></div>';
+  }
+
+  body.innerHTML = html;
+  panel.classList.add("open");
+}
+
+function closeDetail(){
+  document.getElementById("detail-panel").classList.remove("open");
+}
+
+function escapeHtml(s){
+  if(!s) return "";
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ---- D3 力导向图 ---- */
+var width  = window.innerWidth;
+var height = window.innerHeight - 48;
+var svg = d3.select("#graph").append("svg").attr("width",width).attr("height",height);
+var g = svg.append("g");
+var zoom = d3.zoom().scaleExtent([0.05,5]).on("zoom", function(e){ g.attr("transform", e.transform); });
+svg.call(zoom);
+
+var simulation = d3.forceSimulation(NODES)
+  .force("link",    d3.forceLink(LINKS).id(function(d){ return d.id; }).distance(90))
+  .force("charge",  d3.forceManyBody().strength(-220))
+  .force("center",  d3.forceCenter(width/2, height/2))
+  .force("collision", d3.forceCollide(30))
+  .force("x",       d3.forceX(width/2).strength(0.06))
+  .force("y",       d3.forceY(height/2).strength(0.06));
+
+var link = g.append("g").attr("class","links").selectAll("line")
+  .data(LINKS).join("line")
+  .attr("class", function(d){ return "link" + ((d.type==="book-book") ? " link-book" : ""); });
+
+var node = g.append("g").attr("class","nodes").selectAll("g")
+  .data(NODES).join("g")
+  .attr("class","node")
+  .attr("data-id", function(d){ return d.id; })
+  .call(d3.drag()
+    .on("start", function(event,d){ if(!event.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+    .on("drag",  function(event,d){ d.fx=event.x; d.fy=event.y; })
+    .on("end",   function(event,d){ if(!event.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+node.append("circle")
+  .attr("r", function(d){ return d.type==="book" ? 5+Math.sqrt(d.degree||1)*1.5 : 7; })
+  .attr("fill", function(d){ return d.type==="book" ? (CLUSTER_COLORS[d.cluster]||"#94a3b8") : "#f59e0b"; })
+  .attr("stroke", function(d){ return d.type==="book" ? "#0f172a" : "#d97706"; })
+  .on("mouseover", function(event,d){
+    var html = d.type==="book"
+      ? "<strong>📖 "+d.label+"</strong><br>连通度:"+d.degree+"<br>聚类:"+(d.cluster||"未分类")
+      : "<strong>💡 "+d.concept+"</strong><br>关联:"+d.book_count+" 篇";
+    d3.select("#tooltip").html(html).style("opacity",1)
+      .style("left",(event.pageX+12)+"px").style("top",(event.pageY-8)+"px");
+  })
+  .on("mouseout", function(){ d3.select("#tooltip").style("opacity",0); })
+  .on("click", function(event,d){
+    event.stopPropagation();
+    showDetail(d);
+  });
+
+node.append("text").attr("dx",11).attr("dy","0.35em").text(function(d){ return d.label; });
+
+var nodeMap = new Map();
+simulation.on("tick", function(){
+  link
+    .attr("x1", function(d){ return d.source.x; })
+    .attr("y1", function(d){ return d.source.y; })
+    .attr("x2", function(d){ return d.target.x; })
+    .attr("y2", function(d){ return d.target.y; });
+  node.attr("transform", function(d){
+    nodeMap.set(d.id, d);
+    return "translate("+d.x+","+d.y+")";
+  });
+});
+
+/* ---- 图例 ---- */
+var legendItems = d3.select("#legend").append("div").style("font-weight","bold").style("margin-bottom","8px").text("🎨 聚类").node().parentNode;
+Object.entries(CLUSTER_COLORS).forEach(function(entry){
+  var li = d3.select(legendItems).append("div").attr("class","li");
+  li.append("span").attr("class","ld").style("background",entry[1]);
+  li.append("span").text(entry[0]);
+});
+
+/* ---- 按钮 ---- */
+var conceptVisible = true;
+d3.select("#btn-toggle-concept").on("click", function(){
+  conceptVisible = !conceptVisible;
+  svg.selectAll(".node").filter(function(d){ return d.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  svg.selectAll(".link").filter(function(d){ return d.source.type==="concept"||d.target.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  d3.select(this).text(conceptVisible?"隐藏概念":"显示概念").classed("active",!conceptVisible);
+});
+d3.select("#btn-reset").on("click", function(){
+  closeDetail();
+  svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+});
+
+svg.on("click", function(){ searchResults.style.display="none"; });
+document.addEventListener("click", function(e){
+  if(!document.getElementById("detail-panel").contains(e.target) && !e.target.closest(".node")){
+    closeDetail();
+  }
+});
+
+/* 更新统计 */
+d3.select("#node-count").text(NODES.length);
+d3.select("#link-count").text(LINKS.length);
+</script>
+</body>
+</html>

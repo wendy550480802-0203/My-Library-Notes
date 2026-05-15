@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>历史 - 西方哲学史 - 知识图谱</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#0f172a; color:#e2e8f0; overflow:hidden; }
+
+/* 侧边栏 */
+#sidebar { position:fixed; left:0; top:0; width:220px; height:100vh; background:#1e293b; border-right:1px solid #334155; overflow-y:auto; z-index:50; transition:transform 0.3s; font-size:12px; }
+#sidebar.collapsed { transform:translateX(-220px); }
+#sidebar h2 { font-size:13px; padding:12px 14px 8px; color:#94a3b8; border-bottom:1px solid #334155; }
+#sidebar .domain-header { padding:7px 14px; cursor:pointer; font-weight:600; border-bottom:1px solid #1a2332; transition:background 0.15s; user-select:none; }
+#sidebar .domain-header:hover { background:#334155; }
+#sidebar .domain-pages { display:none; }
+#sidebar .domain-pages a { display:block; padding:5px 14px 5px 24px; color:#cbd5e1; text-decoration:none; border-bottom:1px solid #1a2332; transition:background 0.15s; font-size:11px; }
+#sidebar .domain-pages a:hover { background:#334155; color:#fff; }
+#sidebar .domain-pages a.active { font-weight:600; }
+#sidebar a.active { background:#06b6d4; color:#0f172a; }
+#sidebar-toggle { position:fixed; left:8px; top:56px; z-index:60; background:#334155; border:1px solid #475569; color:#e2e8f0; border-radius:6px; padding:4px 7px; cursor:pointer; font-size:13px; transition:left 0.3s; }
+#sidebar:not(.collapsed) ~ #sidebar-toggle { left:228px; }
+
+/* 右侧详情面板 */
+#detail-panel { position:fixed; top:0; right:-420px; width:400px; height:100vh; background:#1e293b; border-left:1px solid #334155; z-index:55; transition:right 0.3s; display:flex; flex-direction:column; }
+#detail-panel.open { right:0; }
+#detail-header { padding:14px 16px; border-bottom:1px solid #334155; display:flex; align-items:flex-start; gap:10px; }
+#detail-header h2 { flex:1; font-size:14px; line-height:1.4; margin:0; word-break:break-all; }
+#detail-close { background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer; padding:0 4px; line-height:1; }
+#detail-close:hover { color:#fff; }
+#detail-body { flex:1; overflow-y:auto; padding:16px; font-size:13px; line-height:1.7; }
+#detail-body .section { margin-bottom:16px; }
+#detail-body .section-title { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+#detail-body .tag { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#334155; border-radius:4px; font-size:11px; color:#cbd5e1; }
+#detail-body .keyword { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#06b6d422; border:1px solid #06b6d466; border-radius:4px; font-size:11px; color:#e2e8f0; }
+#detail-body .summary { color:#cbd5e1; white-space:pre-wrap; }
+#detail-body .open-link { display:inline-block; margin-top:12px; padding:6px 14px; background:#06b6d4; color:#0f172a; border-radius:6px; text-decoration:none; font-size:12px; font-weight:600; }
+#detail-body .open-link:hover { opacity:0.85; }
+#detail-body .meta-row { display:flex; gap:12px; margin-bottom:8px; font-size:12px; }
+#detail-body .meta-label { color:#94a3b8; min-width:60px; }
+#detail-body .connected-list { list-style:none; padding:0; }
+#detail-body .connected-list li { padding:4px 0; border-bottom:1px solid #1a2332; font-size:12px; cursor:pointer; }
+#detail-body .connected-list li:hover { color:#06b6d4; }
+
+#header { padding:10px 20px 10px 50px; background:#1e293b; border-bottom:1px solid #334155; display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-left:200px; transition:margin-left 0.3s; }
+#sidebar.collapsed ~ #header { margin-left:0; }
+#header h1 { margin:0; font-size:17px; color:#06b6d4; white-space:nowrap; }
+#search-wrap { position:relative; }
+#search-box { width:220px; padding:5px 10px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#e2e8f0; font-size:13px; }
+#search-results { position:absolute; top:32px; left:0; width:260px; max-height:300px; overflow-y:auto; background:#1e293b; border:1px solid #475569; border-radius:6px; display:none; z-index:100; }
+.sri { padding:7px 10px; cursor:pointer; font-size:12px; border-bottom:1px solid #334155; }
+.sri:hover { background:#334155; }
+.stats { font-size:12px; color:#94a3b8; white-space:nowrap; }
+.ctrls { display:flex; gap:6px; margin-left:auto; }
+.btn { padding:5px 12px; border-radius:6px; border:1px solid #475569; background:#334155; color:#e2e8f0; cursor:pointer; font-size:12px; }
+.btn:hover { background:#475569; }
+.btn.active { background:#06b6d4; color:#0f172a; border-color:#06b6d4; }
+#legend { position:absolute; top:52px; left:220px; background:#1e293b; border:1px solid #475569; border-radius:8px; padding:10px 14px; font-size:12px; z-index:10; }
+.li { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+.ld { width:10px; height:10px; border-radius:50%; }
+#tooltip { position:absolute; padding:8px 12px; background:#1e293b; border:1px solid #475569; border-radius:8px; font-size:12px; pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:100; box-shadow:0 4px 20px rgba(0,0,0,0.5); max-width:320px; }
+#graph { width:calc(100vw - 200px); height:calc(100vh - 48px); margin-left:200px; transition:width 0.3s, margin-left 0.3s; }
+#sidebar.collapsed ~ #graph { margin-left:0; width:100vw; }
+#detail-panel.open ~ #graph { width:calc(100vw - 200px - 400px); }
+.link { stroke:#475569; stroke-opacity:0.3; }
+.link-book { stroke-opacity:0.12; }
+.node circle { cursor:pointer; stroke-width:1.5; }
+.node text { fill:#e2e8f0; font-size:10px; pointer-events:none; }
+.highlight circle { stroke:#fff !important; stroke-width:2.5px; }
+.highlight text { fill:#fff; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>📚 藏书阁 · 知识图谱</h2>
+  <div class="domain-header" data-target="IT" style="color:#67e8f9; border-left:3px solid #67e8f9;">IT ▾</div>
+  <div class="domain-pages" id="IT">
+    <a href="IT.json" style="border-left:3px solid #67e8f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(225篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="个人成长" style="color:#fb923c; border-left:3px solid #fb923c;">个人成长 ▾</div>
+  <div class="domain-pages" id="个人成长">
+    <a href="个人成长.json" style="border-left:3px solid #fb923c; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(461篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="产品" style="color:#a855f7; border-left:3px solid #a855f7;">产品 ▾</div>
+  <div class="domain-pages" id="产品">
+    <a href="产品_(其他).json" style="border-left:3px solid #a855f7; padding-left:18px;">(其他) <span style="font-size:10px;color:#64748b;">(553篇)</span></a>
+    <a href="产品_产品思维.json" style="border-left:3px solid #a855f7; padding-left:18px;">产品思维 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="产品_小程序生态.json" style="border-left:3px solid #a855f7; padding-left:18px;">小程序生态 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="产品_用户增长.json" style="border-left:3px solid #a855f7; padding-left:18px;">用户增长 <span style="font-size:10px;color:#64748b;">(49篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="会计" style="color:#86efac; border-left:3px solid #86efac;">会计 ▾</div>
+  <div class="domain-pages" id="会计">
+    <a href="会计.json" style="border-left:3px solid #86efac; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(67篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="健康" style="color:#34d399; border-left:3px solid #34d399;">健康 ▾</div>
+  <div class="domain-pages" id="健康">
+    <a href="健康.json" style="border-left:3px solid #34d399; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(284篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="写作" style="color:#c084fc; border-left:3px solid #c084fc;">写作 ▾</div>
+  <div class="domain-pages" id="写作">
+    <a href="写作.json" style="border-left:3px solid #c084fc; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(238篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="历史" style="color:#06b6d4; border-left:3px solid #06b6d4;">历史 ▾</div>
+  <div class="domain-pages" id="历史">
+    <a href="历史_(其他)_part1.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part2.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part3.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part4.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part5.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(541篇)</span></a>
+    <a href="历史_世界史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">世界史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="历史_中国历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国历史 <span style="font-size:10px;color:#64748b;">(96篇)</span></a>
+    <a href="历史_中国古代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国古代文学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="历史_中国现代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国现代文学 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="历史_中国近代史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国近代史 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="历史_人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">人物传记 <span style="font-size:10px;color:#64748b;">(143篇)</span></a>
+    <a href="历史_军事历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">军事历史 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="历史_历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史 <span style="font-size:10px;color:#64748b;">(538篇)</span></a>
+    <a href="历史_历史与政治.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史与政治 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史人物传记 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="历史_历史学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史学 <span style="font-size:10px;color:#64748b;">(189篇)</span></a>
+    <a href="历史_历史小说.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史小说 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史研究.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史研究 <span style="font-size:10px;color:#64748b;">(162篇)</span></a>
+    <a href="历史_思想史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">思想史 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="历史_文学与历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">文学与历史 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="历史_科技史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">科技史 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="历史_艺术史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">艺术史 <span style="font-size:10px;color:#64748b;">(83篇)</span></a>
+    <a href="历史_西方哲学史.json" class="active" style="border-left:3px solid #06b6d4; padding-left:18px;">西方哲学史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="哲学" style="color:#14b8a6; border-left:3px solid #14b8a6;">哲学 ▾</div>
+  <div class="domain-pages" id="哲学">
+    <a href="哲学_(其他)_part1.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="哲学_(其他)_part2.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(272篇)</span></a>
+    <a href="哲学_中国哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">中国哲学 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="哲学_人生哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">人生哲学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="哲学_哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">哲学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+    <a href="哲学_政治哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">政治哲学 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="哲学_生活哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">生活哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+    <a href="哲学_社会哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">社会哲学 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="哲学_科学哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">科学哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="商业" style="color:#10b981; border-left:3px solid #10b981;">商业 ▾</div>
+  <div class="domain-pages" id="商业">
+    <a href="商业_(其他)_part1.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（1/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part2.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（2/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part3.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（3/3） <span style="font-size:10px;color:#64748b;">(391篇)</span></a>
+    <a href="商业_企业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">企业管理 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="商业_健康管理.json" style="border-left:3px solid #10b981; padding-left:18px;">健康管理 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="商业_创业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">创业管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业战略.json" style="border-left:3px solid #10b981; padding-left:18px;">商业战略 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">商业管理 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="商业_投资理财.json" style="border-left:3px solid #10b981; padding-left:18px;">投资理财 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_知识管理.json" style="border-left:3px solid #10b981; padding-left:18px;">知识管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_管理.json" style="border-left:3px solid #10b981; padding-left:18px;">管理 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_组织管理.json" style="border-left:3px solid #10b981; padding-left:18px;">组织管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_经济学.json" style="border-left:3px solid #10b981; padding-left:18px;">经济学 <span style="font-size:10px;color:#64748b;">(74篇)</span></a>
+    <a href="商业_金融投资.json" style="border-left:3px solid #10b981; padding-left:18px;">金融投资 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="商业_领导力.json" style="border-left:3px solid #10b981; padding-left:18px;">领导力 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="图书馆学" style="color:#5eead4; border-left:3px solid #5eead4;">图书馆学 ▾</div>
+  <div class="domain-pages" id="图书馆学">
+    <a href="图书馆学.json" style="border-left:3px solid #5eead4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(23篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="宗教" style="color:#c4b5fd; border-left:3px solid #c4b5fd;">宗教 ▾</div>
+  <div class="domain-pages" id="宗教">
+    <a href="宗教.json" style="border-left:3px solid #c4b5fd; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(19篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="心理学" style="color:#f59e0b; border-left:3px solid #f59e0b;">心理学 ▾</div>
+  <div class="domain-pages" id="心理学">
+    <a href="心理学_(其他)_part1.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（1/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part2.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（2/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part3.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（3/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part4.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（4/4） <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="心理学_个人成长与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">个人成长与心理学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理健康.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理健康 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理学 <span style="font-size:10px;color:#64748b;">(239篇)</span></a>
+    <a href="心理学_教育心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">教育心理学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="心理学_文学与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">文学与心理学 <span style="font-size:10px;color:#64748b;">(119篇)</span></a>
+    <a href="心理学_沟通技巧.json" style="border-left:3px solid #f59e0b; padding-left:18px;">沟通技巧 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="心理学_社会心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">社会心理学 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+    <a href="心理学_认知心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知心理学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="心理学_认知科学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知科学 <span style="font-size:10px;color:#64748b;">(39篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="房地产" style="color:#6ee7b7; border-left:3px solid #6ee7b7;">房地产 ▾</div>
+  <div class="domain-pages" id="房地产">
+    <a href="房地产.json" style="border-left:3px solid #6ee7b7; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(12篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="政治" style="color:#fbbf24; border-left:3px solid #fbbf24;">政治 ▾</div>
+  <div class="domain-pages" id="政治">
+    <a href="政治.json" style="border-left:3px solid #fbbf24; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(253篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="教育" style="color:#ec4899; border-left:3px solid #ec4899;">教育 ▾</div>
+  <div class="domain-pages" id="教育">
+    <a href="教育_(其他)_part1.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="教育_(其他)_part2.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(382篇)</span></a>
+    <a href="教育_个人成长.json" style="border-left:3px solid #ec4899; padding-left:18px;">个人成长 <span style="font-size:10px;color:#64748b;">(250篇)</span></a>
+    <a href="教育_儿童教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">儿童教育 <span style="font-size:10px;color:#64748b;">(62篇)</span></a>
+    <a href="教育_家庭教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">家庭教育 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="教育_教育理念.json" style="border-left:3px solid #ec4899; padding-left:18px;">教育理念 <span style="font-size:10px;color:#64748b;">(68篇)</span></a>
+    <a href="教育_财商教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">财商教育 <span style="font-size:10px;color:#64748b;">(48篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="文学" style="color:#8b5cf6; border-left:3px solid #8b5cf6;">文学 ▾</div>
+  <div class="domain-pages" id="文学">
+    <a href="文学_(其他)_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_中国古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">中国古典文学 <span style="font-size:10px;color:#64748b;">(112篇)</span></a>
+    <a href="文学_儿童文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">儿童文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">古典文学 <span style="font-size:10px;color:#64748b;">(92篇)</span></a>
+    <a href="文学_奇幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">奇幻文学 <span style="font-size:10px;color:#64748b;">(51篇)</span></a>
+    <a href="文学_女性主义文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">女性主义文学 <span style="font-size:10px;color:#64748b;">(38篇)</span></a>
+    <a href="文学_悬疑小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">悬疑小说分析 <span style="font-size:10px;color:#64748b;">(52篇)</span></a>
+    <a href="文学_推理小说.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="文学_推理小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说分析 <span style="font-size:10px;color:#64748b;">(126篇)</span></a>
+    <a href="文学_推理文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理文学 <span style="font-size:10px;color:#64748b;">(35篇)</span></a>
+    <a href="文学_文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学 <span style="font-size:10px;color:#64748b;">(223篇)</span></a>
+    <a href="文学_文学与个人成长.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与个人成长 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="文学_文学与人生哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与人生哲学 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="文学_文学与哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与哲学 <span style="font-size:10px;color:#64748b;">(303篇)</span></a>
+    <a href="文学_文学与社会学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与社会学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="文学_文学分析_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（1/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（2/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（3/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（4/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（5/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part6.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（6/6） <span style="font-size:10px;color:#64748b;">(254篇)</span></a>
+    <a href="文学_文学批评.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学批评 <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="文学_文学理论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学理论 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_文学研究.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学研究 <span style="font-size:10px;color:#64748b;">(84篇)</span></a>
+    <a href="文学_文学经典.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学经典 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="文学_文学解读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学解读 <span style="font-size:10px;color:#64748b;">(40篇)</span></a>
+    <a href="文学_文学评论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学评论 <span style="font-size:10px;color:#64748b;">(482篇)</span></a>
+    <a href="文学_文学赏析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学赏析 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="文学_文学鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学鉴赏 <span style="font-size:10px;color:#64748b;">(82篇)</span></a>
+    <a href="文学_文学阅读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学阅读 <span style="font-size:10px;color:#64748b;">(78篇)</span></a>
+    <a href="文学_旅行文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">旅行文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_日本文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">日本文学 <span style="font-size:10px;color:#64748b;">(98篇)</span></a>
+    <a href="文学_武侠文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">武侠文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_科幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学 <span style="font-size:10px;color:#64748b;">(175篇)</span></a>
+    <a href="文学_科幻文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学分析 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="文学_网络文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">网络文学分析 <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_艺术鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">艺术鉴赏 <span style="font-size:10px;color:#64748b;">(44篇)</span></a>
+    <a href="文学_非虚构文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">非虚构文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="时尚生活" style="color:#f9a8d4; border-left:3px solid #f9a8d4;">时尚生活 ▾</div>
+  <div class="domain-pages" id="时尚生活">
+    <a href="时尚生活.json" style="border-left:3px solid #f9a8d4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(71篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="未知" style="color:#94a3b8; border-left:3px solid #94a3b8;">未知 ▾</div>
+  <div class="domain-pages" id="未知">
+    <a href="未知.json" style="border-left:3px solid #94a3b8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(16篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="法学" style="color:#fcd34d; border-left:3px solid #fcd34d;">法学 ▾</div>
+  <div class="domain-pages" id="法学">
+    <a href="法学.json" style="border-left:3px solid #fcd34d; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="社会学" style="color:#6366f1; border-left:3px solid #6366f1;">社会学 ▾</div>
+  <div class="domain-pages" id="社会学">
+    <a href="社会学_(其他)_part1.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="社会学_(其他)_part2.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(484篇)</span></a>
+    <a href="社会学_文化研究.json" style="border-left:3px solid #6366f1; padding-left:18px;">文化研究 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="社会学_社会学.json" style="border-left:3px solid #6366f1; padding-left:18px;">社会学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="科学" style="color:#f97316; border-left:3px solid #f97316;">科学 ▾</div>
+  <div class="domain-pages" id="科学">
+    <a href="科学_(其他)_part1.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="科学_(其他)_part2.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(116篇)</span></a>
+    <a href="科学_医学人文.json" style="border-left:3px solid #f97316; padding-left:18px;">医学人文 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="科学_神经科学.json" style="border-left:3px solid #f97316; padding-left:18px;">神经科学 <span style="font-size:10px;color:#64748b;">(56篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="编程" style="color:#818cf8; border-left:3px solid #818cf8;">编程 ▾</div>
+  <div class="domain-pages" id="编程">
+    <a href="编程.json" style="border-left:3px solid #818cf8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(151篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="艺术" style="color:#e879f9; border-left:3px solid #e879f9;">艺术 ▾</div>
+  <div class="domain-pages" id="艺术">
+    <a href="艺术.json" style="border-left:3px solid #e879f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(365篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="英语" style="color:#f472b6; border-left:3px solid #f472b6;">英语 ▾</div>
+  <div class="domain-pages" id="英语">
+    <a href="英语.json" style="border-left:3px solid #f472b6; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(209篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="语言文学" style="color:#d8b4fe; border-left:3px solid #d8b4fe;">语言文学 ▾</div>
+  <div class="domain-pages" id="语言文学">
+    <a href="语言文学.json" style="border-left:3px solid #d8b4fe; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="金融" style="color:#a3e635; border-left:3px solid #a3e635;">金融 ▾</div>
+  <div class="domain-pages" id="金融">
+    <a href="金融.json" style="border-left:3px solid #a3e635; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(208篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="雅思" style="color:#22d3ee; border-left:3px solid #22d3ee;">雅思 ▾</div>
+  <div class="domain-pages" id="雅思">
+    <a href="雅思.json" style="border-left:3px solid #22d3ee; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(511篇)</span></a>
+  </div>
+
+    <script>
+    document.querySelectorAll('.domain-header').forEach(function(h){
+      h.addEventListener('click', function(){
+        var t = document.getElementById(this.dataset.target);
+        t.style.display = t.style.display==='none' ? 'block' : 'none';
+        this.innerHTML = this.innerHTML.replace(/[▾▸]/, t.style.display==='none'?'▸':'▾');
+      });
+    });
+    </script>
+    
+</div>
+<button id="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">☰</button>
+
+<div id="header">
+  <h1>📚 历史 · 西方哲学史</h1>
+  <div id="search-wrap">
+    <input id="search-box" type="text" placeholder="🔍 搜索书名/概念...">
+    <div id="search-results"></div>
+  </div>
+  <div class="stats">
+    <span id="node-count">0</span> 节点 ·
+    <span id="link-count">0</span> 连接
+  </div>
+  <div class="ctrls">
+    <button class="btn" id="btn-toggle-concept">隐藏概念</button>
+    <button class="btn" id="btn-reset">重置视图</button>
+  </div>
+</div>
+
+<div id="graph"></div>
+<div id="tooltip"></div>
+
+<!-- 右侧详情面板 -->
+<div id="detail-panel">
+  <div id="detail-header">
+    <h2 id="detail-title"></h2>
+    <button id="detail-close" onclick="closeDetail()">✕</button>
+  </div>
+  <div id="detail-body"></div>
+</div>
+
+<script>
+var NODES = [{"id": "理性主义与经验主义的萌芽.md", "label": "理性主义与经验主义的萌芽", "title": "理性主义与经验主义的萌芽", "type": "book", "degree": 3, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "完整标题：A HISTORY OF WESTERN PHILOSOPHY And Its Connection with Political and Social Circumstances from the Earliest Times to the Present Day。作者：伯特兰·罗素 (Bertrand Russell)。主题领域：西方哲学史、思想史、政治哲学史。城邦的公共生活（如广场辩论、法庭辩护）需要并促进了理性的论证与批判性思维。培养批判性思维：学习罗素如何分析一个哲学家的论证（前提-推理-结论），可以应用于日常决策，辨别广告、政客言论中的逻辑谬误和隐含假设", "keywords": ["相关笔记", "完整标题", "哲学史"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/西方哲学史（英文原版）_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/理性主义与经验主义的萌芽.md"}, {"id": "方法论.md", "label": "方法论", "title": "方法论", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "作者：（英）杰瑞米·斯坦格鲁，（美）詹姆斯·加维。出版信息：北京联合出版公司，2018年10月第1版。基于引言部分，本书提炼出关于“哲学”本身的三个核心定义，并以此作为全书框架的基石：。哲学作为主题（Subject）：哲学是研究“存在”（形而上学）、“知识”（认识论）和“行为”（伦理学）这三大根本问题的抽象学科。哲学作为方法（Method）：哲学是一种特定的思考方式，即对观点进行认真、系统、清晰的思考、解释和论证，", "keywords": ["核心概念如何相互支撑", "作者采用何种论证方法", "对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "认识论的应用", "政治哲学思考", "最有力的论点"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/极简西方哲学史(1)_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/方法论.md"}, {"id": "米利都学派.md", "label": "米利都学派", "title": "米利都学派", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "作者：伯特兰·罗素（原著），文利（编译）。主题领域：西方哲学史、思想史、文明史。出版信息：陕西师范大学出版社，2010年12月第1版。对立：赫拉克利特的“流变” vs. 巴门尼德的“静止”；德谟克利特的“原子论”（唯物主义） vs. 柏拉图的“理念论”（唯心主义）；普罗泰戈拉的“相对主义” vs. 苏格拉底的“普遍定义”。互补：苏格拉底的“伦理追问”与柏拉图的“理念体系”构成一个从实践到理论的完整链条；亚里士多德的“物理学”与“形而上学”分别研究可感世界与超感世界，共同构成其哲学体系的两翼", "keywords": ["相关笔记", "可读性与启发性", "定义人生目标", "米利都学派", "完整标题", "面对变化", "追求真理", "社会实践"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/西方哲学简史_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/米利都学派.md"}, {"id": "四因说.md", "label": "四因说", "title": "四因说", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "作者：伯特兰·罗素（原著），文利（编译）。主题领域：西方哲学史、思想史、文明史。出版信息：陕西师范大学出版社，2010年12月第1版。对立：赫拉克利特的“流变” vs. 巴门尼德的“静止”；德谟克利特的“原子论”（唯物主义） vs. 柏拉图的“理念论”（唯心主义）；普罗泰戈拉的“相对主义” vs. 苏格拉底的“普遍定义”。互补：苏格拉底的“伦理追问”与柏拉图的“理念体系”构成一个从实践到理论的完整链条；亚里士多德的“物理学”与“形而上学”分别研究可感世界与超感世界，共同构成其哲学体系的两翼", "keywords": ["相关笔记", "可读性与启发性", "定义人生目标", "米利都学派", "完整标题", "面对变化", "追求真理", "社会实践"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/西方哲学简史_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/四因说.md"}, {"id": "前苏格拉底哲学.md", "label": "前苏格拉底哲学", "title": "前苏格拉底哲学", "type": "book", "degree": 3, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "完整标题：A HISTORY OF WESTERN PHILOSOPHY And Its Connection with Political and Social Circumstances from the Earliest Times to the Present Day。作者：伯特兰·罗素 (Bertrand Russell)。主题领域：西方哲学史、思想史、政治哲学史。城邦的公共生活（如广场辩论、法庭辩护）需要并促进了理性的论证与批判性思维。培养批判性思维：学习罗素如何分析一个哲学家的论证（前提-推理-结论），可以应用于日常决策，辨别广告、政客言论中的逻辑谬误和隐含假设", "keywords": ["相关笔记", "完整标题", "西方哲"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/西方哲学史（英文原版）_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/前苏格拉底哲学.md"}, {"id": "自然哲学.md", "label": "自然哲学", "title": "自然哲学", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "完整标题：打开 : 周濂的100堂西方哲学课。主题领域：西方哲学史、哲学入门、思想史。出版信息：上海三联书店，2019年4月。“自然哲学家”的探索是“理性”的第一次胜利，他们试图用“逻各斯”取代神话，为后来苏格拉底和柏拉图追求普遍性的“定义”和“理念”奠定了基础。自我认知：运用苏格拉底的“认识你自己”和“精神助产术”，定期反思自己的信念、价值观和行为动机，追问“我为什么这么想/这么做", "keywords": ["核心概念如何相互支撑", "重构了哲学史的叙事", "降低了哲学的门槛", "参与公共讨论", "自然哲学家", "提升判断力", "完整标题", "希腊精神"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/打开：周濂的100堂西方哲学课_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/自然哲学.md"}, {"id": "存在与变化.md", "label": "存在与变化", "title": "存在与变化", "type": "book", "degree": 3, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "完整标题：A HISTORY OF WESTERN PHILOSOPHY And Its Connection with Political and Social Circumstances from the Earliest Times to the Present Day。作者：伯特兰·罗素 (Bertrand Russell)。主题领域：西方哲学史、思想史、政治哲学史。城邦的公共生活（如广场辩论、法庭辩护）需要并促进了理性的论证与批判性思维。培养批判性思维：学习罗素如何分析一个哲学家的论证（前提-推理-结论），可以应用于日常决策，辨别广告、政客言论中的逻辑谬误和隐含假设", "keywords": ["完整标题", "哲学史", "西方哲学"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/西方哲学史（英文原版）_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/存在与变化.md"}, {"id": "家族相似性.md", "label": "家族相似性", "title": "家族相似性", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "作者：（英）杰瑞米·斯坦格鲁，（美）詹姆斯·加维。出版信息：北京联合出版公司，2018年10月第1版。基于引言部分，本书提炼出关于“哲学”本身的三个核心定义，并以此作为全书框架的基石：。哲学作为主题（Subject）：哲学是研究“存在”（形而上学）、“知识”（认识论）和“行为”（伦理学）这三大根本问题的抽象学科。哲学作为方法（Method）：哲学是一种特定的思考方式，即对观点进行认真、系统、清晰的思考、解释和论证，", "keywords": ["核心概念如何相互支撑", "作者采用何种论证方法", "对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "认识论的应用", "政治哲学思考", "最有力的论点"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/极简西方哲学史(1)_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/家族相似性.md"}, {"id": "描述知识.md", "label": "描述知识", "title": "描述知识", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "主题领域：西方哲学史、分析哲学、罗素思想研究。出版信息：上海交通大学出版社，2018年6月第1版，ISBN: 978-7-313-19278-3。逻辑原子论：罗素早期提出的核心哲学理论，认为世界是由无数个独立的、不可再分的“原子事实”构成的，而语言（命题）通过逻辑结构来反映这些事实。因为只有承认外部世界和逻辑实体是客观实在的，逻辑原子论对世界的分析才具有真实意义。本书最有力的论点是什么：作者成功地将罗素复杂的哲学思想，特别是逻辑原子论和摹状词理论，以清晰、凝练的语言呈现出来，使其核心价值（如用逻辑分析解决哲学问题的方法论）得以凸显", "keywords": ["逻辑原子论", "摹状词理论", "亲知知识", "描述知识", "核心概念如何相互支撑", "逻辑分析方法", "结构化思维", "逻辑原子论"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/罗素哲学概论_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/描述知识.md"}, {"id": "理念论.md", "label": "理念论", "title": "理念论", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "作者：伯特兰·罗素（原著），文利（编译）。主题领域：西方哲学史、思想史、文明史。出版信息：陕西师范大学出版社，2010年12月第1版。“逻各斯”作为“变”中的“不变”规律，是连接赫拉克利特的流变哲学与巴门尼德“存在”理论的一座桥梁，并最终在斯多葛主义中被发展为宇宙理性。对立：赫拉克利特的“流变” vs. 巴门尼德的“静止”；德谟克利特的“原子论”（唯物主义） vs. 柏拉图的“理念论”（唯心主义）；普罗泰戈拉的“相对主义” vs. 苏格拉底的“普遍定义”", "keywords": ["可读性与启发性", "定义人生目标", "米利都学派", "完整标题", "面对变化", "追求真理", "社会实践", "理解冲突"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/西方哲学简史_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/理念论.md"}, {"id": "自然哲学家.md", "label": "自然哲学家", "title": "自然哲学家", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "完整标题：打开 : 周濂的100堂西方哲学课。主题领域：西方哲学史、哲学入门、思想史。出版信息：上海三联书店，2019年4月。“自然哲学家”的探索是“理性”的第一次胜利，他们试图用“逻各斯”取代神话，为后来苏格拉底和柏拉图追求普遍性的“定义”和“理念”奠定了基础。自我认知：运用苏格拉底的“认识你自己”和“精神助产术”，定期反思自己的信念、价值观和行为动机，追问“我为什么这么想/这么做", "keywords": ["核心概念如何相互支撑", "重构了哲学史的叙事", "降低了哲学的门槛", "参与公共讨论", "自然哲学家", "提升判断力", "完整标题", "希腊精神"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/打开：周濂的100堂西方哲学课_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/自然哲学家.md"}, {"id": "认识论.md", "label": "认识论", "title": "认识论", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "作者：（英）杰瑞米·斯坦格鲁，（美）詹姆斯·加维。主题领域：西方哲学史、思想史、哲学导论。出版信息：北京联合出版公司，2018年10月第1版。形而上学：研究“存在”本身本质的哲学分支。核心概念的相互支撑：形而上学、认识论和伦理学三大问题构成了一个相互关联的框架", "keywords": ["论证中的薄弱环节", "培养批判性思维", "构建个人价值观", "理解社会思潮", "最有力的论点", "应对不确定", "元哲学立场", "完整标题"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/极简西方哲学史_dup_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/认识论.md"}, {"id": "芝诺悖论.md", "label": "芝诺悖论", "title": "芝诺悖论", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "哲学的本质：哲学不是一门收集信息的科学，也不是展现世界的艺术，而是一种独一无二的行为活动。它挑战既定假设和概念，探究那些无法达成普遍共识的根本性问题。前苏格拉底哲学：指苏格拉底之前的古希腊哲学，其核心特征是试图用自然的、理性的根本性原则（如水、数、逻各斯）来解释世界，而非诉诸拟人化的神话和神灵意志。：从泰勒斯到毕达哥拉斯，再到赫拉克利特和巴门尼德，这些概念呈现出一种递进和深化的关系。泰勒斯用“水”这一具体物质作为本原，是物质一元论的雏形；毕达哥拉斯则用“数”这一抽象形式作为本原，开启了形式主义的思考；赫拉克利特的“逻各斯”则试图解释变化背后的不变法则；而巴门尼德的“存在”则彻底否定了变化和运动", "keywords": ["变化背后的不变法则", "前苏格拉底哲学", "哲学的本质", "物质一元论", "完整标题", "行为活动", "形式主义", "对立关系"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/西方哲学常识_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/芝诺悖论.md"}, {"id": "生活方式.md", "label": "生活方式", "title": "生活方式", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "作者：（英）杰瑞米·斯坦格鲁，（美）詹姆斯·加维。出版信息：北京联合出版公司，2018年10月第1版。基于引言部分，本书提炼出关于“哲学”本身的三个核心定义，并以此作为全书框架的基石：。哲学作为主题（Subject）：哲学是研究“存在”（形而上学）、“知识”（认识论）和“行为”（伦理学）这三大根本问题的抽象学科。哲学作为方法（Method）：哲学是一种特定的思考方式，即对观点进行认真、系统、清晰的思考、解释和论证，", "keywords": ["核心概念如何相互支撑", "作者采用何种论证方法", "对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "认识论的应用", "政治哲学思考", "最有力的论点"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/极简西方哲学史(1)_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/生活方式.md"}, {"id": "伦理学.md", "label": "伦理学", "title": "伦理学", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "作者：（英）杰瑞米·斯坦格鲁，（美）詹姆斯·加维。主题领域：西方哲学史、思想史、哲学导论。出版信息：北京联合出版公司，2018年10月第1版。形而上学：研究“存在”本身本质的哲学分支。核心概念的相互支撑：形而上学、认识论和伦理学三大问题构成了一个相互关联的框架", "keywords": ["论证中的薄弱环节", "培养批判性思维", "构建个人价值观", "理解社会思潮", "最有力的论点", "应对不确定", "元哲学立场", "完整标题"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/极简西方哲学史_dup_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/伦理学.md"}, {"id": "理性主义.md", "label": "理性主义", "title": "理性主义", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "作者：（英）杰瑞米·斯坦格鲁，（美）詹姆斯·加维。主题领域：西方哲学史、思想史、哲学导论。出版信息：北京联合出版公司，2018年10月第1版。形而上学：研究“存在”本身本质的哲学分支。核心概念的相互支撑：形而上学、认识论和伦理学三大问题构成了一个相互关联的框架", "keywords": ["论证中的薄弱环节", "培养批判性思维", "构建个人价值观", "理解社会思潮", "最有力的论点", "应对不确定", "元哲学立场", "完整标题"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/极简西方哲学史_dup_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/理性主义.md"}, {"id": "哲学定义.md", "label": "哲学定义", "title": "哲学定义", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "作者：（英）杰瑞米·斯坦格鲁，（美）詹姆斯·加维。出版信息：北京联合出版公司，2018年10月第1版。基于引言部分，本书提炼出关于“哲学”本身的三个核心定义，并以此作为全书框架的基石：。哲学作为主题（Subject）：哲学是研究“存在”（形而上学）、“知识”（认识论）和“行为”（伦理学）这三大根本问题的抽象学科。哲学作为方法（Method）：哲学是一种特定的思考方式，即对观点进行认真、系统、清晰的思考、解释和论证，", "keywords": ["核心概念如何相互支撑", "作者采用何种论证方法", "对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "认识论的应用", "政治哲学思考", "最有力的论点"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/极简西方哲学史(1)_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/哲学定义.md"}, {"id": "逻各斯.md", "label": "逻各斯", "title": "逻各斯", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "完整标题：打开 : 周濂的100堂西方哲学课。主题领域：西方哲学史、哲学入门、思想史。出版信息：上海三联书店，2019年4月。“自然哲学家”的探索是“理性”的第一次胜利，他们试图用“逻各斯”取代神话，为后来苏格拉底和柏拉图追求普遍性的“定义”和“理念”奠定了基础。对立：雅典的自由 vs. 斯巴达的纪律；赫拉克利特的流变 vs. 巴门尼德的存在；智者派的“人是万物的尺度”（相对主义）vs. 苏格拉底的“普遍定义”（客观主义）", "keywords": ["核心概念如何相互支撑", "重构了哲学史的叙事", "降低了哲学的门槛", "参与公共讨论", "自然哲学家", "提升判断力", "完整标题", "希腊精神"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/打开：周濂的100堂西方哲学课_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/逻各斯.md"}, {"id": "存在.md", "label": "存在", "title": "存在", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "哲学的本质：哲学不是一门收集信息的科学，也不是展现世界的艺术，而是一种独一无二的行为活动。它挑战既定假设和概念，探究那些无法达成普遍共识的根本性问题。前苏格拉底哲学：指苏格拉底之前的古希腊哲学，其核心特征是试图用自然的、理性的根本性原则（如水、数、逻各斯）来解释世界，而非诉诸拟人化的神话和神灵意志。：从泰勒斯到毕达哥拉斯，再到赫拉克利特和巴门尼德，这些概念呈现出一种递进和深化的关系。泰勒斯用“水”这一具体物质作为本原，是物质一元论的雏形；毕达哥拉斯则用“数”这一抽象形式作为本原，开启了形式主义的思考；赫拉克利特的“逻各斯”则试图解释变化背后的不变法则；而巴门尼德的“存在”则彻底否定了变化和运动", "keywords": ["变化背后的不变法则", "前苏格拉底哲学", "哲学的本质", "物质一元论", "完整标题", "行为活动", "形式主义", "对立关系"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/西方哲学常识_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/存在.md"}, {"id": "实在论.md", "label": "实在论", "title": "实在论", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "主题领域：西方哲学史、分析哲学、罗素思想研究。出版信息：上海交通大学出版社，2018年6月第1版，ISBN: 978-7-313-19278-3。逻辑原子论：罗素早期提出的核心哲学理论，认为世界是由无数个独立的、不可再分的“原子事实”构成的，而语言（命题）通过逻辑结构来反映这些事实。因为只有承认外部世界和逻辑实体是客观实在的，逻辑原子论对世界的分析才具有真实意义。本书最有力的论点是什么：作者成功地将罗素复杂的哲学思想，特别是逻辑原子论和摹状词理论，以清晰、凝练的语言呈现出来，使其核心价值（如用逻辑分析解决哲学问题的方法论）得以凸显", "keywords": ["逻辑原子论", "摹状词理论", "亲知知识", "描述知识", "核心概念如何相互支撑", "逻辑分析方法", "结构化思维", "逻辑原子论"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/罗素哲学概论_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/实在论.md"}, {"id": "思想史.md", "label": "思想史", "title": "思想史", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "作者：（英）杰瑞米·斯坦格鲁，（美）詹姆斯·加维。出版信息：北京联合出版公司，2018年10月第1版。基于引言部分，本书提炼出关于“哲学”本身的三个核心定义，并以此作为全书框架的基石：。哲学作为主题（Subject）：哲学是研究“存在”（形而上学）、“知识”（认识论）和“行为”（伦理学）这三大根本问题的抽象学科。哲学作为方法（Method）：哲学是一种特定的思考方式，即对观点进行认真、系统、清晰的思考、解释和论证，", "keywords": ["核心概念如何相互支撑", "作者采用何种论证方法", "对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "认识论的应用", "政治哲学思考", "最有力的论点"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/极简西方哲学史(1)_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/思想史.md"}, {"id": "哲学追问.md", "label": "哲学追问", "title": "哲学追问", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "完整标题：打开 : 周濂的100堂西方哲学课。主题领域：西方哲学史、哲学入门、思想史。出版信息：上海三联书店，2019年4月。“自然哲学家”的探索是“理性”的第一次胜利，他们试图用“逻各斯”取代神话，为后来苏格拉底和柏拉图追求普遍性的“定义”和“理念”奠定了基础。自我认知：运用苏格拉底的“认识你自己”和“精神助产术”，定期反思自己的信念、价值观和行为动机，追问“我为什么这么想/这么做", "keywords": ["核心概念如何相互支撑", "重构了哲学史的叙事", "降低了哲学的门槛", "参与公共讨论", "自然哲学家", "提升判断力", "完整标题", "希腊精神"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/打开：周濂的100堂西方哲学课_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/哲学追问.md"}, {"id": "亲知知识.md", "label": "亲知知识", "title": "亲知知识", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "主题领域：西方哲学史、分析哲学、罗素思想研究。出版信息：上海交通大学出版社，2018年6月第1版，ISBN: 978-7-313-19278-3。逻辑原子论：罗素早期提出的核心哲学理论，认为世界是由无数个独立的、不可再分的“原子事实”构成的，而语言（命题）通过逻辑结构来反映这些事实。因为只有承认外部世界和逻辑实体是客观实在的，逻辑原子论对世界的分析才具有真实意义。本书最有力的论点是什么：作者成功地将罗素复杂的哲学思想，特别是逻辑原子论和摹状词理论，以清晰、凝练的语言呈现出来，使其核心价值（如用逻辑分析解决哲学问题的方法论）得以凸显", "keywords": ["逻辑原子论", "摹状词理论", "亲知知识", "描述知识", "核心概念如何相互支撑", "逻辑分析方法", "结构化思维", "逻辑原子论"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/罗素哲学概论_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/亲知知识.md"}, {"id": "哲学的本质.md", "label": "哲学的本质", "title": "哲学的本质", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "作者：（英）杰瑞米·斯坦格鲁，（美）詹姆斯·加维。出版信息：北京联合出版公司，2018年10月第1版。哲学的本质：书中提出对哲学有三种主流看法：① 关于存在、认识、伦理的抽象主题；② 一种特定方法（认真、系统地思考并清晰论证）；③ 一种批判性的生活方式（如苏格拉底所言“未经审视的人生不值得过”）。正是由于哲学是一个“家族相似”的概念，本书才能将探讨“如何获得权力”（马基雅弗利）与探讨“世界本源是什么”（亚里士多德）的思想家并列，从而支撑起一本包容性强的哲学史。“苏格拉底方法”是哲学作为一种“批判性生活方式”的实践典范，它连接了哲学的“方法”维度和“生活方式”维度", "keywords": ["核心概念如何相互支撑", "应对焦虑与不确定性", "提升批判性思维", "构建人生哲学", "哲学的本质", "入门友好性", "完整标题", "形而上学"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/极简西方哲学史_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/哲学的本质.md"}, {"id": "哲学与时代背景的关联.md", "label": "哲学与时代背景的关联", "title": "哲学与时代背景的关联", "type": "book", "degree": 3, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "完整标题：A HISTORY OF WESTERN PHILOSOPHY And Its Connection with Political and Social Circumstances from the Earliest Times to the Present Day。作者：伯特兰·罗素 (Bertrand Russell)。主题领域：西方哲学史、思想史、政治哲学史。城邦的公共生活（如广场辩论、法庭辩护）需要并促进了理性的论证与批判性思维。培养批判性思维：学习罗素如何分析一个哲学家的论证（前提-推理-结论），可以应用于日常决策，辨别广告、政客言论中的逻辑谬误和隐含假设", "keywords": ["完整标题", "哲学史", "西方哲学"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/西方哲学史（英文原版）_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/哲学与时代背景的关联.md"}, {"id": "哲学本质.md", "label": "哲学本质", "title": "哲学本质", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "完整标题：打开 : 周濂的100堂西方哲学课。主题领域：西方哲学史、哲学入门、思想史。出版信息：上海三联书店，2019年4月。“自然哲学家”的探索是“理性”的第一次胜利，他们试图用“逻各斯”取代神话，为后来苏格拉底和柏拉图追求普遍性的“定义”和“理念”奠定了基础。对立：雅典的自由 vs. 斯巴达的纪律；赫拉克利特的流变 vs. 巴门尼德的存在；智者派的“人是万物的尺度”（相对主义）vs. 苏格拉底的“普遍定义”（客观主义）", "keywords": ["核心概念如何相互支撑", "重构了哲学史的叙事", "降低了哲学的门槛", "参与公共讨论", "自然哲学家", "提升判断力", "完整标题", "希腊精神"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/打开：周濂的100堂西方哲学课_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/哲学本质.md"}, {"id": "摹状词理论.md", "label": "摹状词理论", "title": "摹状词理论", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "主题领域：西方哲学史、分析哲学、罗素思想研究。出版信息：上海交通大学出版社，2018年6月第1版，ISBN: 978-7-313-19278-3。逻辑原子论：罗素早期提出的核心哲学理论，认为世界是由无数个独立的、不可再分的“原子事实”构成的，而语言（命题）通过逻辑结构来反映这些事实。因为只有承认外部世界和逻辑实体是客观实在的，逻辑原子论对世界的分析才具有真实意义。本书最有力的论点是什么：作者成功地将罗素复杂的哲学思想，特别是逻辑原子论和摹状词理论，以清晰、凝练的语言呈现出来，使其核心价值（如用逻辑分析解决哲学问题的方法论）得以凸显", "keywords": ["逻辑原子论", "摹状词理论", "亲知知识", "核心概念如何相互支撑", "逻辑分析方法", "结构化思维", "逻辑原子论", "摹状词理论"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/罗素哲学概论_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/摹状词理论.md"}, {"id": "苏格拉底方法.md", "label": "苏格拉底方法", "title": "苏格拉底方法", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "完整标题：打开 : 周濂的100堂西方哲学课。主题领域：西方哲学史、哲学入门、思想史。出版信息：上海三联书店，2019年4月。“自然哲学家”的探索是“理性”的第一次胜利，他们试图用“逻各斯”取代神话，为后来苏格拉底和柏拉图追求普遍性的“定义”和“理念”奠定了基础。自我认知：运用苏格拉底的“认识你自己”和“精神助产术”，定期反思自己的信念、价值观和行为动机，追问“我为什么这么想/这么做", "keywords": ["苏格拉底", "核心概念如何相互支撑", "重构了哲学史的叙事", "降低了哲学的门槛", "参与公共讨论", "自然哲学家", "提升判断力", "完整标题"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/打开：周濂的100堂西方哲学课_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/苏格拉底方法.md"}, {"id": "思想传承.md", "label": "思想传承", "title": "思想传承", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "作者：（英）杰瑞米·斯坦格鲁，（美）詹姆斯·加维。出版信息：北京联合出版公司，2018年10月第1版。基于引言部分，本书提炼出关于“哲学”本身的三个核心定义，并以此作为全书框架的基石：。哲学作为主题（Subject）：哲学是研究“存在”（形而上学）、“知识”（认识论）和“行为”（伦理学）这三大根本问题的抽象学科。哲学作为方法（Method）：哲学是一种特定的思考方式，即对观点进行认真、系统、清晰的思考、解释和论证，", "keywords": ["核心概念如何相互支撑", "作者采用何种论证方法", "对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "认识论的应用", "政治哲学思考", "最有力的论点"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/极简西方哲学史(1)_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/思想传承.md"}, {"id": "逻辑原子论.md", "label": "逻辑原子论", "title": "逻辑原子论", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "主题领域：西方哲学史、分析哲学、罗素思想研究。出版信息：上海交通大学出版社，2018年6月第1版，ISBN: 978-7-313-19278-3。逻辑原子论：罗素早期提出的核心哲学理论，认为世界是由无数个独立的、不可再分的“原子事实”构成的，而语言（命题）通过逻辑结构来反映这些事实。因为只有承认外部世界和逻辑实体是客观实在的，逻辑原子论对世界的分析才具有真实意义。本书最有力的论点是什么：作者成功地将罗素复杂的哲学思想，特别是逻辑原子论和摹状词理论，以清晰、凝练的语言呈现出来，使其核心价值（如用逻辑分析解决哲学问题的方法论）得以凸显", "keywords": ["逻辑原子论", "摹状词理论", "亲知知识", "描述知识", "逻辑原子论", "核心概念如何相互支撑", "逻辑分析方法", "结构化思维"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/罗素哲学概论_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/逻辑原子论.md"}, {"id": "城邦.md", "label": "城邦", "title": "城邦", "type": "book", "degree": 3, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "完整标题：A HISTORY OF WESTERN PHILOSOPHY And Its Connection with Political and Social Circumstances from the Earliest Times to the Present Day。作者：伯特兰·罗素 (Bertrand Russell)。主题领域：西方哲学史、思想史、政治哲学史。城邦的公共生活（如广场辩论、法庭辩护）需要并促进了理性的论证与批判性思维。培养批判性思维：学习罗素如何分析一个哲学家的论证（前提-推理-结论），可以应用于日常决策，辨别广告、政客言论中的逻辑谬误和隐含假设", "keywords": ["完整标题", "哲学史", "西方哲学"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/西方哲学史（英文原版）_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/城邦.md"}, {"id": "希腊精神.md", "label": "希腊精神", "title": "希腊精神", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "完整标题：打开 : 周濂的100堂西方哲学课。主题领域：西方哲学史、哲学入门、思想史。出版信息：上海三联书店，2019年4月。希腊精神：以雅典为代表的自由、理性、追问精神，与以斯巴达为代表的纪律、服从、集体主义形成鲜明对比。自我认知：运用苏格拉底的“认识你自己”和“精神助产术”，定期反思自己的信念、价值观和行为动机，追问“我为什么这么想/这么做", "keywords": ["核心概念如何相互支撑", "重构了哲学史的叙事", "降低了哲学的门槛", "参与公共讨论", "自然哲学家", "提升判断力", "完整标题", "希腊精神"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/打开：周濂的100堂西方哲学课_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/希腊精神.md"}, {"id": "形而上学.md", "label": "形而上学", "title": "形而上学", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "作者：（英）杰瑞米·斯坦格鲁，（美）詹姆斯·加维。主题领域：西方哲学史、思想史、哲学导论。出版信息：北京联合出版公司，2018年10月第1版。形而上学：研究“存在”本身本质的哲学分支。核心概念的相互支撑：形而上学、认识论和伦理学三大问题构成了一个相互关联的框架", "keywords": ["论证中的薄弱环节", "培养批判性思维", "构建个人价值观", "理解社会思潮", "最有力的论点", "应对不确定", "元哲学立场", "完整标题"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/极简西方哲学史_dup_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/形而上学.md"}, {"id": "斯多葛主义.md", "label": "斯多葛主义", "title": "斯多葛主义", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "作者：伯特兰·罗素（原著），文利（编译）。主题领域：西方哲学史、思想史、文明史。出版信息：陕西师范大学出版社，2010年12月第1版。“逻各斯”作为“变”中的“不变”规律，是连接赫拉克利特的流变哲学与巴门尼德“存在”理论的一座桥梁，并最终在斯多葛主义中被发展为宇宙理性。对立：赫拉克利特的“流变” vs. 巴门尼德的“静止”；德谟克利特的“原子论”（唯物主义） vs. 柏拉图的“理念论”（唯心主义）；普罗泰戈拉的“相对主义” vs. 苏格拉底的“普遍定义”", "keywords": ["可读性与启发性", "定义人生目标", "米利都学派", "完整标题", "面对变化", "追求真理", "社会实践", "理解冲突"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/西方哲学简史_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/斯多葛主义.md"}, {"id": "历史叙事.md", "label": "历史叙事", "title": "历史叙事", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "作者：（英）杰瑞米·斯坦格鲁，（美）詹姆斯·加维。出版信息：北京联合出版公司，2018年10月第1版。基于引言部分，本书提炼出关于“哲学”本身的三个核心定义，并以此作为全书框架的基石：。哲学作为主题（Subject）：哲学是研究“存在”（形而上学）、“知识”（认识论）和“行为”（伦理学）这三大根本问题的抽象学科。哲学作为方法（Method）：哲学是一种特定的思考方式，即对观点进行认真、系统、清晰的思考、解释和论证，", "keywords": ["核心概念如何相互支撑", "作者采用何种论证方法", "对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "认识论的应用", "政治哲学思考", "最有力的论点"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/极简西方哲学史(1)_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/历史叙事.md"}, {"id": "经验主义.md", "label": "经验主义", "title": "经验主义", "type": "book", "degree": 8, "cluster": "西方哲学史", "domain": "历史", "sub_domain": "西方哲学史", "summary": "作者：（英）杰瑞米·斯坦格鲁，（美）詹姆斯·加维。主题领域：西方哲学史、思想史、哲学导论。出版信息：北京联合出版公司，2018年10月第1版。形而上学：研究“存在”本身本质的哲学分支。核心概念的相互支撑：形而上学、认识论和伦理学三大问题构成了一个相互关联的框架", "keywords": ["论证中的薄弱环节", "培养批判性思维", "构建个人价值观", "理解社会思潮", "最有力的论点", "应对不确定", "元哲学立场", "完整标题"], "tags": ["domain/历史", "sub_domain/西方哲学史", "type/concept", "source/极简西方哲学史_dup_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/西方哲学史/经验主义.md"}];
+var LINKS = [{"source": "理性主义与经验主义的萌芽.md", "target": "米利都学派.md", "value": 2, "shared": ["相关笔记", "完整标题"]}, {"source": "理性主义与经验主义的萌芽.md", "target": "四因说.md", "value": 2, "shared": ["相关笔记", "完整标题"]}, {"source": "理性主义与经验主义的萌芽.md", "target": "前苏格拉底哲学.md", "value": 2, "shared": ["相关笔记", "完整标题"]}, {"source": "理性主义与经验主义的萌芽.md", "target": "存在与变化.md", "value": 2, "shared": ["哲学史", "完整标题"]}, {"source": "理性主义与经验主义的萌芽.md", "target": "哲学与时代背景的关联.md", "value": 2, "shared": ["哲学史", "完整标题"]}, {"source": "理性主义与经验主义的萌芽.md", "target": "城邦.md", "value": 2, "shared": ["哲学史", "完整标题"]}, {"source": "方法论.md", "target": "家族相似性.md", "value": 8, "shared": ["对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "政治哲学思考", "核心概念如何相互支撑"]}, {"source": "方法论.md", "target": "认识论.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "方法论.md", "target": "生活方式.md", "value": 8, "shared": ["对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "政治哲学思考", "核心概念如何相互支撑"]}, {"source": "方法论.md", "target": "伦理学.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "方法论.md", "target": "理性主义.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "方法论.md", "target": "哲学定义.md", "value": 8, "shared": ["对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "政治哲学思考", "核心概念如何相互支撑"]}, {"source": "方法论.md", "target": "思想史.md", "value": 8, "shared": ["对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "政治哲学思考", "核心概念如何相互支撑"]}, {"source": "方法论.md", "target": "思想传承.md", "value": 8, "shared": ["对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "政治哲学思考", "核心概念如何相互支撑"]}, {"source": "方法论.md", "target": "形而上学.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "方法论.md", "target": "历史叙事.md", "value": 8, "shared": ["对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "政治哲学思考", "核心概念如何相互支撑"]}, {"source": "方法论.md", "target": "经验主义.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "米利都学派.md", "target": "四因说.md", "value": 8, "shared": ["米利都学派", "追求真理", "可读性与启发性", "相关笔记", "定义人生目标"]}, {"source": "米利都学派.md", "target": "前苏格拉底哲学.md", "value": 2, "shared": ["相关笔记", "完整标题"]}, {"source": "米利都学派.md", "target": "理念论.md", "value": 7, "shared": ["米利都学派", "追求真理", "可读性与启发性", "定义人生目标", "社会实践"]}, {"source": "米利都学派.md", "target": "斯多葛主义.md", "value": 7, "shared": ["米利都学派", "追求真理", "可读性与启发性", "定义人生目标", "社会实践"]}, {"source": "四因说.md", "target": "前苏格拉底哲学.md", "value": 2, "shared": ["相关笔记", "完整标题"]}, {"source": "四因说.md", "target": "理念论.md", "value": 7, "shared": ["米利都学派", "追求真理", "可读性与启发性", "定义人生目标", "社会实践"]}, {"source": "四因说.md", "target": "斯多葛主义.md", "value": 7, "shared": ["米利都学派", "追求真理", "可读性与启发性", "定义人生目标", "社会实践"]}, {"source": "自然哲学.md", "target": "自然哲学家.md", "value": 8, "shared": ["重构了哲学史的叙事", "核心概念如何相互支撑", "参与公共讨论", "降低了哲学的门槛", "希腊精神"]}, {"source": "自然哲学.md", "target": "逻各斯.md", "value": 8, "shared": ["重构了哲学史的叙事", "核心概念如何相互支撑", "参与公共讨论", "降低了哲学的门槛", "希腊精神"]}, {"source": "自然哲学.md", "target": "哲学追问.md", "value": 8, "shared": ["重构了哲学史的叙事", "核心概念如何相互支撑", "参与公共讨论", "降低了哲学的门槛", "希腊精神"]}, {"source": "自然哲学.md", "target": "哲学的本质.md", "value": 2, "shared": ["完整标题", "核心概念如何相互支撑"]}, {"source": "自然哲学.md", "target": "哲学本质.md", "value": 8, "shared": ["重构了哲学史的叙事", "核心概念如何相互支撑", "参与公共讨论", "降低了哲学的门槛", "希腊精神"]}, {"source": "自然哲学.md", "target": "苏格拉底方法.md", "value": 7, "shared": ["重构了哲学史的叙事", "核心概念如何相互支撑", "参与公共讨论", "降低了哲学的门槛", "自然哲学家"]}, {"source": "自然哲学.md", "target": "希腊精神.md", "value": 8, "shared": ["重构了哲学史的叙事", "核心概念如何相互支撑", "参与公共讨论", "降低了哲学的门槛", "希腊精神"]}, {"source": "存在与变化.md", "target": "哲学与时代背景的关联.md", "value": 3, "shared": ["哲学史", "西方哲学", "完整标题"]}, {"source": "存在与变化.md", "target": "城邦.md", "value": 3, "shared": ["哲学史", "西方哲学", "完整标题"]}, {"source": "家族相似性.md", "target": "认识论.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "家族相似性.md", "target": "生活方式.md", "value": 8, "shared": ["对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "政治哲学思考", "核心概念如何相互支撑"]}, {"source": "家族相似性.md", "target": "伦理学.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "家族相似性.md", "target": "理性主义.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "家族相似性.md", "target": "哲学定义.md", "value": 8, "shared": ["对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "政治哲学思考", "核心概念如何相互支撑"]}, {"source": "家族相似性.md", "target": "思想史.md", "value": 8, "shared": ["对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "政治哲学思考", "核心概念如何相互支撑"]}, {"source": "家族相似性.md", "target": "思想传承.md", "value": 8, "shared": ["对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "政治哲学思考", "核心概念如何相互支撑"]}, {"source": "家族相似性.md", "target": "形而上学.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "家族相似性.md", "target": "历史叙事.md", "value": 8, "shared": ["对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "政治哲学思考", "核心概念如何相互支撑"]}, {"source": "家族相似性.md", "target": "经验主义.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "描述知识.md", "target": "实在论.md", "value": 7, "shared": ["亲知知识", "逻辑分析方法", "描述知识", "逻辑原子论", "核心概念如何相互支撑"]}, {"source": "描述知识.md", "target": "亲知知识.md", "value": 7, "shared": ["亲知知识", "逻辑分析方法", "描述知识", "逻辑原子论", "核心概念如何相互支撑"]}, {"source": "描述知识.md", "target": "摹状词理论.md", "value": 6, "shared": ["亲知知识", "逻辑分析方法", "逻辑原子论", "核心概念如何相互支撑", "摹状词理论"]}, {"source": "描述知识.md", "target": "逻辑原子论.md", "value": 7, "shared": ["亲知知识", "逻辑分析方法", "描述知识", "逻辑原子论", "核心概念如何相互支撑"]}, {"source": "理念论.md", "target": "斯多葛主义.md", "value": 8, "shared": ["米利都学派", "理解冲突", "追求真理", "可读性与启发性", "定义人生目标"]}, {"source": "自然哲学家.md", "target": "逻各斯.md", "value": 8, "shared": ["重构了哲学史的叙事", "核心概念如何相互支撑", "参与公共讨论", "降低了哲学的门槛", "希腊精神"]}, {"source": "自然哲学家.md", "target": "哲学追问.md", "value": 8, "shared": ["重构了哲学史的叙事", "核心概念如何相互支撑", "参与公共讨论", "降低了哲学的门槛", "希腊精神"]}, {"source": "自然哲学家.md", "target": "哲学的本质.md", "value": 2, "shared": ["完整标题", "核心概念如何相互支撑"]}, {"source": "自然哲学家.md", "target": "哲学本质.md", "value": 8, "shared": ["重构了哲学史的叙事", "核心概念如何相互支撑", "参与公共讨论", "降低了哲学的门槛", "希腊精神"]}, {"source": "自然哲学家.md", "target": "苏格拉底方法.md", "value": 7, "shared": ["重构了哲学史的叙事", "核心概念如何相互支撑", "参与公共讨论", "降低了哲学的门槛", "自然哲学家"]}, {"source": "自然哲学家.md", "target": "希腊精神.md", "value": 8, "shared": ["重构了哲学史的叙事", "核心概念如何相互支撑", "参与公共讨论", "降低了哲学的门槛", "希腊精神"]}, {"source": "认识论.md", "target": "生活方式.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "认识论.md", "target": "伦理学.md", "value": 8, "shared": ["构建个人价值观", "应对不确定", "培养批判性思维", "论证中的薄弱环节", "元哲学立场"]}, {"source": "认识论.md", "target": "理性主义.md", "value": 8, "shared": ["构建个人价值观", "应对不确定", "培养批判性思维", "论证中的薄弱环节", "元哲学立场"]}, {"source": "认识论.md", "target": "哲学定义.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "认识论.md", "target": "思想史.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "认识论.md", "target": "思想传承.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "认识论.md", "target": "形而上学.md", "value": 8, "shared": ["构建个人价值观", "应对不确定", "培养批判性思维", "论证中的薄弱环节", "元哲学立场"]}, {"source": "认识论.md", "target": "历史叙事.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "认识论.md", "target": "经验主义.md", "value": 8, "shared": ["构建个人价值观", "应对不确定", "培养批判性思维", "论证中的薄弱环节", "元哲学立场"]}, {"source": "芝诺悖论.md", "target": "存在.md", "value": 8, "shared": ["物质一元论", "行为活动", "完整标题", "变化背后的不变法则", "形式主义"]}, {"source": "芝诺悖论.md", "target": "哲学的本质.md", "value": 2, "shared": ["哲学的本质", "完整标题"]}, {"source": "生活方式.md", "target": "伦理学.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "生活方式.md", "target": "理性主义.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "生活方式.md", "target": "哲学定义.md", "value": 8, "shared": ["对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "政治哲学思考", "核心概念如何相互支撑"]}, {"source": "生活方式.md", "target": "思想史.md", "value": 8, "shared": ["对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "政治哲学思考", "核心概念如何相互支撑"]}, {"source": "生活方式.md", "target": "思想传承.md", "value": 8, "shared": ["对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "政治哲学思考", "核心概念如何相互支撑"]}, {"source": "生活方式.md", "target": "形而上学.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "生活方式.md", "target": "历史叙事.md", "value": 8, "shared": ["对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "政治哲学思考", "核心概念如何相互支撑"]}, {"source": "生活方式.md", "target": "经验主义.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "伦理学.md", "target": "理性主义.md", "value": 8, "shared": ["构建个人价值观", "应对不确定", "培养批判性思维", "论证中的薄弱环节", "元哲学立场"]}, {"source": "伦理学.md", "target": "哲学定义.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "伦理学.md", "target": "思想史.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "伦理学.md", "target": "思想传承.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "伦理学.md", "target": "形而上学.md", "value": 8, "shared": ["构建个人价值观", "应对不确定", "培养批判性思维", "论证中的薄弱环节", "元哲学立场"]}, {"source": "伦理学.md", "target": "历史叙事.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "伦理学.md", "target": "经验主义.md", "value": 8, "shared": ["构建个人价值观", "应对不确定", "培养批判性思维", "论证中的薄弱环节", "元哲学立场"]}, {"source": "理性主义.md", "target": "哲学定义.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "理性主义.md", "target": "思想史.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "理性主义.md", "target": "思想传承.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "理性主义.md", "target": "形而上学.md", "value": 8, "shared": ["构建个人价值观", "应对不确定", "培养批判性思维", "论证中的薄弱环节", "元哲学立场"]}, {"source": "理性主义.md", "target": "历史叙事.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "理性主义.md", "target": "经验主义.md", "value": 8, "shared": ["构建个人价值观", "应对不确定", "培养批判性思维", "论证中的薄弱环节", "元哲学立场"]}, {"source": "哲学定义.md", "target": "思想史.md", "value": 8, "shared": ["对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "政治哲学思考", "核心概念如何相互支撑"]}, {"source": "哲学定义.md", "target": "思想传承.md", "value": 8, "shared": ["对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "政治哲学思考", "核心概念如何相互支撑"]}, {"source": "哲学定义.md", "target": "形而上学.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "哲学定义.md", "target": "历史叙事.md", "value": 8, "shared": ["对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "政治哲学思考", "核心概念如何相互支撑"]}, {"source": "哲学定义.md", "target": "经验主义.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "逻各斯.md", "target": "哲学追问.md", "value": 8, "shared": ["重构了哲学史的叙事", "核心概念如何相互支撑", "参与公共讨论", "降低了哲学的门槛", "希腊精神"]}, {"source": "逻各斯.md", "target": "哲学的本质.md", "value": 2, "shared": ["完整标题", "核心概念如何相互支撑"]}, {"source": "逻各斯.md", "target": "哲学本质.md", "value": 8, "shared": ["重构了哲学史的叙事", "核心概念如何相互支撑", "参与公共讨论", "降低了哲学的门槛", "希腊精神"]}, {"source": "逻各斯.md", "target": "苏格拉底方法.md", "value": 7, "shared": ["重构了哲学史的叙事", "核心概念如何相互支撑", "参与公共讨论", "降低了哲学的门槛", "自然哲学家"]}, {"source": "逻各斯.md", "target": "希腊精神.md", "value": 8, "shared": ["重构了哲学史的叙事", "核心概念如何相互支撑", "参与公共讨论", "降低了哲学的门槛", "希腊精神"]}, {"source": "存在.md", "target": "哲学的本质.md", "value": 2, "shared": ["哲学的本质", "完整标题"]}, {"source": "实在论.md", "target": "亲知知识.md", "value": 7, "shared": ["亲知知识", "逻辑分析方法", "描述知识", "逻辑原子论", "核心概念如何相互支撑"]}, {"source": "实在论.md", "target": "摹状词理论.md", "value": 6, "shared": ["亲知知识", "逻辑分析方法", "逻辑原子论", "核心概念如何相互支撑", "摹状词理论"]}, {"source": "实在论.md", "target": "逻辑原子论.md", "value": 7, "shared": ["亲知知识", "逻辑分析方法", "描述知识", "逻辑原子论", "核心概念如何相互支撑"]}, {"source": "思想史.md", "target": "思想传承.md", "value": 8, "shared": ["对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "政治哲学思考", "核心概念如何相互支撑"]}, {"source": "思想史.md", "target": "形而上学.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "思想史.md", "target": "历史叙事.md", "value": 8, "shared": ["对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "政治哲学思考", "核心概念如何相互支撑"]}, {"source": "思想史.md", "target": "经验主义.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "哲学追问.md", "target": "哲学的本质.md", "value": 2, "shared": ["完整标题", "核心概念如何相互支撑"]}, {"source": "哲学追问.md", "target": "哲学本质.md", "value": 8, "shared": ["重构了哲学史的叙事", "核心概念如何相互支撑", "参与公共讨论", "降低了哲学的门槛", "希腊精神"]}, {"source": "哲学追问.md", "target": "苏格拉底方法.md", "value": 7, "shared": ["重构了哲学史的叙事", "核心概念如何相互支撑", "参与公共讨论", "降低了哲学的门槛", "自然哲学家"]}, {"source": "哲学追问.md", "target": "希腊精神.md", "value": 8, "shared": ["重构了哲学史的叙事", "核心概念如何相互支撑", "参与公共讨论", "降低了哲学的门槛", "希腊精神"]}, {"source": "亲知知识.md", "target": "摹状词理论.md", "value": 6, "shared": ["亲知知识", "逻辑分析方法", "逻辑原子论", "核心概念如何相互支撑", "摹状词理论"]}, {"source": "亲知知识.md", "target": "逻辑原子论.md", "value": 7, "shared": ["亲知知识", "逻辑分析方法", "描述知识", "逻辑原子论", "核心概念如何相互支撑"]}, {"source": "哲学的本质.md", "target": "哲学本质.md", "value": 2, "shared": ["完整标题", "核心概念如何相互支撑"]}, {"source": "哲学的本质.md", "target": "苏格拉底方法.md", "value": 2, "shared": ["完整标题", "核心概念如何相互支撑"]}, {"source": "哲学的本质.md", "target": "希腊精神.md", "value": 2, "shared": ["完整标题", "核心概念如何相互支撑"]}, {"source": "哲学与时代背景的关联.md", "target": "城邦.md", "value": 3, "shared": ["哲学史", "西方哲学", "完整标题"]}, {"source": "哲学本质.md", "target": "苏格拉底方法.md", "value": 7, "shared": ["重构了哲学史的叙事", "核心概念如何相互支撑", "参与公共讨论", "降低了哲学的门槛", "自然哲学家"]}, {"source": "哲学本质.md", "target": "希腊精神.md", "value": 8, "shared": ["重构了哲学史的叙事", "核心概念如何相互支撑", "参与公共讨论", "降低了哲学的门槛", "希腊精神"]}, {"source": "摹状词理论.md", "target": "逻辑原子论.md", "value": 6, "shared": ["亲知知识", "逻辑分析方法", "逻辑原子论", "核心概念如何相互支撑", "摹状词理论"]}, {"source": "苏格拉底方法.md", "target": "希腊精神.md", "value": 7, "shared": ["重构了哲学史的叙事", "核心概念如何相互支撑", "参与公共讨论", "降低了哲学的门槛", "自然哲学家"]}, {"source": "思想传承.md", "target": "形而上学.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "思想传承.md", "target": "历史叙事.md", "value": 8, "shared": ["对学科的独特贡献", "论证中的薄弱环节", "苏格拉底式审视", "政治哲学思考", "核心概念如何相互支撑"]}, {"source": "思想传承.md", "target": "经验主义.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "形而上学.md", "target": "历史叙事.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}, {"source": "形而上学.md", "target": "经验主义.md", "value": 8, "shared": ["构建个人价值观", "应对不确定", "培养批判性思维", "论证中的薄弱环节", "元哲学立场"]}, {"source": "历史叙事.md", "target": "经验主义.md", "value": 2, "shared": ["最有力的论点", "论证中的薄弱环节"]}];
+var CLUSTER_COLORS = {"西方哲学史": "#06b6d4"};
+var SEARCH_DATA = [{"id": "理性主义与经验主义的萌芽.md", "label": "理性主义与经验主义的萌芽"}, {"id": "方法论.md", "label": "方法论"}, {"id": "米利都学派.md", "label": "米利都学派"}, {"id": "四因说.md", "label": "四因说"}, {"id": "前苏格拉底哲学.md", "label": "前苏格拉底哲学"}, {"id": "自然哲学.md", "label": "自然哲学"}, {"id": "存在与变化.md", "label": "存在与变化"}, {"id": "家族相似性.md", "label": "家族相似性"}, {"id": "描述知识.md", "label": "描述知识"}, {"id": "理念论.md", "label": "理念论"}, {"id": "自然哲学家.md", "label": "自然哲学家"}, {"id": "认识论.md", "label": "认识论"}, {"id": "芝诺悖论.md", "label": "芝诺悖论"}, {"id": "生活方式.md", "label": "生活方式"}, {"id": "伦理学.md", "label": "伦理学"}, {"id": "理性主义.md", "label": "理性主义"}, {"id": "哲学定义.md", "label": "哲学定义"}, {"id": "逻各斯.md", "label": "逻各斯"}, {"id": "存在.md", "label": "存在"}, {"id": "实在论.md", "label": "实在论"}, {"id": "思想史.md", "label": "思想史"}, {"id": "哲学追问.md", "label": "哲学追问"}, {"id": "亲知知识.md", "label": "亲知知识"}, {"id": "哲学的本质.md", "label": "哲学的本质"}, {"id": "哲学与时代背景的关联.md", "label": "哲学与时代背景的关联"}, {"id": "哲学本质.md", "label": "哲学本质"}, {"id": "摹状词理论.md", "label": "摹状词理论"}, {"id": "苏格拉底方法.md", "label": "苏格拉底方法"}, {"id": "思想传承.md", "label": "思想传承"}, {"id": "逻辑原子论.md", "label": "逻辑原子论"}, {"id": "城邦.md", "label": "城邦"}, {"id": "希腊精神.md", "label": "希腊精神"}, {"id": "形而上学.md", "label": "形而上学"}, {"id": "斯多葛主义.md", "label": "斯多葛主义"}, {"id": "历史叙事.md", "label": "历史叙事"}, {"id": "经验主义.md", "label": "经验主义"}];
+var CONCEPT_SEARCH = [];
+
+
+/* ---- 搜索 ---- */
+var searchBox = document.getElementById("search-box");
+var searchResults = document.getElementById("search-results");
+
+searchBox.addEventListener("input", function(){
+  var q = this.value.trim().toLowerCase();
+  if(!q) { searchResults.style.display="none"; return; }
+  var combined = SEARCH_DATA.concat(CONCEPT_SEARCH.map(function(c){ return {id:c,label:c,type:"concept"}; }));
+  var matches = combined.filter(function(d){ return d.label.toLowerCase().indexOf(q)>-1; }).slice(0,12);
+  if(!matches.length) { searchResults.style.display="none"; return; }
+  searchResults.innerHTML = matches.map(function(d){
+    return '<div class="sri" data-id="'+d.id+'">'+d.label+'</div>';
+  }).join("");
+  searchResults.style.display="block";
+});
+
+searchResults.addEventListener("click", function(e){
+  var el = e.target.closest(".sri");
+  if(!el) return;
+  highlightNode(el.getAttribute("data-id"));
+  searchResults.style.display="none";
+  searchBox.value="";
+});
+
+function highlightNode(id){
+  svg.selectAll(".node").classed("highlight", function(d){ return d.id===id; });
+  svg.selectAll(".link").classed("highlight", function(d){
+    return d.source.id===id || d.target.id===id;
+  });
+  var nd = nodeMap.get(id);
+  if(!nd) return;
+  var t = d3.zoomTransform(svg.node());
+  var x = -nd.x*t.k + width/2;
+  var y = -nd.y*t.k + height/2;
+  svg.transition().duration(600).call(zoom.transform, d3.zoomIdentity.translate(x,y).scale(t.k));
+}
+
+/* ---- 详情面板 ---- */
+function showDetail(d){
+  var panel = document.getElementById("detail-panel");
+  var title = document.getElementById("detail-title");
+  var body  = document.getElementById("detail-body");
+
+  title.textContent = (d.title || d.label || d.id || "").replace(/\.md$/, "");
+
+  var html = "";
+
+  /* 元信息 */
+  html += '<div class="section"><div class="meta-row"><span class="meta-label">类型</span><span>' + (d.type==="concept" ? "💡 概念" : "📖 笔记") + '</span></div>';
+  if(d.domain)   html += '<div class="meta-row"><span class="meta-label">领域</span><span>' + d.domain + '</span></div>';
+  if(d.cluster) html += '<div class="meta-row"><span class="meta-label">聚类</span><span>' + d.cluster + '</span></div>';
+  if(d.degree !== undefined) html += '<div class="meta-row"><span class="meta-label">连通度</span><span>' + d.degree + '</span></div>';
+  html += '</div>';
+
+  /* 摘要 */
+  if(d.summary){
+    html += '<div class="section"><div class="section-title">📝 摘要</div><div class="summary">' + escapeHtml(d.summary.slice(0,500)) + (d.summary.length>500 ? "..." : "") + '</div></div>';
+  }
+
+  /* 关键词 */
+  if(d.keywords && d.keywords.length){
+    html += '<div class="section"><div class="section-title">🔑 关键词</div>';
+    d.keywords.forEach(function(kw){ html += '<span class="keyword">' + escapeHtml(kw) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 标签 */
+  if(d.tags && d.tags.length){
+    html += '<div class="section"><div class="section-title">🏷️ 标签</div>';
+    d.tags.forEach(function(tg){ html += '<span class="tag">' + escapeHtml(tg) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 打开原文件：用 Obsidian URI 协议，避免浏览器 file:// 限制 */
+  if(d.path){
+    var obsidianUrl = "obsidian://open?path=" + encodeURIComponent(d.path);
+    html += '<div class="section"><a class="open-link" href="' + obsidianUrl + '">📂 在 Obsidian 中打开</a></div>';
+  }
+
+  body.innerHTML = html;
+  panel.classList.add("open");
+}
+
+function closeDetail(){
+  document.getElementById("detail-panel").classList.remove("open");
+}
+
+function escapeHtml(s){
+  if(!s) return "";
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ---- D3 力导向图 ---- */
+var width  = window.innerWidth;
+var height = window.innerHeight - 48;
+var svg = d3.select("#graph").append("svg").attr("width",width).attr("height",height);
+var g = svg.append("g");
+var zoom = d3.zoom().scaleExtent([0.05,5]).on("zoom", function(e){ g.attr("transform", e.transform); });
+svg.call(zoom);
+
+var simulation = d3.forceSimulation(NODES)
+  .force("link",    d3.forceLink(LINKS).id(function(d){ return d.id; }).distance(90))
+  .force("charge",  d3.forceManyBody().strength(-220))
+  .force("center",  d3.forceCenter(width/2, height/2))
+  .force("collision", d3.forceCollide(30))
+  .force("x",       d3.forceX(width/2).strength(0.06))
+  .force("y",       d3.forceY(height/2).strength(0.06));
+
+var link = g.append("g").attr("class","links").selectAll("line")
+  .data(LINKS).join("line")
+  .attr("class", function(d){ return "link" + ((d.type==="book-book") ? " link-book" : ""); });
+
+var node = g.append("g").attr("class","nodes").selectAll("g")
+  .data(NODES).join("g")
+  .attr("class","node")
+  .attr("data-id", function(d){ return d.id; })
+  .call(d3.drag()
+    .on("start", function(event,d){ if(!event.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+    .on("drag",  function(event,d){ d.fx=event.x; d.fy=event.y; })
+    .on("end",   function(event,d){ if(!event.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+node.append("circle")
+  .attr("r", function(d){ return d.type==="book" ? 5+Math.sqrt(d.degree||1)*1.5 : 7; })
+  .attr("fill", function(d){ return d.type==="book" ? (CLUSTER_COLORS[d.cluster]||"#94a3b8") : "#06b6d4"; })
+  .attr("stroke", function(d){ return d.type==="book" ? "#0f172a" : "#d97706"; })
+  .on("mouseover", function(event,d){
+    var html = d.type==="book"
+      ? "<strong>📖 "+d.label+"</strong><br>连通度:"+d.degree+"<br>聚类:"+(d.cluster||"未分类")
+      : "<strong>💡 "+d.concept+"</strong><br>关联:"+d.book_count+" 篇";
+    d3.select("#tooltip").html(html).style("opacity",1)
+      .style("left",(event.pageX+12)+"px").style("top",(event.pageY-8)+"px");
+  })
+  .on("mouseout", function(){ d3.select("#tooltip").style("opacity",0); })
+  .on("click", function(event,d){
+    event.stopPropagation();
+    showDetail(d);
+  });
+
+node.append("text").attr("dx",11).attr("dy","0.35em").text(function(d){ return d.label; });
+
+var nodeMap = new Map();
+simulation.on("tick", function(){
+  link
+    .attr("x1", function(d){ return d.source.x; })
+    .attr("y1", function(d){ return d.source.y; })
+    .attr("x2", function(d){ return d.target.x; })
+    .attr("y2", function(d){ return d.target.y; });
+  node.attr("transform", function(d){
+    nodeMap.set(d.id, d);
+    return "translate("+d.x+","+d.y+")";
+  });
+});
+
+/* ---- 图例 ---- */
+var legendItems = d3.select("#legend").append("div").style("font-weight","bold").style("margin-bottom","8px").text("🎨 聚类").node().parentNode;
+Object.entries(CLUSTER_COLORS).forEach(function(entry){
+  var li = d3.select(legendItems).append("div").attr("class","li");
+  li.append("span").attr("class","ld").style("background",entry[1]);
+  li.append("span").text(entry[0]);
+});
+
+/* ---- 按钮 ---- */
+var conceptVisible = true;
+d3.select("#btn-toggle-concept").on("click", function(){
+  conceptVisible = !conceptVisible;
+  svg.selectAll(".node").filter(function(d){ return d.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  svg.selectAll(".link").filter(function(d){ return d.source.type==="concept"||d.target.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  d3.select(this).text(conceptVisible?"隐藏概念":"显示概念").classed("active",!conceptVisible);
+});
+d3.select("#btn-reset").on("click", function(){
+  closeDetail();
+  svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+});
+
+svg.on("click", function(){ searchResults.style.display="none"; });
+document.addEventListener("click", function(e){
+  if(!document.getElementById("detail-panel").contains(e.target) && !e.target.closest(".node")){
+    closeDetail();
+  }
+});
+
+/* 更新统计 */
+d3.select("#node-count").text(NODES.length);
+d3.select("#link-count").text(LINKS.length);
+</script>
+</body>
+</html>

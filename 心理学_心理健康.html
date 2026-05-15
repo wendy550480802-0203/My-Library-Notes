@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>心理学 - 心理健康 - 知识图谱</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#0f172a; color:#e2e8f0; overflow:hidden; }
+
+/* 侧边栏 */
+#sidebar { position:fixed; left:0; top:0; width:220px; height:100vh; background:#1e293b; border-right:1px solid #334155; overflow-y:auto; z-index:50; transition:transform 0.3s; font-size:12px; }
+#sidebar.collapsed { transform:translateX(-220px); }
+#sidebar h2 { font-size:13px; padding:12px 14px 8px; color:#94a3b8; border-bottom:1px solid #334155; }
+#sidebar .domain-header { padding:7px 14px; cursor:pointer; font-weight:600; border-bottom:1px solid #1a2332; transition:background 0.15s; user-select:none; }
+#sidebar .domain-header:hover { background:#334155; }
+#sidebar .domain-pages { display:none; }
+#sidebar .domain-pages a { display:block; padding:5px 14px 5px 24px; color:#cbd5e1; text-decoration:none; border-bottom:1px solid #1a2332; transition:background 0.15s; font-size:11px; }
+#sidebar .domain-pages a:hover { background:#334155; color:#fff; }
+#sidebar .domain-pages a.active { font-weight:600; }
+#sidebar a.active { background:#f59e0b; color:#0f172a; }
+#sidebar-toggle { position:fixed; left:8px; top:56px; z-index:60; background:#334155; border:1px solid #475569; color:#e2e8f0; border-radius:6px; padding:4px 7px; cursor:pointer; font-size:13px; transition:left 0.3s; }
+#sidebar:not(.collapsed) ~ #sidebar-toggle { left:228px; }
+
+/* 右侧详情面板 */
+#detail-panel { position:fixed; top:0; right:-420px; width:400px; height:100vh; background:#1e293b; border-left:1px solid #334155; z-index:55; transition:right 0.3s; display:flex; flex-direction:column; }
+#detail-panel.open { right:0; }
+#detail-header { padding:14px 16px; border-bottom:1px solid #334155; display:flex; align-items:flex-start; gap:10px; }
+#detail-header h2 { flex:1; font-size:14px; line-height:1.4; margin:0; word-break:break-all; }
+#detail-close { background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer; padding:0 4px; line-height:1; }
+#detail-close:hover { color:#fff; }
+#detail-body { flex:1; overflow-y:auto; padding:16px; font-size:13px; line-height:1.7; }
+#detail-body .section { margin-bottom:16px; }
+#detail-body .section-title { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+#detail-body .tag { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#334155; border-radius:4px; font-size:11px; color:#cbd5e1; }
+#detail-body .keyword { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#f59e0b22; border:1px solid #f59e0b66; border-radius:4px; font-size:11px; color:#e2e8f0; }
+#detail-body .summary { color:#cbd5e1; white-space:pre-wrap; }
+#detail-body .open-link { display:inline-block; margin-top:12px; padding:6px 14px; background:#f59e0b; color:#0f172a; border-radius:6px; text-decoration:none; font-size:12px; font-weight:600; }
+#detail-body .open-link:hover { opacity:0.85; }
+#detail-body .meta-row { display:flex; gap:12px; margin-bottom:8px; font-size:12px; }
+#detail-body .meta-label { color:#94a3b8; min-width:60px; }
+#detail-body .connected-list { list-style:none; padding:0; }
+#detail-body .connected-list li { padding:4px 0; border-bottom:1px solid #1a2332; font-size:12px; cursor:pointer; }
+#detail-body .connected-list li:hover { color:#f59e0b; }
+
+#header { padding:10px 20px 10px 50px; background:#1e293b; border-bottom:1px solid #334155; display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-left:200px; transition:margin-left 0.3s; }
+#sidebar.collapsed ~ #header { margin-left:0; }
+#header h1 { margin:0; font-size:17px; color:#f59e0b; white-space:nowrap; }
+#search-wrap { position:relative; }
+#search-box { width:220px; padding:5px 10px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#e2e8f0; font-size:13px; }
+#search-results { position:absolute; top:32px; left:0; width:260px; max-height:300px; overflow-y:auto; background:#1e293b; border:1px solid #475569; border-radius:6px; display:none; z-index:100; }
+.sri { padding:7px 10px; cursor:pointer; font-size:12px; border-bottom:1px solid #334155; }
+.sri:hover { background:#334155; }
+.stats { font-size:12px; color:#94a3b8; white-space:nowrap; }
+.ctrls { display:flex; gap:6px; margin-left:auto; }
+.btn { padding:5px 12px; border-radius:6px; border:1px solid #475569; background:#334155; color:#e2e8f0; cursor:pointer; font-size:12px; }
+.btn:hover { background:#475569; }
+.btn.active { background:#f59e0b; color:#0f172a; border-color:#f59e0b; }
+#legend { position:absolute; top:52px; left:220px; background:#1e293b; border:1px solid #475569; border-radius:8px; padding:10px 14px; font-size:12px; z-index:10; }
+.li { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+.ld { width:10px; height:10px; border-radius:50%; }
+#tooltip { position:absolute; padding:8px 12px; background:#1e293b; border:1px solid #475569; border-radius:8px; font-size:12px; pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:100; box-shadow:0 4px 20px rgba(0,0,0,0.5); max-width:320px; }
+#graph { width:calc(100vw - 200px); height:calc(100vh - 48px); margin-left:200px; transition:width 0.3s, margin-left 0.3s; }
+#sidebar.collapsed ~ #graph { margin-left:0; width:100vw; }
+#detail-panel.open ~ #graph { width:calc(100vw - 200px - 400px); }
+.link { stroke:#475569; stroke-opacity:0.3; }
+.link-book { stroke-opacity:0.12; }
+.node circle { cursor:pointer; stroke-width:1.5; }
+.node text { fill:#e2e8f0; font-size:10px; pointer-events:none; }
+.highlight circle { stroke:#fff !important; stroke-width:2.5px; }
+.highlight text { fill:#fff; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>📚 藏书阁 · 知识图谱</h2>
+  <div class="domain-header" data-target="IT" style="color:#67e8f9; border-left:3px solid #67e8f9;">IT ▾</div>
+  <div class="domain-pages" id="IT">
+    <a href="IT.json" style="border-left:3px solid #67e8f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(225篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="个人成长" style="color:#fb923c; border-left:3px solid #fb923c;">个人成长 ▾</div>
+  <div class="domain-pages" id="个人成长">
+    <a href="个人成长.json" style="border-left:3px solid #fb923c; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(461篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="产品" style="color:#a855f7; border-left:3px solid #a855f7;">产品 ▾</div>
+  <div class="domain-pages" id="产品">
+    <a href="产品_(其他).json" style="border-left:3px solid #a855f7; padding-left:18px;">(其他) <span style="font-size:10px;color:#64748b;">(553篇)</span></a>
+    <a href="产品_产品思维.json" style="border-left:3px solid #a855f7; padding-left:18px;">产品思维 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="产品_小程序生态.json" style="border-left:3px solid #a855f7; padding-left:18px;">小程序生态 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="产品_用户增长.json" style="border-left:3px solid #a855f7; padding-left:18px;">用户增长 <span style="font-size:10px;color:#64748b;">(49篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="会计" style="color:#86efac; border-left:3px solid #86efac;">会计 ▾</div>
+  <div class="domain-pages" id="会计">
+    <a href="会计.json" style="border-left:3px solid #86efac; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(67篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="健康" style="color:#34d399; border-left:3px solid #34d399;">健康 ▾</div>
+  <div class="domain-pages" id="健康">
+    <a href="健康.json" style="border-left:3px solid #34d399; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(284篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="写作" style="color:#c084fc; border-left:3px solid #c084fc;">写作 ▾</div>
+  <div class="domain-pages" id="写作">
+    <a href="写作.json" style="border-left:3px solid #c084fc; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(238篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="历史" style="color:#06b6d4; border-left:3px solid #06b6d4;">历史 ▾</div>
+  <div class="domain-pages" id="历史">
+    <a href="历史_(其他)_part1.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part2.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part3.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part4.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part5.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(541篇)</span></a>
+    <a href="历史_世界史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">世界史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="历史_中国历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国历史 <span style="font-size:10px;color:#64748b;">(96篇)</span></a>
+    <a href="历史_中国古代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国古代文学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="历史_中国现代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国现代文学 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="历史_中国近代史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国近代史 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="历史_人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">人物传记 <span style="font-size:10px;color:#64748b;">(143篇)</span></a>
+    <a href="历史_军事历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">军事历史 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="历史_历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史 <span style="font-size:10px;color:#64748b;">(538篇)</span></a>
+    <a href="历史_历史与政治.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史与政治 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史人物传记 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="历史_历史学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史学 <span style="font-size:10px;color:#64748b;">(189篇)</span></a>
+    <a href="历史_历史小说.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史小说 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史研究.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史研究 <span style="font-size:10px;color:#64748b;">(162篇)</span></a>
+    <a href="历史_思想史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">思想史 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="历史_文学与历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">文学与历史 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="历史_科技史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">科技史 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="历史_艺术史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">艺术史 <span style="font-size:10px;color:#64748b;">(83篇)</span></a>
+    <a href="历史_西方哲学史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">西方哲学史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="哲学" style="color:#14b8a6; border-left:3px solid #14b8a6;">哲学 ▾</div>
+  <div class="domain-pages" id="哲学">
+    <a href="哲学_(其他)_part1.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="哲学_(其他)_part2.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(272篇)</span></a>
+    <a href="哲学_中国哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">中国哲学 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="哲学_人生哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">人生哲学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="哲学_哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">哲学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+    <a href="哲学_政治哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">政治哲学 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="哲学_生活哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">生活哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+    <a href="哲学_社会哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">社会哲学 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="哲学_科学哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">科学哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="商业" style="color:#10b981; border-left:3px solid #10b981;">商业 ▾</div>
+  <div class="domain-pages" id="商业">
+    <a href="商业_(其他)_part1.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（1/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part2.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（2/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part3.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（3/3） <span style="font-size:10px;color:#64748b;">(391篇)</span></a>
+    <a href="商业_企业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">企业管理 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="商业_健康管理.json" style="border-left:3px solid #10b981; padding-left:18px;">健康管理 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="商业_创业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">创业管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业战略.json" style="border-left:3px solid #10b981; padding-left:18px;">商业战略 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">商业管理 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="商业_投资理财.json" style="border-left:3px solid #10b981; padding-left:18px;">投资理财 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_知识管理.json" style="border-left:3px solid #10b981; padding-left:18px;">知识管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_管理.json" style="border-left:3px solid #10b981; padding-left:18px;">管理 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_组织管理.json" style="border-left:3px solid #10b981; padding-left:18px;">组织管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_经济学.json" style="border-left:3px solid #10b981; padding-left:18px;">经济学 <span style="font-size:10px;color:#64748b;">(74篇)</span></a>
+    <a href="商业_金融投资.json" style="border-left:3px solid #10b981; padding-left:18px;">金融投资 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="商业_领导力.json" style="border-left:3px solid #10b981; padding-left:18px;">领导力 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="图书馆学" style="color:#5eead4; border-left:3px solid #5eead4;">图书馆学 ▾</div>
+  <div class="domain-pages" id="图书馆学">
+    <a href="图书馆学.json" style="border-left:3px solid #5eead4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(23篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="宗教" style="color:#c4b5fd; border-left:3px solid #c4b5fd;">宗教 ▾</div>
+  <div class="domain-pages" id="宗教">
+    <a href="宗教.json" style="border-left:3px solid #c4b5fd; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(19篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="心理学" style="color:#f59e0b; border-left:3px solid #f59e0b;">心理学 ▾</div>
+  <div class="domain-pages" id="心理学">
+    <a href="心理学_(其他)_part1.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（1/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part2.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（2/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part3.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（3/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part4.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（4/4） <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="心理学_个人成长与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">个人成长与心理学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理健康.json" class="active" style="border-left:3px solid #f59e0b; padding-left:18px;">心理健康 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理学 <span style="font-size:10px;color:#64748b;">(239篇)</span></a>
+    <a href="心理学_教育心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">教育心理学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="心理学_文学与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">文学与心理学 <span style="font-size:10px;color:#64748b;">(119篇)</span></a>
+    <a href="心理学_沟通技巧.json" style="border-left:3px solid #f59e0b; padding-left:18px;">沟通技巧 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="心理学_社会心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">社会心理学 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+    <a href="心理学_认知心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知心理学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="心理学_认知科学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知科学 <span style="font-size:10px;color:#64748b;">(39篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="房地产" style="color:#6ee7b7; border-left:3px solid #6ee7b7;">房地产 ▾</div>
+  <div class="domain-pages" id="房地产">
+    <a href="房地产.json" style="border-left:3px solid #6ee7b7; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(12篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="政治" style="color:#fbbf24; border-left:3px solid #fbbf24;">政治 ▾</div>
+  <div class="domain-pages" id="政治">
+    <a href="政治.json" style="border-left:3px solid #fbbf24; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(253篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="教育" style="color:#ec4899; border-left:3px solid #ec4899;">教育 ▾</div>
+  <div class="domain-pages" id="教育">
+    <a href="教育_(其他)_part1.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="教育_(其他)_part2.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(382篇)</span></a>
+    <a href="教育_个人成长.json" style="border-left:3px solid #ec4899; padding-left:18px;">个人成长 <span style="font-size:10px;color:#64748b;">(250篇)</span></a>
+    <a href="教育_儿童教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">儿童教育 <span style="font-size:10px;color:#64748b;">(62篇)</span></a>
+    <a href="教育_家庭教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">家庭教育 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="教育_教育理念.json" style="border-left:3px solid #ec4899; padding-left:18px;">教育理念 <span style="font-size:10px;color:#64748b;">(68篇)</span></a>
+    <a href="教育_财商教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">财商教育 <span style="font-size:10px;color:#64748b;">(48篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="文学" style="color:#8b5cf6; border-left:3px solid #8b5cf6;">文学 ▾</div>
+  <div class="domain-pages" id="文学">
+    <a href="文学_(其他)_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_中国古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">中国古典文学 <span style="font-size:10px;color:#64748b;">(112篇)</span></a>
+    <a href="文学_儿童文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">儿童文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">古典文学 <span style="font-size:10px;color:#64748b;">(92篇)</span></a>
+    <a href="文学_奇幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">奇幻文学 <span style="font-size:10px;color:#64748b;">(51篇)</span></a>
+    <a href="文学_女性主义文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">女性主义文学 <span style="font-size:10px;color:#64748b;">(38篇)</span></a>
+    <a href="文学_悬疑小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">悬疑小说分析 <span style="font-size:10px;color:#64748b;">(52篇)</span></a>
+    <a href="文学_推理小说.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="文学_推理小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说分析 <span style="font-size:10px;color:#64748b;">(126篇)</span></a>
+    <a href="文学_推理文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理文学 <span style="font-size:10px;color:#64748b;">(35篇)</span></a>
+    <a href="文学_文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学 <span style="font-size:10px;color:#64748b;">(223篇)</span></a>
+    <a href="文学_文学与个人成长.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与个人成长 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="文学_文学与人生哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与人生哲学 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="文学_文学与哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与哲学 <span style="font-size:10px;color:#64748b;">(303篇)</span></a>
+    <a href="文学_文学与社会学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与社会学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="文学_文学分析_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（1/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（2/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（3/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（4/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（5/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part6.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（6/6） <span style="font-size:10px;color:#64748b;">(254篇)</span></a>
+    <a href="文学_文学批评.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学批评 <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="文学_文学理论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学理论 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_文学研究.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学研究 <span style="font-size:10px;color:#64748b;">(84篇)</span></a>
+    <a href="文学_文学经典.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学经典 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="文学_文学解读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学解读 <span style="font-size:10px;color:#64748b;">(40篇)</span></a>
+    <a href="文学_文学评论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学评论 <span style="font-size:10px;color:#64748b;">(482篇)</span></a>
+    <a href="文学_文学赏析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学赏析 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="文学_文学鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学鉴赏 <span style="font-size:10px;color:#64748b;">(82篇)</span></a>
+    <a href="文学_文学阅读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学阅读 <span style="font-size:10px;color:#64748b;">(78篇)</span></a>
+    <a href="文学_旅行文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">旅行文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_日本文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">日本文学 <span style="font-size:10px;color:#64748b;">(98篇)</span></a>
+    <a href="文学_武侠文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">武侠文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_科幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学 <span style="font-size:10px;color:#64748b;">(175篇)</span></a>
+    <a href="文学_科幻文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学分析 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="文学_网络文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">网络文学分析 <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_艺术鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">艺术鉴赏 <span style="font-size:10px;color:#64748b;">(44篇)</span></a>
+    <a href="文学_非虚构文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">非虚构文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="时尚生活" style="color:#f9a8d4; border-left:3px solid #f9a8d4;">时尚生活 ▾</div>
+  <div class="domain-pages" id="时尚生活">
+    <a href="时尚生活.json" style="border-left:3px solid #f9a8d4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(71篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="未知" style="color:#94a3b8; border-left:3px solid #94a3b8;">未知 ▾</div>
+  <div class="domain-pages" id="未知">
+    <a href="未知.json" style="border-left:3px solid #94a3b8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(16篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="法学" style="color:#fcd34d; border-left:3px solid #fcd34d;">法学 ▾</div>
+  <div class="domain-pages" id="法学">
+    <a href="法学.json" style="border-left:3px solid #fcd34d; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="社会学" style="color:#6366f1; border-left:3px solid #6366f1;">社会学 ▾</div>
+  <div class="domain-pages" id="社会学">
+    <a href="社会学_(其他)_part1.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="社会学_(其他)_part2.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(484篇)</span></a>
+    <a href="社会学_文化研究.json" style="border-left:3px solid #6366f1; padding-left:18px;">文化研究 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="社会学_社会学.json" style="border-left:3px solid #6366f1; padding-left:18px;">社会学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="科学" style="color:#f97316; border-left:3px solid #f97316;">科学 ▾</div>
+  <div class="domain-pages" id="科学">
+    <a href="科学_(其他)_part1.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="科学_(其他)_part2.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(116篇)</span></a>
+    <a href="科学_医学人文.json" style="border-left:3px solid #f97316; padding-left:18px;">医学人文 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="科学_神经科学.json" style="border-left:3px solid #f97316; padding-left:18px;">神经科学 <span style="font-size:10px;color:#64748b;">(56篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="编程" style="color:#818cf8; border-left:3px solid #818cf8;">编程 ▾</div>
+  <div class="domain-pages" id="编程">
+    <a href="编程.json" style="border-left:3px solid #818cf8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(151篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="艺术" style="color:#e879f9; border-left:3px solid #e879f9;">艺术 ▾</div>
+  <div class="domain-pages" id="艺术">
+    <a href="艺术.json" style="border-left:3px solid #e879f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(365篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="英语" style="color:#f472b6; border-left:3px solid #f472b6;">英语 ▾</div>
+  <div class="domain-pages" id="英语">
+    <a href="英语.json" style="border-left:3px solid #f472b6; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(209篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="语言文学" style="color:#d8b4fe; border-left:3px solid #d8b4fe;">语言文学 ▾</div>
+  <div class="domain-pages" id="语言文学">
+    <a href="语言文学.json" style="border-left:3px solid #d8b4fe; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="金融" style="color:#a3e635; border-left:3px solid #a3e635;">金融 ▾</div>
+  <div class="domain-pages" id="金融">
+    <a href="金融.json" style="border-left:3px solid #a3e635; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(208篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="雅思" style="color:#22d3ee; border-left:3px solid #22d3ee;">雅思 ▾</div>
+  <div class="domain-pages" id="雅思">
+    <a href="雅思.json" style="border-left:3px solid #22d3ee; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(511篇)</span></a>
+  </div>
+
+    <script>
+    document.querySelectorAll('.domain-header').forEach(function(h){
+      h.addEventListener('click', function(){
+        var t = document.getElementById(this.dataset.target);
+        t.style.display = t.style.display==='none' ? 'block' : 'none';
+        this.innerHTML = this.innerHTML.replace(/[▾▸]/, t.style.display==='none'?'▸':'▾');
+      });
+    });
+    </script>
+    
+</div>
+<button id="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">☰</button>
+
+<div id="header">
+  <h1>📚 心理学 · 心理健康</h1>
+  <div id="search-wrap">
+    <input id="search-box" type="text" placeholder="🔍 搜索书名/概念...">
+    <div id="search-results"></div>
+  </div>
+  <div class="stats">
+    <span id="node-count">0</span> 节点 ·
+    <span id="link-count">0</span> 连接
+  </div>
+  <div class="ctrls">
+    <button class="btn" id="btn-toggle-concept">隐藏概念</button>
+    <button class="btn" id="btn-reset">重置视图</button>
+  </div>
+</div>
+
+<div id="graph"></div>
+<div id="tooltip"></div>
+
+<!-- 右侧详情面板 -->
+<div id="detail-panel">
+  <div id="detail-header">
+    <h2 id="detail-title"></h2>
+    <button id="detail-close" onclick="closeDetail()">✕</button>
+  </div>
+  <div id="detail-body"></div>
+</div>
+
+<script>
+var NODES = [{"id": "心理免疫策略.md", "label": "心理免疫策略", "title": "心理免疫策略", "type": "book", "degree": 6, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "本书的核心医学/健康观点是：现代生活方式（尤其信息过载、社交媒体、新闻轰炸、工作压力等环境因素）是导致焦虑症和抑郁症激增的关键诱因，而“编辑生活”——有意识地减少刺激、简化信息输入、戒除成瘾性行为——是缓解焦虑、恢复心理健康的有效策略。作者马特·海格提出，心理健康与生理健康同等重要，当代社会在物质富足的同时却制造了“过剩问题”（信息过剩、选择过剩、刺激过剩），这种失衡状态需要人们主动建立防御机制。“编辑生活”的本质是一种心理免疫策略：通过移除过载因素（如断网、限制新闻接触、管理电子设备使用），降低大脑的认知负荷，从而使神经系统得以稳定。作者通过个人经历（第11次焦虑发作）和大量新闻标题（如“压", "keywords": ["相关笔记", "注意力编辑", "环境编辑", "感官编辑", "行为编辑", "编辑生"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/焦虑星球笔记_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/心理免疫策略.md"}, {"id": "心身疾病.md", "label": "心身疾病", "title": "心身疾病", "type": "book", "degree": 6, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "《人类的天敌》虽以小说形式呈现酒店后勤工作与家庭生活，但其核心健康理念聚焦于现代社会中个体心理健康与社会环境之间的深刻矛盾。作者森村诚一通过主人公椎津一训的遭遇，揭示了长期从事高强度、高屈辱性服务行业工作对个体心理韧性的侵蚀，以及家庭关系疏离对成员心理健康的毁灭性影响。本书提出的核心医学观点是：长期处于“情感劳动”与“社会性屈辱”双重压力下，个体可能逐渐丧失健康的情绪调节能力、自我价值感及家庭向心力，进而引发一系列心身疾病（如慢性疲劳、情绪钝化、家庭功能障碍等）。情感劳动与心理耗竭：椎津作为酒店后勤课长，十五年如一日地处理投诉、向客人低头道歉。这种“情感劳动”（要求员工压抑真实情绪、持续展现积", "keywords": ["相关笔记", "情感劳动与心理耗竭", "证据等级与适用人群", "与心身医学的对话", "局限性分析", "类的天"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/人类的天敌_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/心身疾病.md"}, {"id": "职业倦怠.md", "label": "职业倦怠", "title": "职业倦怠", "type": "book", "degree": 6, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "《人类的天敌》虽以小说形式呈现酒店后勤工作与家庭生活，但其核心健康理念聚焦于现代社会中个体心理健康与社会环境之间的深刻矛盾。作者森村诚一通过主人公椎津一训的遭遇，揭示了长期从事高强度、高屈辱性服务行业工作对个体心理韧性的侵蚀，以及家庭关系疏离对成员心理健康的毁灭性影响。本书提出的核心医学观点是：长期处于“情感劳动”与“社会性屈辱”双重压力下，个体可能逐渐丧失健康的情绪调节能力、自我价值感及家庭向心力，进而引发一系列心身疾病（如慢性疲劳、情绪钝化、家庭功能障碍等）。情感劳动与心理耗竭：椎津作为酒店后勤课长，十五年如一日地处理投诉、向客人低头道歉。这种“情感劳动”（要求员工压抑真实情绪、持续展现积", "keywords": ["情感劳动与心理耗竭", "证据等级与适用人群", "与心身医学的对话", "局限性分析", "职业倦怠", "类的天"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/人类的天敌_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/职业倦怠.md"}, {"id": "焦虑症.md", "label": "焦虑症", "title": "焦虑症", "type": "book", "degree": 5, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "核心概念：焦虑症 vs. 焦虑症状。焦虑是现代人的通病，但“焦虑”和“焦虑症”是两码事。焦虑症状就像偶尔的感冒，人人都会有；而焦虑症则是一种严重的“心理疾病”。建立“应对陈述”清单： 把“灾难性解释”写下来，然后在旁边写上正确的“应对陈述”。灾难性解释： “我心跳好快，我要心脏病发了", "keywords": ["焦虑症", "认知行为疗法", "灾难性", "难性解", "性解释"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/2017-05-06 心理医生为什么没有告诉我"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/焦虑症.md"}, {"id": "抑郁症.md", "label": "抑郁症", "title": "抑郁症", "type": "book", "degree": 7, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "本书以个人亲身经历为核心，提出抑郁症并非单纯的“心情不好”或性格缺陷，而是一种涉及情绪麻木、认知扭曲、躯体症状及进食障碍的复杂身心疾病。作者彭瑶的核心医学观点在于：抑郁症的康复并非依赖单一药物或某种特效疗法，而是一个需要长期坚持、家庭支持、自我觉察与多元干预综合作用的过程。她强调，抑郁症患者内心的“求救信号”常被误解为“矫情”或“想太多”，真正的治疗不在于消除痛苦，而在于重建对生活的情感连接——通过绘画、音乐、回忆童年等感性渠道重新找回“人味儿”。作者详细描述了其症状演变过程：初期表现为情绪麻木（“无论多绚丽的景色在我眼里都是黑白的”）、兴趣丧失、社会回避（害怕见人、贴墙根走路），随后出现典型", "keywords": ["相关笔记", "抑郁症患者本身", "躯体化症状", "个人回忆录", "暴食行为", "患者家属", "情绪麻"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/其实没那么糟：那些和抑郁相处的日子_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/抑郁症.md"}, {"id": "情绪调节.md", "label": "情绪调节", "title": "情绪调节", "type": "book", "degree": 4, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "本书的核心医学/健康理念认为：焦虑并非一种无法治愈的疾病或个体缺陷，而是长期压力管理不当、思维模式偏差及情绪调节能力不足所导致的心理习惯问题。作者贝芙·艾斯贝特基于25年的临床实践与个人康复经验，提出“焦虑与自我是一体的”这一关键观点——焦虑并非需要被彻底消除的异己之物，而是内在失衡的信号系统，其存在本身具有信息价值。全书以30天结构化练习为载体，倡导通过“接纳而非抵抗”“拆解而非对抗”“认知重构而非沉溺”的渐进式心理训练，帮助个体重新掌控情绪主导权。本书的论证体系建立在认知行为疗法（CBT）与正念接受模型的基础上，通过每日一主题的渐进式训练展开。第三天进一步阐释“抵抗”如何剥夺能量：以“讨厌", "keywords": ["证据等级与科学依据", "适用人群与禁忌", "情绪调节", "焦虑并"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/焦虑急救_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/情绪调节.md"}, {"id": "感知异常.md", "label": "感知异常", "title": "感知异常", "type": "book", "degree": 2, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "本书《守门员面对罚点球时的焦虑》虽为奥地利作家彼得·汉德克的文学作品，但其中深刻描绘的主人公布洛赫的心理状态——一种弥漫性、无根由的焦虑感、感知扭曲与行为失控——恰恰构成了一个绝佳的“心理健康案例分析”。从医学/健康视角提炼，本书的核心论点可概括为：焦虑并非单纯的情绪波动，而是一种渗透整个感知系统的存在性危机，它导致个体与自我、他人及现实世界之间的联结断裂，进而引发不可预测的暴力行为。书中以布洛赫为主角，展现了一个前足球守门员在面临工作、人际关系与自我认同的模糊压力时，逐步陷入感知异常与行为解体的过程。布洛赫的注意力无法自然流动，而是被突发刺激劫持，导致其行为失去连贯性——这正是焦虑对执行功能", "keywords": ["布洛赫", "焦虑障碍"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/守门员面对罚点球时的焦虑_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/感知异常.md"}, {"id": "焦虑障碍.md", "label": "焦虑障碍", "title": "焦虑障碍", "type": "book", "degree": 2, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "本书《守门员面对罚点球时的焦虑》虽为奥地利作家彼得·汉德克的文学作品，但其中深刻描绘的主人公布洛赫的心理状态——一种弥漫性、无根由的焦虑感、感知扭曲与行为失控——恰恰构成了一个绝佳的“心理健康案例分析”。从医学/健康视角提炼，本书的核心论点可概括为：焦虑并非单纯的情绪波动，而是一种渗透整个感知系统的存在性危机，它导致个体与自我、他人及现实世界之间的联结断裂，进而引发不可预测的暴力行为。书中以布洛赫为主角，展现了一个前足球守门员在面临工作、人际关系与自我认同的模糊压力时，逐步陷入感知异常与行为解体的过程。布洛赫的注意力无法自然流动，而是被突发刺激劫持，导致其行为失去连贯性——这正是焦虑对执行功能", "keywords": ["布洛赫", "焦虑障碍"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/守门员面对罚点球时的焦虑_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/焦虑障碍.md"}, {"id": "正念接纳.md", "label": "正念接纳", "title": "正念接纳", "type": "book", "degree": 4, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "本书的核心医学/健康理念认为：焦虑并非一种无法治愈的疾病或个体缺陷，而是长期压力管理不当、思维模式偏差及情绪调节能力不足所导致的心理习惯问题。作者贝芙·艾斯贝特基于25年的临床实践与个人康复经验，提出“焦虑与自我是一体的”这一关键观点——焦虑并非需要被彻底消除的异己之物，而是内在失衡的信号系统，其存在本身具有信息价值。全书以30天结构化练习为载体，倡导通过“接纳而非抵抗”“拆解而非对抗”“认知重构而非沉溺”的渐进式心理训练，帮助个体重新掌控情绪主导权。本书的论证体系建立在认知行为疗法（CBT）与正念接受模型的基础上，通过每日一主题的渐进式训练展开。第三天进一步阐释“抵抗”如何剥夺能量：以“讨厌", "keywords": ["证据等级与科学依据", "适用人群与禁忌", "焦虑并非", "正念接"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/焦虑急救_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/正念接纳.md"}, {"id": "编辑生活.md", "label": "编辑生活", "title": "编辑生活", "type": "book", "degree": 6, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "本书的核心医学/健康观点是：现代生活方式（尤其信息过载、社交媒体、新闻轰炸、工作压力等环境因素）是导致焦虑症和抑郁症激增的关键诱因，而“编辑生活”——有意识地减少刺激、简化信息输入、戒除成瘾性行为——是缓解焦虑、恢复心理健康的有效策略。作者马特·海格提出，心理健康与生理健康同等重要，当代社会在物质富足的同时却制造了“过剩问题”（信息过剩、选择过剩、刺激过剩），这种失衡状态需要人们主动建立防御机制。“编辑生活”的本质是一种心理免疫策略：通过移除过载因素（如断网、限制新闻接触、管理电子设备使用），降低大脑的认知负荷，从而使神经系统得以稳定。作者通过个人经历（第11次焦虑发作）和大量新闻标题（如“压", "keywords": ["注意力编辑", "环境编辑", "感官编辑", "行为编辑", "编辑生活", "社交媒"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/焦虑星球笔记_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/编辑生活.md"}, {"id": "现代生活方式.md", "label": "现代生活方式", "title": "现代生活方式", "type": "book", "degree": 6, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "本书的核心医学/健康观点是：现代生活方式（尤其信息过载、社交媒体、新闻轰炸、工作压力等环境因素）是导致焦虑症和抑郁症激增的关键诱因，而“编辑生活”——有意识地减少刺激、简化信息输入、戒除成瘾性行为——是缓解焦虑、恢复心理健康的有效策略。作者马特·海格提出，心理健康与生理健康同等重要，当代社会在物质富足的同时却制造了“过剩问题”（信息过剩、选择过剩、刺激过剩），这种失衡状态需要人们主动建立防御机制。“编辑生活”的本质是一种心理免疫策略：通过移除过载因素（如断网、限制新闻接触、管理电子设备使用），降低大脑的认知负荷，从而使神经系统得以稳定。作者通过个人经历（第11次焦虑发作）和大量新闻标题（如“压", "keywords": ["注意力编辑", "环境编辑", "感官编辑", "行为编辑", "编辑生活", "社交媒"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/焦虑星球笔记_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/现代生活方式.md"}, {"id": "身心解离.md", "label": "身心解离", "title": "身心解离", "type": "book", "degree": 2, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "本书《守门员面对罚点球时的焦虑》虽为奥地利作家彼得·汉德克的文学作品，但其中深刻描绘的主人公布洛赫的心理状态——一种弥漫性、无根由的焦虑感、感知扭曲与行为失控——恰恰构成了一个绝佳的“心理健康案例分析”。从医学/健康视角提炼，本书的核心论点可概括为：焦虑并非单纯的情绪波动，而是一种渗透整个感知系统的存在性危机，它导致个体与自我、他人及现实世界之间的联结断裂，进而引发不可预测的暴力行为。书中以布洛赫为主角，展现了一个前足球守门员在面临工作、人际关系与自我认同的模糊压力时，逐步陷入感知异常与行为解体的过程。布洛赫的注意力无法自然流动，而是被突发刺激劫持，导致其行为失去连贯性——这正是焦虑对执行功能", "keywords": ["布洛赫", "焦虑障碍"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/守门员面对罚点球时的焦虑_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/身心解离.md"}, {"id": "认知行为疗法.md", "label": "认知行为疗法", "title": "认知行为疗法", "type": "book", "degree": 5, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "核心概念：焦虑症 vs. 焦虑症状。焦虑是现代人的通病，但“焦虑”和“焦虑症”是两码事。焦虑症状就像偶尔的感冒，人人都会有；而焦虑症则是一种严重的“心理疾病”。与“认知行为疗法（CBT）”的联系：。这本书的核心方法论，其实就是认知行为疗法的通俗版应用", "keywords": ["焦虑症", "认知行为疗法", "灾难性", "难性解", "性解释"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/2017-05-06 心理医生为什么没有告诉我"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/认知行为疗法.md"}, {"id": "认知重构.md", "label": "认知重构", "title": "认知重构", "type": "book", "degree": 2, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "作者：【美】凯特·凯莉, 【美】 佩吉·拉姆多。核心主题：本书旨在帮助成年ADD患者重新认识自己的大脑风格，摆脱“懒惰、愚蠢、疯狂”的负面标签，通过接纳自我、运用具体策略和工具，将ADD从障碍转化为独特优势，实现和谐生活。适合人群：被确诊或怀疑患有ADD的成年人；ADD患者的家人、朋友或伴侣；教育工作者、心理咨询师及教练；任何希望理解注意力分散、冲动和多动等行为背后神经生物学原因的人。作者提出确诊后自我接纳的三个核心任务：第一，重新审视过往经历，将负面事件从“个人失败”的框架中剥离，放入ADD的神经生物学视角；第二，原谅自己因不了解ADD而积累的自我责备和羞愧；第三，带着新获得的知识、工具和策", "keywords": ["大脑风格", "作者提"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/我是ADD，怎么了？！"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/认知重构.md"}, {"id": "4M模型.md", "label": "4M模型", "title": "4M模型", "type": "book", "degree": 2, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "作者：【美】凯特·凯莉, 【美】 佩吉·拉姆多。核心主题：本书旨在帮助成年ADD患者重新认识自己的大脑风格，摆脱“懒惰、愚蠢、疯狂”的负面标签，通过接纳自我、运用具体策略和工具，将ADD从障碍转化为独特优势，实现和谐生活。适合人群：被确诊或怀疑患有ADD的成年人；ADD患者的家人、朋友或伴侣；教育工作者、心理咨询师及教练；任何希望理解注意力分散、冲动和多动等行为背后神经生物学原因的人。作者提出确诊后自我接纳的三个核心任务：第一，重新审视过往经历，将负面事件从“个人失败”的框架中剥离，放入ADD的神经生物学视角；第二，原谅自己因不了解ADD而积累的自我责备和羞愧；第三，带着新获得的知识、工具和策", "keywords": ["大脑风格", "作者提"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/我是ADD，怎么了？！"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/4M模型.md"}, {"id": "七维疗愈法.md", "label": "七维疗愈法", "title": "七维疗愈法", "type": "book", "degree": 5, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "核心概念：焦虑症 vs. 焦虑症状。焦虑是现代人的通病，但“焦虑”和“焦虑症”是两码事。焦虑症状就像偶尔的感冒，人人都会有；而焦虑症则是一种严重的“心理疾病”。建立“应对陈述”清单： 把“灾难性解释”写下来，然后在旁边写上正确的“应对陈述”。灾难性解释： “我心跳好快，我要心脏病发了", "keywords": ["焦虑症", "认知行为疗法", "灾难性", "难性解", "性解释"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/2017-05-06 心理医生为什么没有告诉我"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/七维疗愈法.md"}, {"id": "ADD.md", "label": "ADD", "title": "ADD", "type": "book", "degree": 2, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "作者：【美】凯特·凯莉, 【美】 佩吉·拉姆多。核心主题：本书旨在帮助成年ADD患者重新认识自己的大脑风格，摆脱“懒惰、愚蠢、疯狂”的负面标签，通过接纳自我、运用具体策略和工具，将ADD从障碍转化为独特优势，实现和谐生活。适合人群：被确诊或怀疑患有ADD的成年人；ADD患者的家人、朋友或伴侣；教育工作者、心理咨询师及教练；任何希望理解注意力分散、冲动和多动等行为背后神经生物学原因的人。作者提出确诊后自我接纳的三个核心任务：第一，重新审视过往经历，将负面事件从“个人失败”的框架中剥离，放入ADD的神经生物学视角；第二，原谅自己因不了解ADD而积累的自我责备和羞愧；第三，带着新获得的知识、工具和策", "keywords": ["大脑风格", "作者提"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/我是ADD，怎么了？！"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/ADD.md"}, {"id": "躯体化症状.md", "label": "躯体化症状", "title": "躯体化症状", "type": "book", "degree": 7, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "本书以个人亲身经历为核心，提出抑郁症并非单纯的“心情不好”或性格缺陷，而是一种涉及情绪麻木、认知扭曲、躯体症状及进食障碍的复杂身心疾病。作者彭瑶的核心医学观点在于：抑郁症的康复并非依赖单一药物或某种特效疗法，而是一个需要长期坚持、家庭支持、自我觉察与多元干预综合作用的过程。她强调，抑郁症患者内心的“求救信号”常被误解为“矫情”或“想太多”，真正的治疗不在于消除痛苦，而在于重建对生活的情感连接——通过绘画、音乐、回忆童年等感性渠道重新找回“人味儿”。作者详细描述了其症状演变过程：初期表现为情绪麻木（“无论多绚丽的景色在我眼里都是黑白的”）、兴趣丧失、社会回避（害怕见人、贴墙根走路），随后出现典型", "keywords": ["抑郁症患者本身", "躯体化症状", "个人回忆录", "暴食行为", "患者家属", "情绪麻木", "躯体化症状"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/其实没那么糟：那些和抑郁相处的日子_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/躯体化症状.md"}, {"id": "情感劳动.md", "label": "情感劳动", "title": "情感劳动", "type": "book", "degree": 5, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "《人类的天敌》虽以小说形式呈现酒店后勤工作与家庭生活，但其核心健康理念聚焦于现代社会中个体心理健康与社会环境之间的深刻矛盾。作者森村诚一通过主人公椎津一训的遭遇，揭示了长期从事高强度、高屈辱性服务行业工作对个体心理韧性的侵蚀，以及家庭关系疏离对成员心理健康的毁灭性影响。本书提出的核心医学观点是：长期处于“情感劳动”与“社会性屈辱”双重压力下，个体可能逐渐丧失健康的情绪调节能力、自我价值感及家庭向心力，进而引发一系列心身疾病（如慢性疲劳、情绪钝化、家庭功能障碍等）。情感劳动与心理耗竭：椎津作为酒店后勤课长，十五年如一日地处理投诉、向客人低头道歉。这种“情感劳动”（要求员工压抑真实情绪、持续展现积", "keywords": ["情感劳动与心理耗竭", "证据等级与适用人群", "与心身医学的对话", "局限性分析", "人类的天敌"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/人类的天敌_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/情感劳动.md"}, {"id": "惊恐发作.md", "label": "惊恐发作", "title": "惊恐发作", "type": "book", "degree": 5, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "核心概念：焦虑症 vs. 焦虑症状。焦虑是现代人的通病，但“焦虑”和“焦虑症”是两码事。焦虑症状就像偶尔的感冒，人人都会有；而焦虑症则是一种严重的“心理疾病”。建立“应对陈述”清单： 把“灾难性解释”写下来，然后在旁边写上正确的“应对陈述”。灾难性解释： “我心跳好快，我要心脏病发了", "keywords": ["焦虑症", "认知行为疗法", "灾难性", "难性解", "性解释"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/2017-05-06 心理医生为什么没有告诉我"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/惊恐发作.md"}, {"id": "暴力冲动.md", "label": "暴力冲动", "title": "暴力冲动", "type": "book", "degree": 2, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "本书《守门员面对罚点球时的焦虑》虽为奥地利作家彼得·汉德克的文学作品，但其中深刻描绘的主人公布洛赫的心理状态——一种弥漫性、无根由的焦虑感、感知扭曲与行为失控——恰恰构成了一个绝佳的“心理健康案例分析”。从医学/健康视角提炼，本书的核心论点可概括为：焦虑并非单纯的情绪波动，而是一种渗透整个感知系统的存在性危机，它导致个体与自我、他人及现实世界之间的联结断裂，进而引发不可预测的暴力行为。书中以布洛赫为主角，展现了一个前足球守门员在面临工作、人际关系与自我认同的模糊压力时，逐步陷入感知异常与行为解体的过程。布洛赫的注意力无法自然流动，而是被突发刺激劫持，导致其行为失去连贯性——这正是焦虑对执行功能", "keywords": ["布洛赫", "焦虑障碍"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/守门员面对罚点球时的焦虑_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/暴力冲动.md"}, {"id": "信息过载.md", "label": "信息过载", "title": "信息过载", "type": "book", "degree": 6, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "本书的核心医学/健康观点是：现代生活方式（尤其信息过载、社交媒体、新闻轰炸、工作压力等环境因素）是导致焦虑症和抑郁症激增的关键诱因，而“编辑生活”——有意识地减少刺激、简化信息输入、戒除成瘾性行为——是缓解焦虑、恢复心理健康的有效策略。作者马特·海格提出，心理健康与生理健康同等重要，当代社会在物质富足的同时却制造了“过剩问题”（信息过剩、选择过剩、刺激过剩），这种失衡状态需要人们主动建立防御机制。“编辑生活”的本质是一种心理免疫策略：通过移除过载因素（如断网、限制新闻接触、管理电子设备使用），降低大脑的认知负荷，从而使神经系统得以稳定。作者通过个人经历（第11次焦虑发作）和大量新闻标题（如“压", "keywords": ["注意力编辑", "环境编辑", "感官编辑", "行为编辑", "编辑生活", "息过载"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/焦虑星球笔记_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/信息过载.md"}, {"id": "自我接纳.md", "label": "自我接纳", "title": "自我接纳", "type": "book", "degree": 2, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "作者：【美】凯特·凯莉, 【美】 佩吉·拉姆多。核心主题：本书旨在帮助成年ADD患者重新认识自己的大脑风格，摆脱“懒惰、愚蠢、疯狂”的负面标签，通过接纳自我、运用具体策略和工具，将ADD从障碍转化为独特优势，实现和谐生活。适合人群：被确诊或怀疑患有ADD的成年人；ADD患者的家人、朋友或伴侣；教育工作者、心理咨询师及教练；任何希望理解注意力分散、冲动和多动等行为背后神经生物学原因的人。作者提出确诊后自我接纳的三个核心任务：第一，重新审视过往经历，将负面事件从“个人失败”的框架中剥离，放入ADD的神经生物学视角；第二，原谅自己因不了解ADD而积累的自我责备和羞愧；第三，带着新获得的知识、工具和策", "keywords": ["大脑风格", "自我接"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/我是ADD，怎么了？！"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/自我接纳.md"}, {"id": "社会性屈辱.md", "label": "社会性屈辱", "title": "社会性屈辱", "type": "book", "degree": 5, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "《人类的天敌》虽以小说形式呈现酒店后勤工作与家庭生活，但其核心健康理念聚焦于现代社会中个体心理健康与社会环境之间的深刻矛盾。作者森村诚一通过主人公椎津一训的遭遇，揭示了长期从事高强度、高屈辱性服务行业工作对个体心理韧性的侵蚀，以及家庭关系疏离对成员心理健康的毁灭性影响。本书提出的核心医学观点是：长期处于“情感劳动”与“社会性屈辱”双重压力下，个体可能逐渐丧失健康的情绪调节能力、自我价值感及家庭向心力，进而引发一系列心身疾病（如慢性疲劳、情绪钝化、家庭功能障碍等）。情感劳动与心理耗竭：椎津作为酒店后勤课长，十五年如一日地处理投诉、向客人低头道歉。这种“情感劳动”（要求员工压抑真实情绪、持续展现积", "keywords": ["情感劳动与心理耗竭", "证据等级与适用人群", "与心身医学的对话", "局限性分析", "人类的天敌"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/人类的天敌_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/社会性屈辱.md"}, {"id": "暴露疗法.md", "label": "暴露疗法", "title": "暴露疗法", "type": "book", "degree": 5, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "核心概念：焦虑症 vs. 焦虑症状。焦虑是现代人的通病，但“焦虑”和“焦虑症”是两码事。焦虑症状就像偶尔的感冒，人人都会有；而焦虑症则是一种严重的“心理疾病”。建立“应对陈述”清单： 把“灾难性解释”写下来，然后在旁边写上正确的“应对陈述”。灾难性解释： “我心跳好快，我要心脏病发了", "keywords": ["焦虑症", "认知行为疗法", "灾难性", "难性解", "性解释"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/2017-05-06 心理医生为什么没有告诉我"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/暴露疗法.md"}, {"id": "社会支持系统.md", "label": "社会支持系统", "title": "社会支持系统", "type": "book", "degree": 7, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "本书以个人亲身经历为核心，提出抑郁症并非单纯的“心情不好”或性格缺陷，而是一种涉及情绪麻木、认知扭曲、躯体症状及进食障碍的复杂身心疾病。作者彭瑶的核心医学观点在于：抑郁症的康复并非依赖单一药物或某种特效疗法，而是一个需要长期坚持、家庭支持、自我觉察与多元干预综合作用的过程。她强调，抑郁症患者内心的“求救信号”常被误解为“矫情”或“想太多”，真正的治疗不在于消除痛苦，而在于重建对生活的情感连接——通过绘画、音乐、回忆童年等感性渠道重新找回“人味儿”。作者详细描述了其症状演变过程：初期表现为情绪麻木（“无论多绚丽的景色在我眼里都是黑白的”）、兴趣丧失、社会回避（害怕见人、贴墙根走路），随后出现典型", "keywords": ["抑郁症患者本身", "躯体化症状", "个人回忆录", "暴食行为", "患者家属", "情绪麻木", "而是一"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/其实没那么糟：那些和抑郁相处的日子_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/社会支持系统.md"}, {"id": "神经多样性.md", "label": "神经多样性", "title": "神经多样性", "type": "book", "degree": 2, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "作者：【美】凯特·凯莉, 【美】 佩吉·拉姆多。核心主题：本书旨在帮助成年ADD患者重新认识自己的大脑风格，摆脱“懒惰、愚蠢、疯狂”的负面标签，通过接纳自我、运用具体策略和工具，将ADD从障碍转化为独特优势，实现和谐生活。适合人群：被确诊或怀疑患有ADD的成年人；ADD患者的家人、朋友或伴侣；教育工作者、心理咨询师及教练；任何希望理解注意力分散、冲动和多动等行为背后神经生物学原因的人。洞察1：从“缺陷”到“大脑风格”的范式转变——与神经多样性的对话。本书的核心观点与神经多样性（Neurodiversity）运动高度契合", "keywords": ["大脑风格", "神经多"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/我是ADD，怎么了？！"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/神经多样性.md"}, {"id": "家庭系统失衡.md", "label": "家庭系统失衡", "title": "家庭系统失衡", "type": "book", "degree": 6, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "《人类的天敌》虽以小说形式呈现酒店后勤工作与家庭生活，但其核心健康理念聚焦于现代社会中个体心理健康与社会环境之间的深刻矛盾。作者森村诚一通过主人公椎津一训的遭遇，揭示了长期从事高强度、高屈辱性服务行业工作对个体心理韧性的侵蚀，以及家庭关系疏离对成员心理健康的毁灭性影响。本书提出的核心医学观点是：长期处于“情感劳动”与“社会性屈辱”双重压力下，个体可能逐渐丧失健康的情绪调节能力、自我价值感及家庭向心力，进而引发一系列心身疾病（如慢性疲劳、情绪钝化、家庭功能障碍等）。情感劳动与心理耗竭：椎津作为酒店后勤课长，十五年如一日地处理投诉、向客人低头道歉。这种“情感劳动”（要求员工压抑真实情绪、持续展现积", "keywords": ["情感劳动与心理耗竭", "证据等级与适用人群", "与心身医学的对话", "局限性分析", "家庭系统", "类的天"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/人类的天敌_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/家庭系统失衡.md"}, {"id": "焦虑管理.md", "label": "焦虑管理", "title": "焦虑管理", "type": "book", "degree": 4, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "本书的核心医学/健康理念认为：焦虑并非一种无法治愈的疾病或个体缺陷，而是长期压力管理不当、思维模式偏差及情绪调节能力不足所导致的心理习惯问题。作者贝芙·艾斯贝特基于25年的临床实践与个人康复经验，提出“焦虑与自我是一体的”这一关键观点——焦虑并非需要被彻底消除的异己之物，而是内在失衡的信号系统，其存在本身具有信息价值。全书以30天结构化练习为载体，倡导通过“接纳而非抵抗”“拆解而非对抗”“认知重构而非沉溺”的渐进式心理训练，帮助个体重新掌控情绪主导权。本书的论证体系建立在认知行为疗法（CBT）与正念接受模型的基础上，通过每日一主题的渐进式训练展开。第三天进一步阐释“抵抗”如何剥夺能量：以“讨厌", "keywords": ["证据等级与科学依据", "适用人群与禁忌", "焦虑并非", "力管理"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/焦虑急救_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/焦虑管理.md"}, {"id": "艺术治疗.md", "label": "艺术治疗", "title": "艺术治疗", "type": "book", "degree": 7, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "本书以个人亲身经历为核心，提出抑郁症并非单纯的“心情不好”或性格缺陷，而是一种涉及情绪麻木、认知扭曲、躯体症状及进食障碍的复杂身心疾病。作者彭瑶的核心医学观点在于：抑郁症的康复并非依赖单一药物或某种特效疗法，而是一个需要长期坚持、家庭支持、自我觉察与多元干预综合作用的过程。她强调，抑郁症患者内心的“求救信号”常被误解为“矫情”或“想太多”，真正的治疗不在于消除痛苦，而在于重建对生活的情感连接——通过绘画、音乐、回忆童年等感性渠道重新找回“人味儿”。作者详细描述了其症状演变过程：初期表现为情绪麻木（“无论多绚丽的景色在我眼里都是黑白的”）、兴趣丧失、社会回避（害怕见人、贴墙根走路），随后出现典型", "keywords": ["抑郁症患者本身", "躯体化症状", "个人回忆录", "暴食行为", "患者家属", "情绪麻木", "而是一"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/其实没那么糟：那些和抑郁相处的日子_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/艺术治疗.md"}, {"id": "认知回避.md", "label": "认知回避", "title": "认知回避", "type": "book", "degree": 2, "cluster": "心理健康", "domain": "心理学", "sub_domain": "心理健康", "summary": "本书《守门员面对罚点球时的焦虑》虽为奥地利作家彼得·汉德克的文学作品，但其中深刻描绘的主人公布洛赫的心理状态——一种弥漫性、无根由的焦虑感、感知扭曲与行为失控——恰恰构成了一个绝佳的“心理健康案例分析”。从医学/健康视角提炼，本书的核心论点可概括为：焦虑并非单纯的情绪波动，而是一种渗透整个感知系统的存在性危机，它导致个体与自我、他人及现实世界之间的联结断裂，进而引发不可预测的暴力行为。书中以布洛赫为主角，展现了一个前足球守门员在面临工作、人际关系与自我认同的模糊压力时，逐步陷入感知异常与行为解体的过程。布洛赫的注意力无法自然流动，而是被突发刺激劫持，导致其行为失去连贯性——这正是焦虑对执行功能", "keywords": ["布洛赫", "焦虑障碍"], "tags": ["domain/心理学", "sub_domain/心理健康", "type/concept", "source/守门员面对罚点球时的焦虑_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/心理健康/认知回避.md"}];
+var LINKS = [{"source": "心理免疫策略.md", "target": "编辑生活.md", "value": 4, "shared": ["感官编辑", "行为编辑", "注意力编辑", "环境编辑"]}, {"source": "心理免疫策略.md", "target": "现代生活方式.md", "value": 4, "shared": ["感官编辑", "行为编辑", "注意力编辑", "环境编辑"]}, {"source": "心理免疫策略.md", "target": "信息过载.md", "value": 4, "shared": ["感官编辑", "行为编辑", "注意力编辑", "环境编辑"]}, {"source": "心身疾病.md", "target": "职业倦怠.md", "value": 5, "shared": ["情感劳动与心理耗竭", "局限性分析", "证据等级与适用人群", "类的天", "与心身医学的对话"]}, {"source": "心身疾病.md", "target": "情感劳动.md", "value": 4, "shared": ["证据等级与适用人群", "局限性分析", "情感劳动与心理耗竭", "与心身医学的对话"]}, {"source": "心身疾病.md", "target": "社会性屈辱.md", "value": 4, "shared": ["证据等级与适用人群", "局限性分析", "情感劳动与心理耗竭", "与心身医学的对话"]}, {"source": "心身疾病.md", "target": "家庭系统失衡.md", "value": 5, "shared": ["情感劳动与心理耗竭", "局限性分析", "证据等级与适用人群", "类的天", "与心身医学的对话"]}, {"source": "职业倦怠.md", "target": "情感劳动.md", "value": 4, "shared": ["证据等级与适用人群", "局限性分析", "情感劳动与心理耗竭", "与心身医学的对话"]}, {"source": "职业倦怠.md", "target": "社会性屈辱.md", "value": 4, "shared": ["证据等级与适用人群", "局限性分析", "情感劳动与心理耗竭", "与心身医学的对话"]}, {"source": "职业倦怠.md", "target": "家庭系统失衡.md", "value": 5, "shared": ["情感劳动与心理耗竭", "局限性分析", "证据等级与适用人群", "类的天", "与心身医学的对话"]}, {"source": "焦虑症.md", "target": "认知行为疗法.md", "value": 5, "shared": ["性解释", "焦虑症", "灾难性", "难性解", "认知行为疗法"]}, {"source": "焦虑症.md", "target": "七维疗愈法.md", "value": 5, "shared": ["性解释", "焦虑症", "灾难性", "难性解", "认知行为疗法"]}, {"source": "焦虑症.md", "target": "惊恐发作.md", "value": 5, "shared": ["性解释", "焦虑症", "灾难性", "难性解", "认知行为疗法"]}, {"source": "焦虑症.md", "target": "暴露疗法.md", "value": 5, "shared": ["性解释", "焦虑症", "灾难性", "难性解", "认知行为疗法"]}, {"source": "抑郁症.md", "target": "躯体化症状.md", "value": 5, "shared": ["抑郁症患者本身", "个人回忆录", "患者家属", "暴食行为", "躯体化症状"]}, {"source": "抑郁症.md", "target": "社会支持系统.md", "value": 5, "shared": ["抑郁症患者本身", "个人回忆录", "患者家属", "暴食行为", "躯体化症状"]}, {"source": "抑郁症.md", "target": "艺术治疗.md", "value": 5, "shared": ["抑郁症患者本身", "个人回忆录", "患者家属", "暴食行为", "躯体化症状"]}, {"source": "情绪调节.md", "target": "正念接纳.md", "value": 2, "shared": ["适用人群与禁忌", "证据等级与科学依据"]}, {"source": "情绪调节.md", "target": "焦虑管理.md", "value": 2, "shared": ["适用人群与禁忌", "证据等级与科学依据"]}, {"source": "感知异常.md", "target": "焦虑障碍.md", "value": 2, "shared": ["焦虑障碍", "布洛赫"]}, {"source": "感知异常.md", "target": "身心解离.md", "value": 2, "shared": ["焦虑障碍", "布洛赫"]}, {"source": "感知异常.md", "target": "暴力冲动.md", "value": 2, "shared": ["焦虑障碍", "布洛赫"]}, {"source": "感知异常.md", "target": "认知回避.md", "value": 2, "shared": ["焦虑障碍", "布洛赫"]}, {"source": "焦虑障碍.md", "target": "身心解离.md", "value": 2, "shared": ["焦虑障碍", "布洛赫"]}, {"source": "焦虑障碍.md", "target": "暴力冲动.md", "value": 2, "shared": ["焦虑障碍", "布洛赫"]}, {"source": "焦虑障碍.md", "target": "认知回避.md", "value": 2, "shared": ["焦虑障碍", "布洛赫"]}, {"source": "正念接纳.md", "target": "焦虑管理.md", "value": 3, "shared": ["焦虑并非", "适用人群与禁忌", "证据等级与科学依据"]}, {"source": "编辑生活.md", "target": "现代生活方式.md", "value": 6, "shared": ["行为编辑", "编辑生活", "社交媒", "注意力编辑", "感官编辑"]}, {"source": "编辑生活.md", "target": "信息过载.md", "value": 5, "shared": ["行为编辑", "编辑生活", "注意力编辑", "感官编辑", "环境编辑"]}, {"source": "现代生活方式.md", "target": "信息过载.md", "value": 5, "shared": ["行为编辑", "编辑生活", "注意力编辑", "感官编辑", "环境编辑"]}, {"source": "身心解离.md", "target": "暴力冲动.md", "value": 2, "shared": ["焦虑障碍", "布洛赫"]}, {"source": "身心解离.md", "target": "认知回避.md", "value": 2, "shared": ["焦虑障碍", "布洛赫"]}, {"source": "认知行为疗法.md", "target": "七维疗愈法.md", "value": 5, "shared": ["性解释", "焦虑症", "灾难性", "难性解", "认知行为疗法"]}, {"source": "认知行为疗法.md", "target": "惊恐发作.md", "value": 5, "shared": ["性解释", "焦虑症", "灾难性", "难性解", "认知行为疗法"]}, {"source": "认知行为疗法.md", "target": "暴露疗法.md", "value": 5, "shared": ["性解释", "焦虑症", "灾难性", "难性解", "认知行为疗法"]}, {"source": "认知重构.md", "target": "4M模型.md", "value": 2, "shared": ["大脑风格", "作者提"]}, {"source": "认知重构.md", "target": "ADD.md", "value": 2, "shared": ["大脑风格", "作者提"]}, {"source": "4M模型.md", "target": "ADD.md", "value": 2, "shared": ["大脑风格", "作者提"]}, {"source": "七维疗愈法.md", "target": "惊恐发作.md", "value": 5, "shared": ["性解释", "焦虑症", "灾难性", "难性解", "认知行为疗法"]}, {"source": "七维疗愈法.md", "target": "暴露疗法.md", "value": 5, "shared": ["性解释", "焦虑症", "灾难性", "难性解", "认知行为疗法"]}, {"source": "躯体化症状.md", "target": "社会支持系统.md", "value": 6, "shared": ["抑郁症患者本身", "个人回忆录", "患者家属", "暴食行为", "情绪麻木"]}, {"source": "躯体化症状.md", "target": "艺术治疗.md", "value": 6, "shared": ["抑郁症患者本身", "个人回忆录", "患者家属", "暴食行为", "情绪麻木"]}, {"source": "情感劳动.md", "target": "社会性屈辱.md", "value": 5, "shared": ["情感劳动与心理耗竭", "人类的天敌", "局限性分析", "证据等级与适用人群", "与心身医学的对话"]}, {"source": "情感劳动.md", "target": "家庭系统失衡.md", "value": 4, "shared": ["证据等级与适用人群", "局限性分析", "情感劳动与心理耗竭", "与心身医学的对话"]}, {"source": "惊恐发作.md", "target": "暴露疗法.md", "value": 5, "shared": ["性解释", "焦虑症", "灾难性", "难性解", "认知行为疗法"]}, {"source": "暴力冲动.md", "target": "认知回避.md", "value": 2, "shared": ["焦虑障碍", "布洛赫"]}, {"source": "社会性屈辱.md", "target": "家庭系统失衡.md", "value": 4, "shared": ["证据等级与适用人群", "局限性分析", "情感劳动与心理耗竭", "与心身医学的对话"]}, {"source": "社会支持系统.md", "target": "艺术治疗.md", "value": 7, "shared": ["抑郁症患者本身", "个人回忆录", "患者家属", "而是一", "暴食行为"]}];
+var CLUSTER_COLORS = {"心理健康": "#f59e0b"};
+var SEARCH_DATA = [{"id": "心理免疫策略.md", "label": "心理免疫策略"}, {"id": "心身疾病.md", "label": "心身疾病"}, {"id": "职业倦怠.md", "label": "职业倦怠"}, {"id": "焦虑症.md", "label": "焦虑症"}, {"id": "抑郁症.md", "label": "抑郁症"}, {"id": "情绪调节.md", "label": "情绪调节"}, {"id": "感知异常.md", "label": "感知异常"}, {"id": "焦虑障碍.md", "label": "焦虑障碍"}, {"id": "正念接纳.md", "label": "正念接纳"}, {"id": "编辑生活.md", "label": "编辑生活"}, {"id": "现代生活方式.md", "label": "现代生活方式"}, {"id": "身心解离.md", "label": "身心解离"}, {"id": "认知行为疗法.md", "label": "认知行为疗法"}, {"id": "认知重构.md", "label": "认知重构"}, {"id": "4M模型.md", "label": "4M模型"}, {"id": "七维疗愈法.md", "label": "七维疗愈法"}, {"id": "ADD.md", "label": "ADD"}, {"id": "躯体化症状.md", "label": "躯体化症状"}, {"id": "情感劳动.md", "label": "情感劳动"}, {"id": "惊恐发作.md", "label": "惊恐发作"}, {"id": "暴力冲动.md", "label": "暴力冲动"}, {"id": "信息过载.md", "label": "信息过载"}, {"id": "自我接纳.md", "label": "自我接纳"}, {"id": "社会性屈辱.md", "label": "社会性屈辱"}, {"id": "暴露疗法.md", "label": "暴露疗法"}, {"id": "社会支持系统.md", "label": "社会支持系统"}, {"id": "神经多样性.md", "label": "神经多样性"}, {"id": "家庭系统失衡.md", "label": "家庭系统失衡"}, {"id": "焦虑管理.md", "label": "焦虑管理"}, {"id": "艺术治疗.md", "label": "艺术治疗"}, {"id": "认知回避.md", "label": "认知回避"}];
+var CONCEPT_SEARCH = [];
+
+
+/* ---- 搜索 ---- */
+var searchBox = document.getElementById("search-box");
+var searchResults = document.getElementById("search-results");
+
+searchBox.addEventListener("input", function(){
+  var q = this.value.trim().toLowerCase();
+  if(!q) { searchResults.style.display="none"; return; }
+  var combined = SEARCH_DATA.concat(CONCEPT_SEARCH.map(function(c){ return {id:c,label:c,type:"concept"}; }));
+  var matches = combined.filter(function(d){ return d.label.toLowerCase().indexOf(q)>-1; }).slice(0,12);
+  if(!matches.length) { searchResults.style.display="none"; return; }
+  searchResults.innerHTML = matches.map(function(d){
+    return '<div class="sri" data-id="'+d.id+'">'+d.label+'</div>';
+  }).join("");
+  searchResults.style.display="block";
+});
+
+searchResults.addEventListener("click", function(e){
+  var el = e.target.closest(".sri");
+  if(!el) return;
+  highlightNode(el.getAttribute("data-id"));
+  searchResults.style.display="none";
+  searchBox.value="";
+});
+
+function highlightNode(id){
+  svg.selectAll(".node").classed("highlight", function(d){ return d.id===id; });
+  svg.selectAll(".link").classed("highlight", function(d){
+    return d.source.id===id || d.target.id===id;
+  });
+  var nd = nodeMap.get(id);
+  if(!nd) return;
+  var t = d3.zoomTransform(svg.node());
+  var x = -nd.x*t.k + width/2;
+  var y = -nd.y*t.k + height/2;
+  svg.transition().duration(600).call(zoom.transform, d3.zoomIdentity.translate(x,y).scale(t.k));
+}
+
+/* ---- 详情面板 ---- */
+function showDetail(d){
+  var panel = document.getElementById("detail-panel");
+  var title = document.getElementById("detail-title");
+  var body  = document.getElementById("detail-body");
+
+  title.textContent = (d.title || d.label || d.id || "").replace(/\.md$/, "");
+
+  var html = "";
+
+  /* 元信息 */
+  html += '<div class="section"><div class="meta-row"><span class="meta-label">类型</span><span>' + (d.type==="concept" ? "💡 概念" : "📖 笔记") + '</span></div>';
+  if(d.domain)   html += '<div class="meta-row"><span class="meta-label">领域</span><span>' + d.domain + '</span></div>';
+  if(d.cluster) html += '<div class="meta-row"><span class="meta-label">聚类</span><span>' + d.cluster + '</span></div>';
+  if(d.degree !== undefined) html += '<div class="meta-row"><span class="meta-label">连通度</span><span>' + d.degree + '</span></div>';
+  html += '</div>';
+
+  /* 摘要 */
+  if(d.summary){
+    html += '<div class="section"><div class="section-title">📝 摘要</div><div class="summary">' + escapeHtml(d.summary.slice(0,500)) + (d.summary.length>500 ? "..." : "") + '</div></div>';
+  }
+
+  /* 关键词 */
+  if(d.keywords && d.keywords.length){
+    html += '<div class="section"><div class="section-title">🔑 关键词</div>';
+    d.keywords.forEach(function(kw){ html += '<span class="keyword">' + escapeHtml(kw) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 标签 */
+  if(d.tags && d.tags.length){
+    html += '<div class="section"><div class="section-title">🏷️ 标签</div>';
+    d.tags.forEach(function(tg){ html += '<span class="tag">' + escapeHtml(tg) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 打开原文件：用 Obsidian URI 协议，避免浏览器 file:// 限制 */
+  if(d.path){
+    var obsidianUrl = "obsidian://open?path=" + encodeURIComponent(d.path);
+    html += '<div class="section"><a class="open-link" href="' + obsidianUrl + '">📂 在 Obsidian 中打开</a></div>';
+  }
+
+  body.innerHTML = html;
+  panel.classList.add("open");
+}
+
+function closeDetail(){
+  document.getElementById("detail-panel").classList.remove("open");
+}
+
+function escapeHtml(s){
+  if(!s) return "";
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ---- D3 力导向图 ---- */
+var width  = window.innerWidth;
+var height = window.innerHeight - 48;
+var svg = d3.select("#graph").append("svg").attr("width",width).attr("height",height);
+var g = svg.append("g");
+var zoom = d3.zoom().scaleExtent([0.05,5]).on("zoom", function(e){ g.attr("transform", e.transform); });
+svg.call(zoom);
+
+var simulation = d3.forceSimulation(NODES)
+  .force("link",    d3.forceLink(LINKS).id(function(d){ return d.id; }).distance(90))
+  .force("charge",  d3.forceManyBody().strength(-220))
+  .force("center",  d3.forceCenter(width/2, height/2))
+  .force("collision", d3.forceCollide(30))
+  .force("x",       d3.forceX(width/2).strength(0.06))
+  .force("y",       d3.forceY(height/2).strength(0.06));
+
+var link = g.append("g").attr("class","links").selectAll("line")
+  .data(LINKS).join("line")
+  .attr("class", function(d){ return "link" + ((d.type==="book-book") ? " link-book" : ""); });
+
+var node = g.append("g").attr("class","nodes").selectAll("g")
+  .data(NODES).join("g")
+  .attr("class","node")
+  .attr("data-id", function(d){ return d.id; })
+  .call(d3.drag()
+    .on("start", function(event,d){ if(!event.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+    .on("drag",  function(event,d){ d.fx=event.x; d.fy=event.y; })
+    .on("end",   function(event,d){ if(!event.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+node.append("circle")
+  .attr("r", function(d){ return d.type==="book" ? 5+Math.sqrt(d.degree||1)*1.5 : 7; })
+  .attr("fill", function(d){ return d.type==="book" ? (CLUSTER_COLORS[d.cluster]||"#94a3b8") : "#f59e0b"; })
+  .attr("stroke", function(d){ return d.type==="book" ? "#0f172a" : "#d97706"; })
+  .on("mouseover", function(event,d){
+    var html = d.type==="book"
+      ? "<strong>📖 "+d.label+"</strong><br>连通度:"+d.degree+"<br>聚类:"+(d.cluster||"未分类")
+      : "<strong>💡 "+d.concept+"</strong><br>关联:"+d.book_count+" 篇";
+    d3.select("#tooltip").html(html).style("opacity",1)
+      .style("left",(event.pageX+12)+"px").style("top",(event.pageY-8)+"px");
+  })
+  .on("mouseout", function(){ d3.select("#tooltip").style("opacity",0); })
+  .on("click", function(event,d){
+    event.stopPropagation();
+    showDetail(d);
+  });
+
+node.append("text").attr("dx",11).attr("dy","0.35em").text(function(d){ return d.label; });
+
+var nodeMap = new Map();
+simulation.on("tick", function(){
+  link
+    .attr("x1", function(d){ return d.source.x; })
+    .attr("y1", function(d){ return d.source.y; })
+    .attr("x2", function(d){ return d.target.x; })
+    .attr("y2", function(d){ return d.target.y; });
+  node.attr("transform", function(d){
+    nodeMap.set(d.id, d);
+    return "translate("+d.x+","+d.y+")";
+  });
+});
+
+/* ---- 图例 ---- */
+var legendItems = d3.select("#legend").append("div").style("font-weight","bold").style("margin-bottom","8px").text("🎨 聚类").node().parentNode;
+Object.entries(CLUSTER_COLORS).forEach(function(entry){
+  var li = d3.select(legendItems).append("div").attr("class","li");
+  li.append("span").attr("class","ld").style("background",entry[1]);
+  li.append("span").text(entry[0]);
+});
+
+/* ---- 按钮 ---- */
+var conceptVisible = true;
+d3.select("#btn-toggle-concept").on("click", function(){
+  conceptVisible = !conceptVisible;
+  svg.selectAll(".node").filter(function(d){ return d.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  svg.selectAll(".link").filter(function(d){ return d.source.type==="concept"||d.target.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  d3.select(this).text(conceptVisible?"隐藏概念":"显示概念").classed("active",!conceptVisible);
+});
+d3.select("#btn-reset").on("click", function(){
+  closeDetail();
+  svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+});
+
+svg.on("click", function(){ searchResults.style.display="none"; });
+document.addEventListener("click", function(e){
+  if(!document.getElementById("detail-panel").contains(e.target) && !e.target.closest(".node")){
+    closeDetail();
+  }
+});
+
+/* 更新统计 */
+d3.select("#node-count").text(NODES.length);
+d3.select("#link-count").text(LINKS.length);
+</script>
+</body>
+</html>

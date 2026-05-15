@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>文学 - 推理小说 - 知识图谱</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#0f172a; color:#e2e8f0; overflow:hidden; }
+
+/* 侧边栏 */
+#sidebar { position:fixed; left:0; top:0; width:220px; height:100vh; background:#1e293b; border-right:1px solid #334155; overflow-y:auto; z-index:50; transition:transform 0.3s; font-size:12px; }
+#sidebar.collapsed { transform:translateX(-220px); }
+#sidebar h2 { font-size:13px; padding:12px 14px 8px; color:#94a3b8; border-bottom:1px solid #334155; }
+#sidebar .domain-header { padding:7px 14px; cursor:pointer; font-weight:600; border-bottom:1px solid #1a2332; transition:background 0.15s; user-select:none; }
+#sidebar .domain-header:hover { background:#334155; }
+#sidebar .domain-pages { display:none; }
+#sidebar .domain-pages a { display:block; padding:5px 14px 5px 24px; color:#cbd5e1; text-decoration:none; border-bottom:1px solid #1a2332; transition:background 0.15s; font-size:11px; }
+#sidebar .domain-pages a:hover { background:#334155; color:#fff; }
+#sidebar .domain-pages a.active { font-weight:600; }
+#sidebar a.active { background:#8b5cf6; color:#0f172a; }
+#sidebar-toggle { position:fixed; left:8px; top:56px; z-index:60; background:#334155; border:1px solid #475569; color:#e2e8f0; border-radius:6px; padding:4px 7px; cursor:pointer; font-size:13px; transition:left 0.3s; }
+#sidebar:not(.collapsed) ~ #sidebar-toggle { left:228px; }
+
+/* 右侧详情面板 */
+#detail-panel { position:fixed; top:0; right:-420px; width:400px; height:100vh; background:#1e293b; border-left:1px solid #334155; z-index:55; transition:right 0.3s; display:flex; flex-direction:column; }
+#detail-panel.open { right:0; }
+#detail-header { padding:14px 16px; border-bottom:1px solid #334155; display:flex; align-items:flex-start; gap:10px; }
+#detail-header h2 { flex:1; font-size:14px; line-height:1.4; margin:0; word-break:break-all; }
+#detail-close { background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer; padding:0 4px; line-height:1; }
+#detail-close:hover { color:#fff; }
+#detail-body { flex:1; overflow-y:auto; padding:16px; font-size:13px; line-height:1.7; }
+#detail-body .section { margin-bottom:16px; }
+#detail-body .section-title { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+#detail-body .tag { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#334155; border-radius:4px; font-size:11px; color:#cbd5e1; }
+#detail-body .keyword { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#8b5cf622; border:1px solid #8b5cf666; border-radius:4px; font-size:11px; color:#e2e8f0; }
+#detail-body .summary { color:#cbd5e1; white-space:pre-wrap; }
+#detail-body .open-link { display:inline-block; margin-top:12px; padding:6px 14px; background:#8b5cf6; color:#0f172a; border-radius:6px; text-decoration:none; font-size:12px; font-weight:600; }
+#detail-body .open-link:hover { opacity:0.85; }
+#detail-body .meta-row { display:flex; gap:12px; margin-bottom:8px; font-size:12px; }
+#detail-body .meta-label { color:#94a3b8; min-width:60px; }
+#detail-body .connected-list { list-style:none; padding:0; }
+#detail-body .connected-list li { padding:4px 0; border-bottom:1px solid #1a2332; font-size:12px; cursor:pointer; }
+#detail-body .connected-list li:hover { color:#8b5cf6; }
+
+#header { padding:10px 20px 10px 50px; background:#1e293b; border-bottom:1px solid #334155; display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-left:200px; transition:margin-left 0.3s; }
+#sidebar.collapsed ~ #header { margin-left:0; }
+#header h1 { margin:0; font-size:17px; color:#8b5cf6; white-space:nowrap; }
+#search-wrap { position:relative; }
+#search-box { width:220px; padding:5px 10px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#e2e8f0; font-size:13px; }
+#search-results { position:absolute; top:32px; left:0; width:260px; max-height:300px; overflow-y:auto; background:#1e293b; border:1px solid #475569; border-radius:6px; display:none; z-index:100; }
+.sri { padding:7px 10px; cursor:pointer; font-size:12px; border-bottom:1px solid #334155; }
+.sri:hover { background:#334155; }
+.stats { font-size:12px; color:#94a3b8; white-space:nowrap; }
+.ctrls { display:flex; gap:6px; margin-left:auto; }
+.btn { padding:5px 12px; border-radius:6px; border:1px solid #475569; background:#334155; color:#e2e8f0; cursor:pointer; font-size:12px; }
+.btn:hover { background:#475569; }
+.btn.active { background:#8b5cf6; color:#0f172a; border-color:#8b5cf6; }
+#legend { position:absolute; top:52px; left:220px; background:#1e293b; border:1px solid #475569; border-radius:8px; padding:10px 14px; font-size:12px; z-index:10; }
+.li { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+.ld { width:10px; height:10px; border-radius:50%; }
+#tooltip { position:absolute; padding:8px 12px; background:#1e293b; border:1px solid #475569; border-radius:8px; font-size:12px; pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:100; box-shadow:0 4px 20px rgba(0,0,0,0.5); max-width:320px; }
+#graph { width:calc(100vw - 200px); height:calc(100vh - 48px); margin-left:200px; transition:width 0.3s, margin-left 0.3s; }
+#sidebar.collapsed ~ #graph { margin-left:0; width:100vw; }
+#detail-panel.open ~ #graph { width:calc(100vw - 200px - 400px); }
+.link { stroke:#475569; stroke-opacity:0.3; }
+.link-book { stroke-opacity:0.12; }
+.node circle { cursor:pointer; stroke-width:1.5; }
+.node text { fill:#e2e8f0; font-size:10px; pointer-events:none; }
+.highlight circle { stroke:#fff !important; stroke-width:2.5px; }
+.highlight text { fill:#fff; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>📚 藏书阁 · 知识图谱</h2>
+  <div class="domain-header" data-target="IT" style="color:#67e8f9; border-left:3px solid #67e8f9;">IT ▾</div>
+  <div class="domain-pages" id="IT">
+    <a href="IT.json" style="border-left:3px solid #67e8f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(225篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="个人成长" style="color:#fb923c; border-left:3px solid #fb923c;">个人成长 ▾</div>
+  <div class="domain-pages" id="个人成长">
+    <a href="个人成长.json" style="border-left:3px solid #fb923c; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(461篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="产品" style="color:#a855f7; border-left:3px solid #a855f7;">产品 ▾</div>
+  <div class="domain-pages" id="产品">
+    <a href="产品_(其他).json" style="border-left:3px solid #a855f7; padding-left:18px;">(其他) <span style="font-size:10px;color:#64748b;">(553篇)</span></a>
+    <a href="产品_产品思维.json" style="border-left:3px solid #a855f7; padding-left:18px;">产品思维 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="产品_小程序生态.json" style="border-left:3px solid #a855f7; padding-left:18px;">小程序生态 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="产品_用户增长.json" style="border-left:3px solid #a855f7; padding-left:18px;">用户增长 <span style="font-size:10px;color:#64748b;">(49篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="会计" style="color:#86efac; border-left:3px solid #86efac;">会计 ▾</div>
+  <div class="domain-pages" id="会计">
+    <a href="会计.json" style="border-left:3px solid #86efac; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(67篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="健康" style="color:#34d399; border-left:3px solid #34d399;">健康 ▾</div>
+  <div class="domain-pages" id="健康">
+    <a href="健康.json" style="border-left:3px solid #34d399; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(284篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="写作" style="color:#c084fc; border-left:3px solid #c084fc;">写作 ▾</div>
+  <div class="domain-pages" id="写作">
+    <a href="写作.json" style="border-left:3px solid #c084fc; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(238篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="历史" style="color:#06b6d4; border-left:3px solid #06b6d4;">历史 ▾</div>
+  <div class="domain-pages" id="历史">
+    <a href="历史_(其他)_part1.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part2.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part3.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part4.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part5.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(541篇)</span></a>
+    <a href="历史_世界史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">世界史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="历史_中国历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国历史 <span style="font-size:10px;color:#64748b;">(96篇)</span></a>
+    <a href="历史_中国古代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国古代文学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="历史_中国现代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国现代文学 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="历史_中国近代史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国近代史 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="历史_人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">人物传记 <span style="font-size:10px;color:#64748b;">(143篇)</span></a>
+    <a href="历史_军事历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">军事历史 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="历史_历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史 <span style="font-size:10px;color:#64748b;">(538篇)</span></a>
+    <a href="历史_历史与政治.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史与政治 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史人物传记 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="历史_历史学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史学 <span style="font-size:10px;color:#64748b;">(189篇)</span></a>
+    <a href="历史_历史小说.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史小说 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史研究.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史研究 <span style="font-size:10px;color:#64748b;">(162篇)</span></a>
+    <a href="历史_思想史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">思想史 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="历史_文学与历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">文学与历史 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="历史_科技史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">科技史 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="历史_艺术史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">艺术史 <span style="font-size:10px;color:#64748b;">(83篇)</span></a>
+    <a href="历史_西方哲学史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">西方哲学史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="哲学" style="color:#14b8a6; border-left:3px solid #14b8a6;">哲学 ▾</div>
+  <div class="domain-pages" id="哲学">
+    <a href="哲学_(其他)_part1.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="哲学_(其他)_part2.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(272篇)</span></a>
+    <a href="哲学_中国哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">中国哲学 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="哲学_人生哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">人生哲学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="哲学_哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">哲学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+    <a href="哲学_政治哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">政治哲学 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="哲学_生活哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">生活哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+    <a href="哲学_社会哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">社会哲学 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="哲学_科学哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">科学哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="商业" style="color:#10b981; border-left:3px solid #10b981;">商业 ▾</div>
+  <div class="domain-pages" id="商业">
+    <a href="商业_(其他)_part1.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（1/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part2.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（2/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part3.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（3/3） <span style="font-size:10px;color:#64748b;">(391篇)</span></a>
+    <a href="商业_企业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">企业管理 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="商业_健康管理.json" style="border-left:3px solid #10b981; padding-left:18px;">健康管理 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="商业_创业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">创业管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业战略.json" style="border-left:3px solid #10b981; padding-left:18px;">商业战略 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">商业管理 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="商业_投资理财.json" style="border-left:3px solid #10b981; padding-left:18px;">投资理财 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_知识管理.json" style="border-left:3px solid #10b981; padding-left:18px;">知识管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_管理.json" style="border-left:3px solid #10b981; padding-left:18px;">管理 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_组织管理.json" style="border-left:3px solid #10b981; padding-left:18px;">组织管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_经济学.json" style="border-left:3px solid #10b981; padding-left:18px;">经济学 <span style="font-size:10px;color:#64748b;">(74篇)</span></a>
+    <a href="商业_金融投资.json" style="border-left:3px solid #10b981; padding-left:18px;">金融投资 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="商业_领导力.json" style="border-left:3px solid #10b981; padding-left:18px;">领导力 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="图书馆学" style="color:#5eead4; border-left:3px solid #5eead4;">图书馆学 ▾</div>
+  <div class="domain-pages" id="图书馆学">
+    <a href="图书馆学.json" style="border-left:3px solid #5eead4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(23篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="宗教" style="color:#c4b5fd; border-left:3px solid #c4b5fd;">宗教 ▾</div>
+  <div class="domain-pages" id="宗教">
+    <a href="宗教.json" style="border-left:3px solid #c4b5fd; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(19篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="心理学" style="color:#f59e0b; border-left:3px solid #f59e0b;">心理学 ▾</div>
+  <div class="domain-pages" id="心理学">
+    <a href="心理学_(其他)_part1.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（1/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part2.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（2/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part3.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（3/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part4.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（4/4） <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="心理学_个人成长与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">个人成长与心理学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理健康.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理健康 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理学 <span style="font-size:10px;color:#64748b;">(239篇)</span></a>
+    <a href="心理学_教育心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">教育心理学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="心理学_文学与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">文学与心理学 <span style="font-size:10px;color:#64748b;">(119篇)</span></a>
+    <a href="心理学_沟通技巧.json" style="border-left:3px solid #f59e0b; padding-left:18px;">沟通技巧 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="心理学_社会心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">社会心理学 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+    <a href="心理学_认知心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知心理学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="心理学_认知科学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知科学 <span style="font-size:10px;color:#64748b;">(39篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="房地产" style="color:#6ee7b7; border-left:3px solid #6ee7b7;">房地产 ▾</div>
+  <div class="domain-pages" id="房地产">
+    <a href="房地产.json" style="border-left:3px solid #6ee7b7; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(12篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="政治" style="color:#fbbf24; border-left:3px solid #fbbf24;">政治 ▾</div>
+  <div class="domain-pages" id="政治">
+    <a href="政治.json" style="border-left:3px solid #fbbf24; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(253篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="教育" style="color:#ec4899; border-left:3px solid #ec4899;">教育 ▾</div>
+  <div class="domain-pages" id="教育">
+    <a href="教育_(其他)_part1.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="教育_(其他)_part2.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(382篇)</span></a>
+    <a href="教育_个人成长.json" style="border-left:3px solid #ec4899; padding-left:18px;">个人成长 <span style="font-size:10px;color:#64748b;">(250篇)</span></a>
+    <a href="教育_儿童教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">儿童教育 <span style="font-size:10px;color:#64748b;">(62篇)</span></a>
+    <a href="教育_家庭教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">家庭教育 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="教育_教育理念.json" style="border-left:3px solid #ec4899; padding-left:18px;">教育理念 <span style="font-size:10px;color:#64748b;">(68篇)</span></a>
+    <a href="教育_财商教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">财商教育 <span style="font-size:10px;color:#64748b;">(48篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="文学" style="color:#8b5cf6; border-left:3px solid #8b5cf6;">文学 ▾</div>
+  <div class="domain-pages" id="文学">
+    <a href="文学_(其他)_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_中国古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">中国古典文学 <span style="font-size:10px;color:#64748b;">(112篇)</span></a>
+    <a href="文学_儿童文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">儿童文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">古典文学 <span style="font-size:10px;color:#64748b;">(92篇)</span></a>
+    <a href="文学_奇幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">奇幻文学 <span style="font-size:10px;color:#64748b;">(51篇)</span></a>
+    <a href="文学_女性主义文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">女性主义文学 <span style="font-size:10px;color:#64748b;">(38篇)</span></a>
+    <a href="文学_悬疑小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">悬疑小说分析 <span style="font-size:10px;color:#64748b;">(52篇)</span></a>
+    <a href="文学_推理小说.json" class="active" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="文学_推理小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说分析 <span style="font-size:10px;color:#64748b;">(126篇)</span></a>
+    <a href="文学_推理文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理文学 <span style="font-size:10px;color:#64748b;">(35篇)</span></a>
+    <a href="文学_文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学 <span style="font-size:10px;color:#64748b;">(223篇)</span></a>
+    <a href="文学_文学与个人成长.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与个人成长 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="文学_文学与人生哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与人生哲学 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="文学_文学与哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与哲学 <span style="font-size:10px;color:#64748b;">(303篇)</span></a>
+    <a href="文学_文学与社会学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与社会学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="文学_文学分析_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（1/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（2/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（3/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（4/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（5/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part6.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（6/6） <span style="font-size:10px;color:#64748b;">(254篇)</span></a>
+    <a href="文学_文学批评.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学批评 <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="文学_文学理论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学理论 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_文学研究.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学研究 <span style="font-size:10px;color:#64748b;">(84篇)</span></a>
+    <a href="文学_文学经典.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学经典 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="文学_文学解读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学解读 <span style="font-size:10px;color:#64748b;">(40篇)</span></a>
+    <a href="文学_文学评论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学评论 <span style="font-size:10px;color:#64748b;">(482篇)</span></a>
+    <a href="文学_文学赏析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学赏析 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="文学_文学鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学鉴赏 <span style="font-size:10px;color:#64748b;">(82篇)</span></a>
+    <a href="文学_文学阅读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学阅读 <span style="font-size:10px;color:#64748b;">(78篇)</span></a>
+    <a href="文学_旅行文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">旅行文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_日本文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">日本文学 <span style="font-size:10px;color:#64748b;">(98篇)</span></a>
+    <a href="文学_武侠文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">武侠文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_科幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学 <span style="font-size:10px;color:#64748b;">(175篇)</span></a>
+    <a href="文学_科幻文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学分析 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="文学_网络文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">网络文学分析 <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_艺术鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">艺术鉴赏 <span style="font-size:10px;color:#64748b;">(44篇)</span></a>
+    <a href="文学_非虚构文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">非虚构文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="时尚生活" style="color:#f9a8d4; border-left:3px solid #f9a8d4;">时尚生活 ▾</div>
+  <div class="domain-pages" id="时尚生活">
+    <a href="时尚生活.json" style="border-left:3px solid #f9a8d4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(71篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="未知" style="color:#94a3b8; border-left:3px solid #94a3b8;">未知 ▾</div>
+  <div class="domain-pages" id="未知">
+    <a href="未知.json" style="border-left:3px solid #94a3b8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(16篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="法学" style="color:#fcd34d; border-left:3px solid #fcd34d;">法学 ▾</div>
+  <div class="domain-pages" id="法学">
+    <a href="法学.json" style="border-left:3px solid #fcd34d; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="社会学" style="color:#6366f1; border-left:3px solid #6366f1;">社会学 ▾</div>
+  <div class="domain-pages" id="社会学">
+    <a href="社会学_(其他)_part1.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="社会学_(其他)_part2.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(484篇)</span></a>
+    <a href="社会学_文化研究.json" style="border-left:3px solid #6366f1; padding-left:18px;">文化研究 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="社会学_社会学.json" style="border-left:3px solid #6366f1; padding-left:18px;">社会学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="科学" style="color:#f97316; border-left:3px solid #f97316;">科学 ▾</div>
+  <div class="domain-pages" id="科学">
+    <a href="科学_(其他)_part1.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="科学_(其他)_part2.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(116篇)</span></a>
+    <a href="科学_医学人文.json" style="border-left:3px solid #f97316; padding-left:18px;">医学人文 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="科学_神经科学.json" style="border-left:3px solid #f97316; padding-left:18px;">神经科学 <span style="font-size:10px;color:#64748b;">(56篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="编程" style="color:#818cf8; border-left:3px solid #818cf8;">编程 ▾</div>
+  <div class="domain-pages" id="编程">
+    <a href="编程.json" style="border-left:3px solid #818cf8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(151篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="艺术" style="color:#e879f9; border-left:3px solid #e879f9;">艺术 ▾</div>
+  <div class="domain-pages" id="艺术">
+    <a href="艺术.json" style="border-left:3px solid #e879f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(365篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="英语" style="color:#f472b6; border-left:3px solid #f472b6;">英语 ▾</div>
+  <div class="domain-pages" id="英语">
+    <a href="英语.json" style="border-left:3px solid #f472b6; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(209篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="语言文学" style="color:#d8b4fe; border-left:3px solid #d8b4fe;">语言文学 ▾</div>
+  <div class="domain-pages" id="语言文学">
+    <a href="语言文学.json" style="border-left:3px solid #d8b4fe; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="金融" style="color:#a3e635; border-left:3px solid #a3e635;">金融 ▾</div>
+  <div class="domain-pages" id="金融">
+    <a href="金融.json" style="border-left:3px solid #a3e635; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(208篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="雅思" style="color:#22d3ee; border-left:3px solid #22d3ee;">雅思 ▾</div>
+  <div class="domain-pages" id="雅思">
+    <a href="雅思.json" style="border-left:3px solid #22d3ee; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(511篇)</span></a>
+  </div>
+
+    <script>
+    document.querySelectorAll('.domain-header').forEach(function(h){
+      h.addEventListener('click', function(){
+        var t = document.getElementById(this.dataset.target);
+        t.style.display = t.style.display==='none' ? 'block' : 'none';
+        this.innerHTML = this.innerHTML.replace(/[▾▸]/, t.style.display==='none'?'▸':'▾');
+      });
+    });
+    </script>
+    
+</div>
+<button id="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">☰</button>
+
+<div id="header">
+  <h1>📚 文学 · 推理小说</h1>
+  <div id="search-wrap">
+    <input id="search-box" type="text" placeholder="🔍 搜索书名/概念...">
+    <div id="search-results"></div>
+  </div>
+  <div class="stats">
+    <span id="node-count">0</span> 节点 ·
+    <span id="link-count">0</span> 连接
+  </div>
+  <div class="ctrls">
+    <button class="btn" id="btn-toggle-concept">隐藏概念</button>
+    <button class="btn" id="btn-reset">重置视图</button>
+  </div>
+</div>
+
+<div id="graph"></div>
+<div id="tooltip"></div>
+
+<!-- 右侧详情面板 -->
+<div id="detail-panel">
+  <div id="detail-header">
+    <h2 id="detail-title"></h2>
+    <button id="detail-close" onclick="closeDetail()">✕</button>
+  </div>
+  <div id="detail-body"></div>
+</div>
+
+<script>
+var NODES = [{"id": "社会派推理.md", "label": "社会派推理", "title": "社会派推理", "type": "book", "degree": 2, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：本书通过一位自称“天才犯罪者”鹤冈七郎的自白，揭露了一系列利用法律与人性盲点，在光天化日之下实施并成功的完美诈骗案件，探讨了高智商犯罪、法律漏洞、道德困境以及犯罪者与作家、法律专家之间的复杂关系。本格与社会派推理小说爱好者，特别是对高智商犯罪、法庭推理感兴趣的读者。对法律、犯罪心理学、商业欺诈等主题有探究欲的读者。希望了解高木彬光创作生涯转折点（从纯粹本格转向社会派）的读者。本书并非纯虚构，而是基于作者高木彬光在箱根温泉疗养时，偶遇一位自称“犯罪者”的鹤冈七郎，并记录下其亲口讲述的犯罪经历", "keywords": ["犯罪者", "鹤冈七郎"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/白昼的死角"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/社会派推理.md"}, {"id": "科学伦理.md", "label": "科学伦理", "title": "科学伦理", "type": "book", "degree": 5, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：禁断的魔术（神探伽利略系列全新长篇小说，继《嫌疑人X的献身》和《圣女的救济》之后，神探伽利略再度破解奇案。核心主题：本书通过一桩离奇的酒店命案，探讨了科学知识被用于善与恶的边界，以及个人天赋、恩情与正义之间的冲突。核心在于揭示“禁断的魔术”——即那些能够成就伟大，也能制造悲剧的强大知识与技术。适合人群：东野圭吾及“神探伽利略”系列的忠实读者；对科学伦理、人性与正义冲突感兴趣的推理小说爱好者；喜欢思考“技术双刃剑”这一主题的读者。汤川学：帝都大学物理系副教授，被誉为“神探伽利略”", "keywords": ["相关笔记", "神探伽", "古芝伸吾", "古芝秋穗", "汤川学"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/禁断的魔术（神探伽利略系列全新长篇小说，继《嫌疑人X的献身"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/科学伦理.md"}, {"id": "民国推理.md", "label": "民国推理", "title": "民国推理", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：以民国上海为背景，讲述一位优雅神秘的绅士侦探与初出茅庐的女警探搭档破案的故事，展现罪恶与正义交织的都市传奇。适合人群：喜欢民国风推理小说的读者；对侦探、悬疑、犯罪题材感兴趣的读者；偏好人物鲜明、情节曲折的叙事风格的读者。要点1：人物设定与冲突——绅士侦探与热血女警探的搭档。主角罗非（推测为“绅探”）是一位穿着考究、举止优雅的绅士，住在沙利文公寓203室，随身携带怀表，擅长推理和观察。示例：秦小曼听到枪声后翻窗潜入，却撞见罗非在切西瓜；罗非早已从影子察觉她的到来，展现了敏锐的观察力", "keywords": ["相关笔记", "示例", "细节", "马博远"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/绅探"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/民国推理.md"}, {"id": "组织生存法则.md", "label": "组织生存法则", "title": "组织生存法则", "type": "book", "degree": 2, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：代号D机关.第二部（日本推理作家协会奖、“这本推理小说了不起。”权威推荐，同名电影由龟梨和也、深田恭子、伊势谷有介领衔主演）。核心主题：本书通过多个间谍故事，核心探讨了在二战前夕的背景下，日本陆军内部两个理念截然不同的秘密谍报机关——D机关与风机关——之间的生死竞争。适合人群：悬疑推理小说爱好者、对二战谍战史感兴趣的读者、喜欢智斗和复杂角色设定的读者，以及希望了解组织内部竞争与生存法则的管理者。这种“异端”性质，使其在陆军内部备受厌恶，但也正是这种厌恶，为风机关的成立扫清了障碍", "keywords": ["相关笔记", "风机关"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/代号D机关.第二部（日本推理作家协会奖、“这本推理小说了不起！”权威推荐，同名电影由龟梨和也、深田恭子、伊势谷有介领衔主演）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/组织生存法则.md"}, {"id": "道德困境.md", "label": "道德困境", "title": "道德困境", "type": "book", "degree": 2, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：本书通过一位自称“天才犯罪者”鹤冈七郎的自白，揭露了一系列利用法律与人性盲点，在光天化日之下实施并成功的完美诈骗案件，探讨了高智商犯罪、法律漏洞、道德困境以及犯罪者与作家、法律专家之间的复杂关系。本格与社会派推理小说爱好者，特别是对高智商犯罪、法庭推理感兴趣的读者。对法律、犯罪心理学、商业欺诈等主题有探究欲的读者。希望了解高木彬光创作生涯转折点（从纯粹本格转向社会派）的读者。本书并非纯虚构，而是基于作者高木彬光在箱根温泉疗养时，偶遇一位自称“犯罪者”的鹤冈七郎，并记录下其亲口讲述的犯罪经历", "keywords": ["犯罪者", "鹤冈七郎"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/白昼的死角"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/道德困境.md"}, {"id": "身份冲突.md", "label": "身份冲突", "title": "身份冲突", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：通过侦探金田一耕助的系列探案，展现日本昭和时代乡村与都市中隐藏的家族秘密、人性阴暗面，以及基于传统习俗与心理动机的复杂密室杀人诡计。适合人群：推理小说爱好者、日本文化研究者、对密室杀人诡计与人性黑暗面感兴趣的读者。要点1：经典密室杀人诡计与“本阵”背景。侦探金田一耕助通过观察现场细节（如红色房间、琴声、三指男人）推理出凶手利用心理盲点制造的密室。书中金田一耕助通过三指男人的手套、口罩、走路姿势等细节推断其身份", "keywords": ["金田一", "密室杀", "室杀人", "杀人诡"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/金田一探案大全集"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/身份冲突.md"}, {"id": "组织竞争.md", "label": "组织竞争", "title": "组织竞争", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：代号D机关.第二部（日本推理作家协会奖、“这本推理小说了不起。”权威推荐，同名电影由龟梨和也、深田恭子、伊势谷有介领衔主演）。核心主题：本书通过多个间谍故事，核心探讨了在二战前夕的背景下，日本陆军内部两个理念截然不同的秘密谍报机关——D机关与风机关——之间的生死竞争。这种“异端”性质，使其在陆军内部备受厌恶，但也正是这种厌恶，为风机关的成立扫清了障碍。D机关因其“不能自杀、不能杀人”等原则，在崇尚杀伐决断的陆军内部被视为“烂苹果”，引发了强烈的本能的排斥和厌恶", "keywords": ["风机关", "本推理", "推理小", "理小说"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/代号D机关.第二部（日本推理作家协会奖、“这本推理小说了不起！”权威推荐，同名电影由龟梨和也、深田恭子、伊势谷有介领衔主演）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/组织竞争.md"}, {"id": "司法公正.md", "label": "司法公正", "title": "司法公正", "type": "book", "degree": 2, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：红拇指印（世界经典推理文库3）。核心主题：本书通过一个看似无懈可击的“指纹”证据链，讲述了侦探桑戴克医生如何运用科学方法、逻辑推理和对人性的洞察，为无辜的嫌疑人鲁宾·霍恩比洗脱盗窃钻石罪名，并揭露真凶的故事。核心探讨了科学证据的可靠性、司法公正以及表象与真相之间的巨大鸿沟。书中以“血指纹”为核心证据，展现了科学证据在司法中的强大说服力（指纹的唯一性、警方指纹专家的鉴定），也揭示了其可能被伪造或误解的风险。桑戴克并未被证据的表面说服，而是提出了一系列质疑：“有没有可能是谁故意把这张带血指印的纸放进去的", "keywords": ["桑戴克", "科学证据"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/红拇指印（世界经典推理文库3）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/司法公正.md"}, {"id": "恩情与正义的冲突.md", "label": "恩情与正义的冲突", "title": "恩情与正义的冲突", "type": "book", "degree": 5, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：禁断的魔术（神探伽利略系列全新长篇小说，继《嫌疑人X的献身》和《圣女的救济》之后，神探伽利略再度破解奇案。核心主题：本书通过一桩离奇的酒店命案，探讨了科学知识被用于善与恶的边界，以及个人天赋、恩情与正义之间的冲突。核心在于揭示“禁断的魔术”——即那些能够成就伟大，也能制造悲剧的强大知识与技术。适合人群：东野圭吾及“神探伽利略”系列的忠实读者；对科学伦理、人性与正义冲突感兴趣的推理小说爱好者；喜欢思考“技术双刃剑”这一主题的读者。另一条线是青年古芝伸吾的成长故事：他是一位热爱物理的高中生，在社团面临解散危机时，得到了帝都大学物理系副教授汤川学的帮助，并因此结下深厚情谊", "keywords": ["神探伽利", "伽利略", "古芝伸吾", "古芝秋穗", "汤川学"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/禁断的魔术（神探伽利略系列全新长篇小说，继《嫌疑人X的献身"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/恩情与正义的冲突.md"}, {"id": "法医病理学.md", "label": "法医病理学", "title": "法医病理学", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "与阿加莎齐名的推理小说大师P. D. 詹姆斯。恶念丛生的孤岛上，我们都在逃亡，我们都在寻找真相。核心主题：通过一起发生在与世隔绝的科姆岛上的死亡案件，探讨权力、秘密、道德困境与人性幽暗，同时展现现代刑侦调查在政治与安全压力下的复杂性。要点3：法医病理学家与调查程序的严谨性。在推理小说中，法医病理学不仅是破案工具，更是对抗谎言与权力干预的“客观第三方”", "keywords": ["我们都", "法医病", "医病理", "病理学"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/灯塔血案（读客熊猫君出品。与阿加莎齐名的推理小说大师P. D. 詹姆斯！恶念丛生的孤岛上，我们都在逃亡，我们都在寻找真相。）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/法医病理学.md"}, {"id": "技术双刃剑.md", "label": "技术双刃剑", "title": "技术双刃剑", "type": "book", "degree": 5, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：禁断的魔术（神探伽利略系列全新长篇小说，继《嫌疑人X的献身》和《圣女的救济》之后，神探伽利略再度破解奇案。核心主题：本书通过一桩离奇的酒店命案，探讨了科学知识被用于善与恶的边界，以及个人天赋、恩情与正义之间的冲突。核心在于揭示“禁断的魔术”——即那些能够成就伟大，也能制造悲剧的强大知识与技术。适合人群：东野圭吾及“神探伽利略”系列的忠实读者；对科学伦理、人性与正义冲突感兴趣的推理小说爱好者；喜欢思考“技术双刃剑”这一主题的读者。另一条线是青年古芝伸吾的成长故事：他是一位热爱物理的高中生，在社团面临解散危机时，得到了帝都大学物理系副教授汤川学的帮助，并因此结下深厚情谊", "keywords": ["神探伽利", "伽利略", "古芝伸吾", "古芝秋穗", "汤川学"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/禁断的魔术（神探伽利略系列全新长篇小说，继《嫌疑人X的献身"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/技术双刃剑.md"}, {"id": "信息不对称.md", "label": "信息不对称", "title": "信息不对称", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：本书以“夏亚事务所”为背景，通过一系列与经典游戏（如杀人游戏、捉迷藏、棋类等）同名的案件，讲述主角夏亚与心理学博士方程合作，运用逻辑推理和心理分析破解谜题的故事。核心主题是探索游戏规则与现实犯罪之间的映射关系，以及在压力情境下人性的博弈与暴露。适合人群：推理小说爱好者、心理学入门读者、对“游戏化”叙事结构感兴趣的读者，以及喜欢在虚构故事中寻找逻辑解谜乐趣的读者。本书的核心结构是将经典的聚会游戏（如“杀人游戏”）的规则和模式，作为现实案件发生的框架。例如，在“杀人杀人游戏”章节中，案件的参与者正在玩“杀人游戏”，而现实中却发生了真正的谋杀", "keywords": ["杀人游", "人游戏", "心理学", "参与者"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/杀人游戏"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/信息不对称.md"}, {"id": "推理元素.md", "label": "推理元素", "title": "推理元素", "type": "book", "degree": 5, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：以民国上海为背景，讲述一位优雅神秘的绅士侦探与初出茅庐的女警探搭档破案的故事，展现罪恶与正义交织的都市传奇。适合人群：喜欢民国风推理小说的读者；对侦探、悬疑、犯罪题材感兴趣的读者；偏好人物鲜明、情节曲折的叙事风格的读者。要点1：人物设定与冲突——绅士侦探与热血女警探的搭档。主角罗非（推测为“绅探”）是一位穿着考究、举止优雅的绅士，住在沙利文公寓203室，随身携带怀表，擅长推理和观察。女警探秦小曼刚从中央警官学校毕业，初到上海，性格正直、勇敢、冲动，但缺乏经验", "keywords": ["示例", "细节", "马博远", "秦小曼", "民国上海"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/绅探"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/推理元素.md"}, {"id": "侦探推理方法.md", "label": "侦探推理方法", "title": "侦探推理方法", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：通过侦探金田一耕助的系列探案，展现日本昭和时代乡村与都市中隐藏的家族秘密、人性阴暗面，以及基于传统习俗与心理动机的复杂密室杀人诡计。适合人群：推理小说爱好者、日本文化研究者、对密室杀人诡计与人性黑暗面感兴趣的读者。要点1：经典密室杀人诡计与“本阵”背景。侦探金田一耕助通过观察现场细节（如红色房间、琴声、三指男人）推理出凶手利用心理盲点制造的密室。书中金田一耕助通过三指男人的手套、口罩、走路姿势等细节推断其身份", "keywords": ["金田一", "密室杀", "室杀人", "杀人诡"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/金田一探案大全集"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/侦探推理方法.md"}, {"id": "社会阶层.md", "label": "社会阶层", "title": "社会阶层", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：本书以“夏亚事务所”为背景，通过一系列与经典游戏（如杀人游戏、捉迷藏、棋类等）同名的案件，讲述主角夏亚与心理学博士方程合作，运用逻辑推理和心理分析破解谜题的故事。核心主题是探索游戏规则与现实犯罪之间的映射关系，以及在压力情境下人性的博弈与暴露。适合人群：推理小说爱好者、心理学入门读者、对“游戏化”叙事结构感兴趣的读者，以及喜欢在虚构故事中寻找逻辑解谜乐趣的读者。本书的核心结构是将经典的聚会游戏（如“杀人游戏”）的规则和模式，作为现实案件发生的框架。例如，在“杀人杀人游戏”章节中，案件的参与者正在玩“杀人游戏”，而现实中却发生了真正的谋杀", "keywords": ["杀人游", "人游戏", "心理学", "参与者"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/杀人游戏"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/社会阶层.md"}, {"id": "本格推理.md", "label": "本格推理", "title": "本格推理", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：《不连续杀人事件（第二届日本推理作家协会奖获奖作品，江户川乱步、松本清张赞誉推荐） (坂口安吾系列作品)》。核心主题：本书是作者践行“推理小说是作者与读者间的公平解谜游戏”理念的自信之作。通过一系列看似不连续的谋杀案，构建了一个封闭山庄中的复杂人际关系网，核心在于挑战读者与作品中侦探一同找出真凶，体验纯粹的斗智乐趣。适合人群：本格推理小说爱好者，尤其是享受“挑战读者”、进行逻辑推演的读者；对日本战后“无赖派”文学及坂口安吾独特文学理念感兴趣的读者；喜欢复杂人物关系和封闭空间杀人设定的读者。本书是坂口安吾对其推理小说理念的完美实践", "keywords": ["坂口安吾", "推理小", "训练结构化逻辑思维", "提升人际洞察力"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/不连续杀人事件（第二届日本推理作家协会奖获奖作品，江户川乱步、松本清张赞誉推荐） (坂口安吾系列作品)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/本格推理.md"}, {"id": "法律盲点.md", "label": "法律盲点", "title": "法律盲点", "type": "book", "degree": 2, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：本书通过一位自称“天才犯罪者”鹤冈七郎的自白，揭露了一系列利用法律与人性盲点，在光天化日之下实施并成功的完美诈骗案件，探讨了高智商犯罪、法律漏洞、道德困境以及犯罪者与作家、法律专家之间的复杂关系。本格与社会派推理小说爱好者，特别是对高智商犯罪、法庭推理感兴趣的读者。对法律、犯罪心理学、商业欺诈等主题有探究欲的读者。希望了解高木彬光创作生涯转折点（从纯粹本格转向社会派）的读者。本书并非纯虚构，而是基于作者高木彬光在箱根温泉疗养时，偶遇一位自称“犯罪者”的鹤冈七郎，并记录下其亲口讲述的犯罪经历", "keywords": ["犯罪者", "鹤冈七郎"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/白昼的死角"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/法律盲点.md"}, {"id": "确认偏误.md", "label": "确认偏误", "title": "确认偏误", "type": "book", "degree": 2, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：红拇指印（世界经典推理文库3）。核心主题：本书通过一个看似无懈可击的“指纹”证据链，讲述了侦探桑戴克医生如何运用科学方法、逻辑推理和对人性的洞察，为无辜的嫌疑人鲁宾·霍恩比洗脱盗窃钻石罪名，并揭露真凶的故事。核心探讨了科学证据的可靠性、司法公正以及表象与真相之间的巨大鸿沟。书中以“血指纹”为核心证据，展现了科学证据在司法中的强大说服力（指纹的唯一性、警方指纹专家的鉴定），也揭示了其可能被伪造或误解的风险。桑戴克并未被证据的表面说服，而是提出了一系列质疑：“有没有可能是谁故意把这张带血指印的纸放进去的", "keywords": ["桑戴克", "确认偏误"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/红拇指印（世界经典推理文库3）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/确认偏误.md"}, {"id": "孤岛封闭空间.md", "label": "孤岛封闭空间", "title": "孤岛封闭空间", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "与阿加莎齐名的推理小说大师P. D. 詹姆斯。恶念丛生的孤岛上，我们都在逃亡，我们都在寻找真相。核心主题：通过一起发生在与世隔绝的科姆岛上的死亡案件，探讨权力、秘密、道德困境与人性幽暗，同时展现现代刑侦调查在政治与安全压力下的复杂性。适合人群：推理小说爱好者、对英国社会与官僚体制感兴趣的读者、喜欢心理悬疑与法医细节的读者。在推理小说中，法医病理学不仅是破案工具，更是对抗谎言与权力干预的“客观第三方”", "keywords": ["我们都", "推理小", "理小说", "詹姆斯"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/灯塔血案（读客熊猫君出品。与阿加莎齐名的推理小说大师P. D. 詹姆斯！恶念丛生的孤岛上，我们都在逃亡，我们都在寻找真相。）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/孤岛封闭空间.md"}, {"id": "情报战伦理.md", "label": "情报战伦理", "title": "情报战伦理", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：代号D机关.第二部（日本推理作家协会奖、“这本推理小说了不起。”权威推荐，同名电影由龟梨和也、深田恭子、伊势谷有介领衔主演）。核心主题：本书通过多个间谍故事，核心探讨了在二战前夕的背景下，日本陆军内部两个理念截然不同的秘密谍报机关——D机关与风机关——之间的生死竞争。这种“异端”性质，使其在陆军内部备受厌恶，但也正是这种厌恶，为风机关的成立扫清了障碍。D机关因其“不能自杀、不能杀人”等原则，在崇尚杀伐决断的陆军内部被视为“烂苹果”，引发了强烈的本能的排斥和厌恶", "keywords": ["风机关", "本推理", "推理小", "理小说"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/代号D机关.第二部（日本推理作家协会奖、“这本推理小说了不起！”权威推荐，同名电影由龟梨和也、深田恭子、伊势谷有介领衔主演）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/情报战伦理.md"}, {"id": "间谍伦理.md", "label": "间谍伦理", "title": "间谍伦理", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：代号D机关.第二部（日本推理作家协会奖、“这本推理小说了不起。”权威推荐，同名电影由龟梨和也、深田恭子、伊势谷有介领衔主演）。核心主题：本书通过多个间谍故事，核心探讨了在二战前夕的背景下，日本陆军内部两个理念截然不同的秘密谍报机关——D机关与风机关——之间的生死竞争。适合人群：悬疑推理小说爱好者、对二战谍战史感兴趣的读者、喜欢智斗和复杂角色设定的读者，以及希望了解组织内部竞争与生存法则的管理者。这种“异端”性质，使其在陆军内部备受厌恶，但也正是这种厌恶，为风机关的成立扫清了障碍", "keywords": ["风机关", "本推理", "推理小", "理小说"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/代号D机关.第二部（日本推理作家协会奖、“这本推理小说了不起！”权威推荐，同名电影由龟梨和也、深田恭子、伊势谷有介领衔主演）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/间谍伦理.md"}, {"id": "观察力.md", "label": "观察力", "title": "观察力", "type": "book", "degree": 6, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：以民国上海为背景，讲述一位优雅神秘的绅士侦探与初出茅庐的女警探搭档破案的故事，展现罪恶与正义交织的都市传奇。适合人群：喜欢民国风推理小说的读者；对侦探、悬疑、犯罪题材感兴趣的读者；偏好人物鲜明、情节曲折的叙事风格的读者。要点1：人物设定与冲突——绅士侦探与热血女警探的搭档。女警探秦小曼刚从中央警官学校毕业，初到上海，性格正直、勇敢、冲动，但缺乏经验。示例：秦小曼听到枪声后翻窗潜入，却撞见罗非在切西瓜；罗非早已从影子察觉她的到来，展现了敏锐的观察力", "keywords": ["示例", "细节", "马博远", "秦小曼", "观察力", "国上海"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/绅探"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/观察力.md"}, {"id": "不可能犯罪.md", "label": "不可能犯罪", "title": "不可能犯罪", "type": "book", "degree": 2, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：三口棺材（【不可能犯罪小说】的巅峰之作，全球读者顶礼膜拜，世界推理文学史上不可忽视的里程碑，至今难以超越。核心主题：通过两起看似超自然的“不可能犯罪”谋杀案（密室杀人、雪地无足迹杀人），揭示凶手如何利用心理学、魔术技巧和环境细节制造完美犯罪假象，最终由侦探菲尔博士拆解谜团，展现理性推理对神秘现象的终极胜利。适合人群：推理小说爱好者，尤其是钟情于“密室杀人”“不可能犯罪”题材的读者；对魔术、心理学、逻辑分析感兴趣的读者；希望学习如何从细节中构建严密推理链条的写作或思考者。卡尔通过“三口棺材”的隐喻（教授、凶手、谜题本身），构建了一个“凶手如幽灵般来去无踪”的谜面。菲尔博士系统梳理了密室杀人", "keywords": ["不可能犯", "能犯罪"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/三口棺材（【不可能犯罪小说】的巅峰之作，全球读者顶礼膜拜，世界推理文学史上不可忽视的里程碑，至今难以超越。）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/不可能犯罪.md"}, {"id": "魔术技巧.md", "label": "魔术技巧", "title": "魔术技巧", "type": "book", "degree": 2, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：三口棺材（【不可能犯罪小说】的巅峰之作，全球读者顶礼膜拜，世界推理文学史上不可忽视的里程碑，至今难以超越。核心主题：通过两起看似超自然的“不可能犯罪”谋杀案（密室杀人、雪地无足迹杀人），揭示凶手如何利用心理学、魔术技巧和环境细节制造完美犯罪假象，最终由侦探菲尔博士拆解谜团，展现理性推理对神秘现象的终极胜利。适合人群：推理小说爱好者，尤其是钟情于“密室杀人”“不可能犯罪”题材的读者；对魔术、心理学、逻辑分析感兴趣的读者；希望学习如何从细节中构建严密推理链条的写作或思考者。卡尔通过“三口棺材”的隐喻（教授、凶手、谜题本身），构建了一个“凶手如幽灵般来去无踪”的谜面。菲尔博士系统梳理了密室杀人", "keywords": ["不可能", "凶手利用"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/三口棺材（【不可能犯罪小说】的巅峰之作，全球读者顶礼膜拜，世界推理文学史上不可忽视的里程碑，至今难以超越。）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/魔术技巧.md"}, {"id": "情报战.md", "label": "情报战", "title": "情报战", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：代号D机关.第二部（日本推理作家协会奖、“这本推理小说了不起。”权威推荐，同名电影由龟梨和也、深田恭子、伊势谷有介领衔主演）。核心主题：本书通过多个间谍故事，核心探讨了在二战前夕的背景下，日本陆军内部两个理念截然不同的秘密谍报机关——D机关与风机关——之间的生死竞争。这种“异端”性质，使其在陆军内部备受厌恶，但也正是这种厌恶，为风机关的成立扫清了障碍。D机关因其“不能自杀、不能杀人”等原则，在崇尚杀伐决断的陆军内部被视为“烂苹果”，引发了强烈的本能的排斥和厌恶", "keywords": ["风机关", "本推理", "推理小", "理小说"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/代号D机关.第二部（日本推理作家协会奖、“这本推理小说了不起！”权威推荐，同名电影由龟梨和也、深田恭子、伊势谷有介领衔主演）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/情报战.md"}, {"id": "恩情与正义.md", "label": "恩情与正义", "title": "恩情与正义", "type": "book", "degree": 5, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：禁断的魔术（神探伽利略系列全新长篇小说，继《嫌疑人X的献身》和《圣女的救济》之后，神探伽利略再度破解奇案。核心主题：本书通过一桩离奇的酒店命案，探讨了科学知识被用于善与恶的边界，以及个人天赋、恩情与正义之间的冲突。核心在于揭示“禁断的魔术”——即那些能够成就伟大，也能制造悲剧的强大知识与技术。适合人群：东野圭吾及“神探伽利略”系列的忠实读者；对科学伦理、人性与正义冲突感兴趣的推理小说爱好者；喜欢思考“技术双刃剑”这一主题的读者。另一条线是青年古芝伸吾的成长故事：他是一位热爱物理的高中生，在社团面临解散危机时，得到了帝都大学物理系副教授汤川学的帮助，并因此结下深厚情谊", "keywords": ["神探伽利", "伽利略", "古芝伸吾", "古芝秋穗", "汤川学"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/禁断的魔术（神探伽利略系列全新长篇小说，继《嫌疑人X的献身"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/恩情与正义.md"}, {"id": "公平解谜.md", "label": "公平解谜", "title": "公平解谜", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：《不连续杀人事件（第二届日本推理作家协会奖获奖作品，江户川乱步、松本清张赞誉推荐） (坂口安吾系列作品)》。核心主题：本书是作者践行“推理小说是作者与读者间的公平解谜游戏”理念的自信之作。通过一系列看似不连续的谋杀案，构建了一个封闭山庄中的复杂人际关系网，核心在于挑战读者与作品中侦探一同找出真凶，体验纯粹的斗智乐趣。适合人群：本格推理小说爱好者，尤其是享受“挑战读者”、进行逻辑推演的读者；对日本战后“无赖派”文学及坂口安吾独特文学理念感兴趣的读者；喜欢复杂人物关系和封闭空间杀人设定的读者。本书是坂口安吾对其推理小说理念的完美实践", "keywords": ["坂口安吾", "推理小", "训练结构化逻辑思维", "提升人际洞察力"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/不连续杀人事件（第二届日本推理作家协会奖获奖作品，江户川乱步、松本清张赞誉推荐） (坂口安吾系列作品)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/公平解谜.md"}, {"id": "游戏化叙事.md", "label": "游戏化叙事", "title": "游戏化叙事", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：本书以“夏亚事务所”为背景，通过一系列与经典游戏（如杀人游戏、捉迷藏、棋类等）同名的案件，讲述主角夏亚与心理学博士方程合作，运用逻辑推理和心理分析破解谜题的故事。核心主题是探索游戏规则与现实犯罪之间的映射关系，以及在压力情境下人性的博弈与暴露。适合人群：推理小说爱好者、心理学入门读者、对“游戏化”叙事结构感兴趣的读者，以及喜欢在虚构故事中寻找逻辑解谜乐趣的读者。本书的核心结构是将经典的聚会游戏（如“杀人游戏”）的规则和模式，作为现实案件发生的框架。例如，在“杀人杀人游戏”章节中，案件的参与者正在玩“杀人游戏”，而现实中却发生了真正的谋杀", "keywords": ["杀人游", "人游戏", "心理学", "参与者"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/杀人游戏"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/游戏化叙事.md"}, {"id": "工具理性与价值理性.md", "label": "工具理性与价值理性", "title": "工具理性与价值理性", "type": "book", "degree": 5, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：禁断的魔术（神探伽利略系列全新长篇小说，继《嫌疑人X的献身》和《圣女的救济》之后，神探伽利略再度破解奇案。核心主题：本书通过一桩离奇的酒店命案，探讨了科学知识被用于善与恶的边界，以及个人天赋、恩情与正义之间的冲突。核心在于揭示“禁断的魔术”——即那些能够成就伟大，也能制造悲剧的强大知识与技术。适合人群：东野圭吾及“神探伽利略”系列的忠实读者；对科学伦理、人性与正义冲突感兴趣的推理小说爱好者；喜欢思考“技术双刃剑”这一主题的读者。另一条线是青年古芝伸吾的成长故事：他是一位热爱物理的高中生，在社团面临解散危机时，得到了帝都大学物理系副教授汤川学的帮助，并因此结下深厚情谊", "keywords": ["神探伽利", "伽利略", "古芝伸吾", "古芝秋穗", "汤川学"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/禁断的魔术（神探伽利略系列全新长篇小说，继《嫌疑人X的献身"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/工具理性与价值理性.md"}, {"id": "象征性物件.md", "label": "象征性物件", "title": "象征性物件", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：通过侦探金田一耕助的系列探案，展现日本昭和时代乡村与都市中隐藏的家族秘密、人性阴暗面，以及基于传统习俗与心理动机的复杂密室杀人诡计。适合人群：推理小说爱好者、日本文化研究者、对密室杀人诡计与人性黑暗面感兴趣的读者。要点1：经典密室杀人诡计与“本阵”背景。侦探金田一耕助通过观察现场细节（如红色房间、琴声、三指男人）推理出凶手利用心理盲点制造的密室。书中金田一耕助通过三指男人的手套、口罩、走路姿势等细节推断其身份", "keywords": ["金田一", "密室杀", "室杀人", "杀人诡"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/金田一探案大全集"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/象征性物件.md"}, {"id": "科学证据.md", "label": "科学证据", "title": "科学证据", "type": "book", "degree": 2, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：红拇指印（世界经典推理文库3）。核心主题：本书通过一个看似无懈可击的“指纹”证据链，讲述了侦探桑戴克医生如何运用科学方法、逻辑推理和对人性的洞察，为无辜的嫌疑人鲁宾·霍恩比洗脱盗窃钻石罪名，并揭露真凶的故事。核心探讨了科学证据的可靠性、司法公正以及表象与真相之间的巨大鸿沟。书中以“血指纹”为核心证据，展现了科学证据在司法中的强大说服力（指纹的唯一性、警方指纹专家的鉴定），也揭示了其可能被伪造或误解的风险。桑戴克并未被证据的表面说服，而是提出了一系列质疑：“有没有可能是谁故意把这张带血指印的纸放进去的", "keywords": ["桑戴克", "科学证据"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/红拇指印（世界经典推理文库3）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/科学证据.md"}, {"id": "先事实后解释.md", "label": "先事实后解释", "title": "先事实后解释", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "与阿加莎齐名的推理小说大师P. D. 詹姆斯。恶念丛生的孤岛上，我们都在逃亡，我们都在寻找真相。核心主题：通过一起发生在与世隔绝的科姆岛上的死亡案件，探讨权力、秘密、道德困境与人性幽暗，同时展现现代刑侦调查在政治与安全压力下的复杂性。适合人群：推理小说爱好者、对英国社会与官僚体制感兴趣的读者、喜欢心理悬疑与法医细节的读者。在推理小说中，法医病理学不仅是破案工具，更是对抗谎言与权力干预的“客观第三方”", "keywords": ["我们都", "推理小", "理小说", "詹姆斯"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/灯塔血案（读客熊猫君出品。与阿加莎齐名的推理小说大师P. D. 詹姆斯！恶念丛生的孤岛上，我们都在逃亡，我们都在寻找真相。）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/先事实后解释.md"}, {"id": "犯罪心理学.md", "label": "犯罪心理学", "title": "犯罪心理学", "type": "book", "degree": 2, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：本书通过一位自称“天才犯罪者”鹤冈七郎的自白，揭露了一系列利用法律与人性盲点，在光天化日之下实施并成功的完美诈骗案件，探讨了高智商犯罪、法律漏洞、道德困境以及犯罪者与作家、法律专家之间的复杂关系。本格与社会派推理小说爱好者，特别是对高智商犯罪、法庭推理感兴趣的读者。对法律、犯罪心理学、商业欺诈等主题有探究欲的读者。希望了解高木彬光创作生涯转折点（从纯粹本格转向社会派）的读者。本书并非纯虚构，而是基于作者高木彬光在箱根温泉疗养时，偶遇一位自称“犯罪者”的鹤冈七郎，并记录下其亲口讲述的犯罪经历", "keywords": ["犯罪者", "鹤冈七郎"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/白昼的死角"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/犯罪心理学.md"}, {"id": "案件谜题.md", "label": "案件谜题", "title": "案件谜题", "type": "book", "degree": 5, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：以民国上海为背景，讲述一位优雅神秘的绅士侦探与初出茅庐的女警探搭档破案的故事，展现罪恶与正义交织的都市传奇。适合人群：喜欢民国风推理小说的读者；对侦探、悬疑、犯罪题材感兴趣的读者；偏好人物鲜明、情节曲折的叙事风格的读者。要点1：人物设定与冲突——绅士侦探与热血女警探的搭档。主角罗非（推测为“绅探”）是一位穿着考究、举止优雅的绅士，住在沙利文公寓203室，随身携带怀表，擅长推理和观察。女警探秦小曼刚从中央警官学校毕业，初到上海，性格正直、勇敢、冲动，但缺乏经验", "keywords": ["示例", "细节", "马博远", "秦小曼", "民国上海"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/绅探"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/案件谜题.md"}, {"id": "高智商犯罪.md", "label": "高智商犯罪", "title": "高智商犯罪", "type": "book", "degree": 2, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：本书通过一位自称“天才犯罪者”鹤冈七郎的自白，揭露了一系列利用法律与人性盲点，在光天化日之下实施并成功的完美诈骗案件，探讨了高智商犯罪、法律漏洞、道德困境以及犯罪者与作家、法律专家之间的复杂关系。本格与社会派推理小说爱好者，特别是对高智商犯罪、法庭推理感兴趣的读者。对法律、犯罪心理学、商业欺诈等主题有探究欲的读者。希望了解高木彬光创作生涯转折点（从纯粹本格转向社会派）的读者。本书并非纯虚构，而是基于作者高木彬光在箱根温泉疗养时，偶遇一位自称“犯罪者”的鹤冈七郎，并记录下其亲口讲述的犯罪经历", "keywords": ["犯罪者", "鹤冈七郎"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/白昼的死角"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/高智商犯罪.md"}, {"id": "心理学操控.md", "label": "心理学操控", "title": "心理学操控", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：三口棺材（【不可能犯罪小说】的巅峰之作，全球读者顶礼膜拜，世界推理文学史上不可忽视的里程碑，至今难以超越。核心主题：通过两起看似超自然的“不可能犯罪”谋杀案（密室杀人、雪地无足迹杀人），揭示凶手如何利用心理学、魔术技巧和环境细节制造完美犯罪假象，最终由侦探菲尔博士拆解谜团，展现理性推理对神秘现象的终极胜利。适合人群：推理小说爱好者，尤其是钟情于“密室杀人”“不可能犯罪”题材的读者；对魔术、心理学、逻辑分析感兴趣的读者；希望学习如何从细节中构建严密推理链条的写作或思考者。卡尔通过“三口棺材”的隐喻（教授、凶手、谜题本身），构建了一个“凶手如幽灵般来去无踪”的谜面。菲尔博士系统梳理了密室杀人", "keywords": ["不可能", "心理学", "凶手利", "手利用"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/三口棺材（【不可能犯罪小说】的巅峰之作，全球读者顶礼膜拜，世界推理文学史上不可忽视的里程碑，至今难以超越。）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/心理学操控.md"}, {"id": "人际关系网.md", "label": "人际关系网", "title": "人际关系网", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：《不连续杀人事件（第二届日本推理作家协会奖获奖作品，江户川乱步、松本清张赞誉推荐） (坂口安吾系列作品)》。核心主题：本书是作者践行“推理小说是作者与读者间的公平解谜游戏”理念的自信之作。通过一系列看似不连续的谋杀案，构建了一个封闭山庄中的复杂人际关系网，核心在于挑战读者与作品中侦探一同找出真凶，体验纯粹的斗智乐趣。适合人群：本格推理小说爱好者，尤其是享受“挑战读者”、进行逻辑推演的读者；对日本战后“无赖派”文学及坂口安吾独特文学理念感兴趣的读者；喜欢复杂人物关系和封闭空间杀人设定的读者。本书是坂口安吾对其推理小说理念的完美实践", "keywords": ["坂口安吾", "推理小", "训练结构化逻辑思维", "提升人际洞察力"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/不连续杀人事件（第二届日本推理作家协会奖获奖作品，江户川乱步、松本清张赞誉推荐） (坂口安吾系列作品)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/人际关系网.md"}, {"id": "道德推脱.md", "label": "道德推脱", "title": "道德推脱", "type": "book", "degree": 6, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：以民国上海为背景，讲述一位优雅神秘的绅士侦探与初出茅庐的女警探搭档破案的故事，展现罪恶与正义交织的都市传奇。适合人群：喜欢民国风推理小说的读者；对侦探、悬疑、犯罪题材感兴趣的读者；偏好人物鲜明、情节曲折的叙事风格的读者。要点1：人物设定与冲突——绅士侦探与热血女警探的搭档。女警探秦小曼刚从中央警官学校毕业，初到上海，性格正直、勇敢、冲动，但缺乏经验。马博远撞人后第一反应是向母亲求救，而非报警或救助伤者，体现了典型的“道德推脱”心理：将责任归咎于受害者（“她抓着车门不放”），并寻求权威（母亲）的庇护", "keywords": ["示例", "细节", "马博远", "秦小曼", "道德推", "德推脱"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/绅探"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/道德推脱.md"}, {"id": "认知失调.md", "label": "认知失调", "title": "认知失调", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：本书以“夏亚事务所”为背景，通过一系列与经典游戏（如杀人游戏、捉迷藏、棋类等）同名的案件，讲述主角夏亚与心理学博士方程合作，运用逻辑推理和心理分析破解谜题的故事。核心主题是探索游戏规则与现实犯罪之间的映射关系，以及在压力情境下人性的博弈与暴露。适合人群：推理小说爱好者、心理学入门读者、对“游戏化”叙事结构感兴趣的读者，以及喜欢在虚构故事中寻找逻辑解谜乐趣的读者。本书的核心结构是将经典的聚会游戏（如“杀人游戏”）的规则和模式，作为现实案件发生的框架。例如，在“杀人杀人游戏”章节中，案件的参与者正在玩“杀人游戏”，而现实中却发生了真正的谋杀", "keywords": ["杀人游", "人游戏", "心理学", "参与者"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/杀人游戏"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/认知失调.md"}, {"id": "二战谍战.md", "label": "二战谍战", "title": "二战谍战", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：代号D机关.第二部（日本推理作家协会奖、“这本推理小说了不起。”权威推荐，同名电影由龟梨和也、深田恭子、伊势谷有介领衔主演）。核心主题：本书通过多个间谍故事，核心探讨了在二战前夕的背景下，日本陆军内部两个理念截然不同的秘密谍报机关——D机关与风机关——之间的生死竞争。这种“异端”性质，使其在陆军内部备受厌恶，但也正是这种厌恶，为风机关的成立扫清了障碍。D机关因其“不能自杀、不能杀人”等原则，在崇尚杀伐决断的陆军内部被视为“烂苹果”，引发了强烈的本能的排斥和厌恶", "keywords": ["风机关", "本推理", "推理小", "理小说"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/代号D机关.第二部（日本推理作家协会奖、“这本推理小说了不起！”权威推荐，同名电影由龟梨和也、深田恭子、伊势谷有介领衔主演）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/二战谍战.md"}, {"id": "权力与安全悖论.md", "label": "权力与安全悖论", "title": "权力与安全悖论", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "与阿加莎齐名的推理小说大师P. D. 詹姆斯。恶念丛生的孤岛上，我们都在逃亡，我们都在寻找真相。核心主题：通过一起发生在与世隔绝的科姆岛上的死亡案件，探讨权力、秘密、道德困境与人性幽暗，同时展现现代刑侦调查在政治与安全压力下的复杂性。适合人群：推理小说爱好者、对英国社会与官僚体制感兴趣的读者、喜欢心理悬疑与法医细节的读者。在推理小说中，法医病理学不仅是破案工具，更是对抗谎言与权力干预的“客观第三方”", "keywords": ["我们都", "推理小", "理小说", "詹姆斯"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/灯塔血案（读客熊猫君出品。与阿加莎齐名的推理小说大师P. D. 詹姆斯！恶念丛生的孤岛上，我们都在逃亡，我们都在寻找真相。）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/权力与安全悖论.md"}, {"id": "风机关.md", "label": "风机关", "title": "风机关", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：代号D机关.第二部（日本推理作家协会奖、“这本推理小说了不起。”权威推荐，同名电影由龟梨和也、深田恭子、伊势谷有介领衔主演）。核心主题：本书通过多个间谍故事，核心探讨了在二战前夕的背景下，日本陆军内部两个理念截然不同的秘密谍报机关——D机关与风机关——之间的生死竞争。这种“异端”性质，使其在陆军内部备受厌恶，但也正是这种厌恶，为风机关的成立扫清了障碍。D机关因其“不能自杀、不能杀人”等原则，在崇尚杀伐决断的陆军内部被视为“烂苹果”，引发了强烈的本能的排斥和厌恶", "keywords": ["风机关", "本推理", "推理小", "理小说"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/代号D机关.第二部（日本推理作家协会奖、“这本推理小说了不起！”权威推荐，同名电影由龟梨和也、深田恭子、伊势谷有介领衔主演）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/风机关.md"}, {"id": "间谍组织竞争.md", "label": "间谍组织竞争", "title": "间谍组织竞争", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：代号D机关.第二部（日本推理作家协会奖、“这本推理小说了不起。”权威推荐，同名电影由龟梨和也、深田恭子、伊势谷有介领衔主演）。核心主题：本书通过多个间谍故事，核心探讨了在二战前夕的背景下，日本陆军内部两个理念截然不同的秘密谍报机关——D机关与风机关——之间的生死竞争。这种“异端”性质，使其在陆军内部备受厌恶，但也正是这种厌恶，为风机关的成立扫清了障碍。D机关因其“不能自杀、不能杀人”等原则，在崇尚杀伐决断的陆军内部被视为“烂苹果”，引发了强烈的本能的排斥和厌恶", "keywords": ["风机关", "本推理", "推理小", "理小说"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/代号D机关.第二部（日本推理作家协会奖、“这本推理小说了不起！”权威推荐，同名电影由龟梨和也、深田恭子、伊势谷有介领衔主演）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/间谍组织竞争.md"}, {"id": "密室杀人诡计.md", "label": "密室杀人诡计", "title": "密室杀人诡计", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：通过侦探金田一耕助的系列探案，展现日本昭和时代乡村与都市中隐藏的家族秘密、人性阴暗面，以及基于传统习俗与心理动机的复杂密室杀人诡计。适合人群：推理小说爱好者、日本文化研究者、对密室杀人诡计与人性黑暗面感兴趣的读者。要点1：经典密室杀人诡计与“本阵”背景。侦探金田一耕助通过观察现场细节（如红色房间、琴声、三指男人）推理出凶手利用心理盲点制造的密室。书中的“琴”不仅是家规的象征，更是杀人诡计的关键工具", "keywords": ["金田一", "密室杀", "室杀人", "杀人诡"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/金田一探案大全集"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/密室杀人诡计.md"}, {"id": "密室讲义.md", "label": "密室讲义", "title": "密室讲义", "type": "book", "degree": 2, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：三口棺材（【不可能犯罪小说】的巅峰之作，全球读者顶礼膜拜，世界推理文学史上不可忽视的里程碑，至今难以超越。核心主题：通过两起看似超自然的“不可能犯罪”谋杀案（密室杀人、雪地无足迹杀人），揭示凶手如何利用心理学、魔术技巧和环境细节制造完美犯罪假象，最终由侦探菲尔博士拆解谜团，展现理性推理对神秘现象的终极胜利。适合人群：推理小说爱好者，尤其是钟情于“密室杀人”“不可能犯罪”题材的读者；对魔术、心理学、逻辑分析感兴趣的读者；希望学习如何从细节中构建严密推理链条的写作或思考者。卡尔通过“三口棺材”的隐喻（教授、凶手、谜题本身），构建了一个“凶手如幽灵般来去无踪”的谜面。菲尔博士系统梳理了密室杀人", "keywords": ["不可能", "凶手利用"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/三口棺材（【不可能犯罪小说】的巅峰之作，全球读者顶礼膜拜，世界推理文学史上不可忽视的里程碑，至今难以超越。）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/密室讲义.md"}, {"id": "作者介入.md", "label": "作者介入", "title": "作者介入", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：《不连续杀人事件（第二届日本推理作家协会奖获奖作品，江户川乱步、松本清张赞誉推荐） (坂口安吾系列作品)》。核心主题：本书是作者践行“推理小说是作者与读者间的公平解谜游戏”理念的自信之作。通过一系列看似不连续的谋杀案，构建了一个封闭山庄中的复杂人际关系网，核心在于挑战读者与作品中侦探一同找出真凶，体验纯粹的斗智乐趣。适合人群：本格推理小说爱好者，尤其是享受“挑战读者”、进行逻辑推演的读者；对日本战后“无赖派”文学及坂口安吾独特文学理念感兴趣的读者；喜欢复杂人物关系和封闭空间杀人设定的读者。本书是坂口安吾对其推理小说理念的完美实践", "keywords": ["坂口安吾", "推理小", "训练结构化逻辑思维", "提升人际洞察力"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/不连续杀人事件（第二届日本推理作家协会奖获奖作品，江户川乱步、松本清张赞誉推荐） (坂口安吾系列作品)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/作者介入.md"}, {"id": "人物设定.md", "label": "人物设定", "title": "人物设定", "type": "book", "degree": 5, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：以民国上海为背景，讲述一位优雅神秘的绅士侦探与初出茅庐的女警探搭档破案的故事，展现罪恶与正义交织的都市传奇。适合人群：喜欢民国风推理小说的读者；对侦探、悬疑、犯罪题材感兴趣的读者；偏好人物鲜明、情节曲折的叙事风格的读者。要点1：人物设定与冲突——绅士侦探与热血女警探的搭档。主角罗非（推测为“绅探”）是一位穿着考究、举止优雅的绅士，住在沙利文公寓203室，随身携带怀表，擅长推理和观察。女警探秦小曼刚从中央警官学校毕业，初到上海，性格正直、勇敢、冲动，但缺乏经验", "keywords": ["示例", "细节", "马博远", "秦小曼", "民国上海"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/绅探"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/人物设定.md"}, {"id": "批判性思维.md", "label": "批判性思维", "title": "批判性思维", "type": "book", "degree": 2, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：红拇指印（世界经典推理文库3）。核心主题：本书通过一个看似无懈可击的“指纹”证据链，讲述了侦探桑戴克医生如何运用科学方法、逻辑推理和对人性的洞察，为无辜的嫌疑人鲁宾·霍恩比洗脱盗窃钻石罪名，并揭露真凶的故事。核心探讨了科学证据的可靠性、司法公正以及表象与真相之间的巨大鸿沟。书中以“血指纹”为核心证据，展现了科学证据在司法中的强大说服力（指纹的唯一性、警方指纹专家的鉴定），也揭示了其可能被伪造或误解的风险。桑戴克并未被证据的表面说服，而是提出了一系列质疑：“有没有可能是谁故意把这张带血指印的纸放进去的", "keywords": ["桑戴克", "科学证据"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/红拇指印（世界经典推理文库3）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/批判性思维.md"}, {"id": "D机关.md", "label": "D机关", "title": "D机关", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：代号D机关.第二部（日本推理作家协会奖、“这本推理小说了不起。”权威推荐，同名电影由龟梨和也、深田恭子、伊势谷有介领衔主演）。核心主题：本书通过多个间谍故事，核心探讨了在二战前夕的背景下，日本陆军内部两个理念截然不同的秘密谍报机关——D机关与风机关——之间的生死竞争。这种“异端”性质，使其在陆军内部备受厌恶，但也正是这种厌恶，为风机关的成立扫清了障碍。D机关因其“不能自杀、不能杀人”等原则，在崇尚杀伐决断的陆军内部被视为“烂苹果”，引发了强烈的本能的排斥和厌恶", "keywords": ["风机关", "本推理", "推理小", "理小说"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/代号D机关.第二部（日本推理作家协会奖、“这本推理小说了不起！”权威推荐，同名电影由龟梨和也、深田恭子、伊势谷有介领衔主演）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/D机关.md"}, {"id": "环境氛围.md", "label": "环境氛围", "title": "环境氛围", "type": "book", "degree": 5, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：以民国上海为背景，讲述一位优雅神秘的绅士侦探与初出茅庐的女警探搭档破案的故事，展现罪恶与正义交织的都市传奇。适合人群：喜欢民国风推理小说的读者；对侦探、悬疑、犯罪题材感兴趣的读者；偏好人物鲜明、情节曲折的叙事风格的读者。要点1：人物设定与冲突——绅士侦探与热血女警探的搭档。主角罗非（推测为“绅探”）是一位穿着考究、举止优雅的绅士，住在沙利文公寓203室，随身携带怀表，擅长推理和观察。女警探秦小曼刚从中央警官学校毕业，初到上海，性格正直、勇敢、冲动，但缺乏经验", "keywords": ["示例", "细节", "马博远", "秦小曼", "民国上海"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/绅探"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/环境氛围.md"}, {"id": "密室杀人.md", "label": "密室杀人", "title": "密室杀人", "type": "book", "degree": 2, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：三口棺材（【不可能犯罪小说】的巅峰之作，全球读者顶礼膜拜，世界推理文学史上不可忽视的里程碑，至今难以超越。核心主题：通过两起看似超自然的“不可能犯罪”谋杀案（密室杀人、雪地无足迹杀人），揭示凶手如何利用心理学、魔术技巧和环境细节制造完美犯罪假象，最终由侦探菲尔博士拆解谜团，展现理性推理对神秘现象的终极胜利。适合人群：推理小说爱好者，尤其是钟情于“密室杀人”“不可能犯罪”题材的读者；对魔术、心理学、逻辑分析感兴趣的读者；希望学习如何从细节中构建严密推理链条的写作或思考者。卡尔通过“三口棺材”的隐喻（教授、凶手、谜题本身），构建了一个“凶手如幽灵般来去无踪”的谜面。菲尔博士系统梳理了密室杀人", "keywords": ["不可能", "凶手利用"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/三口棺材（【不可能犯罪小说】的巅峰之作，全球读者顶礼膜拜，世界推理文学史上不可忽视的里程碑，至今难以超越。）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/密室杀人.md"}, {"id": "心理博弈.md", "label": "心理博弈", "title": "心理博弈", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：本书以“夏亚事务所”为背景，通过一系列与经典游戏（如杀人游戏、捉迷藏、棋类等）同名的案件，讲述主角夏亚与心理学博士方程合作，运用逻辑推理和心理分析破解谜题的故事。核心主题是探索游戏规则与现实犯罪之间的映射关系，以及在压力情境下人性的博弈与暴露。适合人群：推理小说爱好者、心理学入门读者、对“游戏化”叙事结构感兴趣的读者，以及喜欢在虚构故事中寻找逻辑解谜乐趣的读者。本书的核心结构是将经典的聚会游戏（如“杀人游戏”）的规则和模式，作为现实案件发生的框架。例如，在“杀人杀人游戏”章节中，案件的参与者正在玩“杀人游戏”，而现实中却发生了真正的谋杀", "keywords": ["杀人游", "人游戏", "心理学", "参与者"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/杀人游戏"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/心理博弈.md"}, {"id": "逻辑推理.md", "label": "逻辑推理", "title": "逻辑推理", "type": "book", "degree": 2, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：红拇指印（世界经典推理文库3）。核心主题：本书通过一个看似无懈可击的“指纹”证据链，讲述了侦探桑戴克医生如何运用科学方法、逻辑推理和对人性的洞察，为无辜的嫌疑人鲁宾·霍恩比洗脱盗窃钻石罪名，并揭露真凶的故事。核心探讨了科学证据的可靠性、司法公正以及表象与真相之间的巨大鸿沟。书中以“血指纹”为核心证据，展现了科学证据在司法中的强大说服力（指纹的唯一性、警方指纹专家的鉴定），也揭示了其可能被伪造或误解的风险。桑戴克并未被证据的表面说服，而是提出了一系列质疑：“有没有可能是谁故意把这张带血指印的纸放进去的", "keywords": ["桑戴克", "科学证据"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/红拇指印（世界经典推理文库3）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/逻辑推理.md"}, {"id": "家族秘密.md", "label": "家族秘密", "title": "家族秘密", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "核心主题：通过侦探金田一耕助的系列探案，展现日本昭和时代乡村与都市中隐藏的家族秘密、人性阴暗面，以及基于传统习俗与心理动机的复杂密室杀人诡计。适合人群：推理小说爱好者、日本文化研究者、对密室杀人诡计与人性黑暗面感兴趣的读者。要点1：经典密室杀人诡计与“本阵”背景。侦探金田一耕助通过观察现场细节（如红色房间、琴声、三指男人）推理出凶手利用心理盲点制造的密室。书中金田一耕助通过三指男人的手套、口罩、走路姿势等细节推断其身份", "keywords": ["金田一", "密室杀", "室杀人", "杀人诡"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/金田一探案大全集"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/家族秘密.md"}, {"id": "职业倦怠与异化.md", "label": "职业倦怠与异化", "title": "职业倦怠与异化", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "与阿加莎齐名的推理小说大师P. D. 詹姆斯。恶念丛生的孤岛上，我们都在逃亡，我们都在寻找真相。核心主题：通过一起发生在与世隔绝的科姆岛上的死亡案件，探讨权力、秘密、道德困境与人性幽暗，同时展现现代刑侦调查在政治与安全压力下的复杂性。适合人群：推理小说爱好者、对英国社会与官僚体制感兴趣的读者、喜欢心理悬疑与法医细节的读者。在推理小说中，法医病理学不仅是破案工具，更是对抗谎言与权力干预的“客观第三方”", "keywords": ["我们都", "推理小", "理小说", "詹姆斯"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/灯塔血案（读客熊猫君出品。与阿加莎齐名的推理小说大师P. D. 詹姆斯！恶念丛生的孤岛上，我们都在逃亡，我们都在寻找真相。）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/职业倦怠与异化.md"}, {"id": "封闭空间.md", "label": "封闭空间", "title": "封闭空间", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：《不连续杀人事件（第二届日本推理作家协会奖获奖作品，江户川乱步、松本清张赞誉推荐） (坂口安吾系列作品)》。核心主题：本书是作者践行“推理小说是作者与读者间的公平解谜游戏”理念的自信之作。通过一系列看似不连续的谋杀案，构建了一个封闭山庄中的复杂人际关系网，核心在于挑战读者与作品中侦探一同找出真凶，体验纯粹的斗智乐趣。适合人群：本格推理小说爱好者，尤其是享受“挑战读者”、进行逻辑推演的读者；对日本战后“无赖派”文学及坂口安吾独特文学理念感兴趣的读者；喜欢复杂人物关系和封闭空间杀人设定的读者。本书是坂口安吾对其推理小说理念的完美实践", "keywords": ["坂口安吾", "推理小", "训练结构化逻辑思维", "提升人际洞察力"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/不连续杀人事件（第二届日本推理作家协会奖获奖作品，江户川乱步、松本清张赞誉推荐） (坂口安吾系列作品)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/封闭空间.md"}, {"id": "挑战读者.md", "label": "挑战读者", "title": "挑战读者", "type": "book", "degree": 4, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：《不连续杀人事件（第二届日本推理作家协会奖获奖作品，江户川乱步、松本清张赞誉推荐） (坂口安吾系列作品)》。核心主题：本书是作者践行“推理小说是作者与读者间的公平解谜游戏”理念的自信之作。通过一系列看似不连续的谋杀案，构建了一个封闭山庄中的复杂人际关系网，核心在于挑战读者与作品中侦探一同找出真凶，体验纯粹的斗智乐趣。适合人群：本格推理小说爱好者，尤其是享受“挑战读者”、进行逻辑推演的读者；对日本战后“无赖派”文学及坂口安吾独特文学理念感兴趣的读者；喜欢复杂人物关系和封闭空间杀人设定的读者。本书是坂口安吾对其推理小说理念的完美实践", "keywords": ["坂口安吾", "推理小", "训练结构化逻辑思维", "提升人际洞察力"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/不连续杀人事件（第二届日本推理作家协会奖获奖作品，江户川乱步、松本清张赞誉推荐） (坂口安吾系列作品)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/挑战读者.md"}, {"id": "悬疑叙事.md", "label": "悬疑叙事", "title": "悬疑叙事", "type": "book", "degree": 5, "cluster": "推理小说", "domain": "文学", "sub_domain": "推理小说", "summary": "书名：禁断的魔术（神探伽利略系列全新长篇小说，继《嫌疑人X的献身》和《圣女的救济》之后，神探伽利略再度破解奇案。核心主题：本书通过一桩离奇的酒店命案，探讨了科学知识被用于善与恶的边界，以及个人天赋、恩情与正义之间的冲突。核心在于揭示“禁断的魔术”——即那些能够成就伟大，也能制造悲剧的强大知识与技术。适合人群：东野圭吾及“神探伽利略”系列的忠实读者；对科学伦理、人性与正义冲突感兴趣的推理小说爱好者；喜欢思考“技术双刃剑”这一主题的读者。另一条线是青年古芝伸吾的成长故事：他是一位热爱物理的高中生，在社团面临解散危机时，得到了帝都大学物理系副教授汤川学的帮助，并因此结下深厚情谊", "keywords": ["神探伽利", "伽利略", "古芝伸吾", "古芝秋穗", "汤川学"], "tags": ["domain/文学", "sub_domain/推理小说", "type/concept", "source/禁断的魔术（神探伽利略系列全新长篇小说，继《嫌疑人X的献身"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/推理小说/悬疑叙事.md"}];
+var LINKS = [{"source": "社会派推理.md", "target": "道德困境.md", "value": 2, "shared": ["鹤冈七郎", "犯罪者"]}, {"source": "社会派推理.md", "target": "法律盲点.md", "value": 2, "shared": ["鹤冈七郎", "犯罪者"]}, {"source": "社会派推理.md", "target": "犯罪心理学.md", "value": 2, "shared": ["鹤冈七郎", "犯罪者"]}, {"source": "社会派推理.md", "target": "高智商犯罪.md", "value": 2, "shared": ["鹤冈七郎", "犯罪者"]}, {"source": "科学伦理.md", "target": "恩情与正义的冲突.md", "value": 3, "shared": ["汤川学", "古芝秋穗", "古芝伸吾"]}, {"source": "科学伦理.md", "target": "技术双刃剑.md", "value": 3, "shared": ["汤川学", "古芝秋穗", "古芝伸吾"]}, {"source": "科学伦理.md", "target": "恩情与正义.md", "value": 3, "shared": ["汤川学", "古芝秋穗", "古芝伸吾"]}, {"source": "科学伦理.md", "target": "工具理性与价值理性.md", "value": 3, "shared": ["汤川学", "古芝秋穗", "古芝伸吾"]}, {"source": "科学伦理.md", "target": "悬疑叙事.md", "value": 3, "shared": ["汤川学", "古芝秋穗", "古芝伸吾"]}, {"source": "民国推理.md", "target": "推理元素.md", "value": 3, "shared": ["细节", "马博远", "示例"]}, {"source": "民国推理.md", "target": "观察力.md", "value": 3, "shared": ["细节", "马博远", "示例"]}, {"source": "民国推理.md", "target": "案件谜题.md", "value": 3, "shared": ["细节", "马博远", "示例"]}, {"source": "民国推理.md", "target": "道德推脱.md", "value": 3, "shared": ["细节", "马博远", "示例"]}, {"source": "民国推理.md", "target": "人物设定.md", "value": 3, "shared": ["细节", "马博远", "示例"]}, {"source": "民国推理.md", "target": "环境氛围.md", "value": 3, "shared": ["细节", "马博远", "示例"]}, {"source": "道德困境.md", "target": "法律盲点.md", "value": 2, "shared": ["鹤冈七郎", "犯罪者"]}, {"source": "道德困境.md", "target": "犯罪心理学.md", "value": 2, "shared": ["鹤冈七郎", "犯罪者"]}, {"source": "道德困境.md", "target": "高智商犯罪.md", "value": 2, "shared": ["鹤冈七郎", "犯罪者"]}, {"source": "身份冲突.md", "target": "侦探推理方法.md", "value": 4, "shared": ["金田一", "密室杀", "杀人诡", "室杀人"]}, {"source": "身份冲突.md", "target": "象征性物件.md", "value": 4, "shared": ["金田一", "密室杀", "杀人诡", "室杀人"]}, {"source": "身份冲突.md", "target": "密室杀人诡计.md", "value": 4, "shared": ["金田一", "密室杀", "杀人诡", "室杀人"]}, {"source": "身份冲突.md", "target": "家族秘密.md", "value": 4, "shared": ["金田一", "密室杀", "杀人诡", "室杀人"]}, {"source": "组织竞争.md", "target": "孤岛封闭空间.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "组织竞争.md", "target": "情报战伦理.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "组织竞争.md", "target": "间谍伦理.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "组织竞争.md", "target": "情报战.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "组织竞争.md", "target": "先事实后解释.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "组织竞争.md", "target": "二战谍战.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "组织竞争.md", "target": "权力与安全悖论.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "组织竞争.md", "target": "风机关.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "组织竞争.md", "target": "间谍组织竞争.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "组织竞争.md", "target": "D机关.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "组织竞争.md", "target": "职业倦怠与异化.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "司法公正.md", "target": "科学证据.md", "value": 2, "shared": ["桑戴克", "科学证据"]}, {"source": "司法公正.md", "target": "批判性思维.md", "value": 2, "shared": ["桑戴克", "科学证据"]}, {"source": "司法公正.md", "target": "逻辑推理.md", "value": 2, "shared": ["桑戴克", "科学证据"]}, {"source": "恩情与正义的冲突.md", "target": "技术双刃剑.md", "value": 5, "shared": ["伽利略", "古芝伸吾", "古芝秋穗", "神探伽利", "汤川学"]}, {"source": "恩情与正义的冲突.md", "target": "恩情与正义.md", "value": 5, "shared": ["伽利略", "古芝伸吾", "古芝秋穗", "神探伽利", "汤川学"]}, {"source": "恩情与正义的冲突.md", "target": "工具理性与价值理性.md", "value": 5, "shared": ["伽利略", "古芝伸吾", "古芝秋穗", "神探伽利", "汤川学"]}, {"source": "恩情与正义的冲突.md", "target": "悬疑叙事.md", "value": 5, "shared": ["伽利略", "古芝伸吾", "古芝秋穗", "神探伽利", "汤川学"]}, {"source": "技术双刃剑.md", "target": "恩情与正义.md", "value": 5, "shared": ["伽利略", "古芝伸吾", "古芝秋穗", "神探伽利", "汤川学"]}, {"source": "技术双刃剑.md", "target": "工具理性与价值理性.md", "value": 5, "shared": ["伽利略", "古芝伸吾", "古芝秋穗", "神探伽利", "汤川学"]}, {"source": "技术双刃剑.md", "target": "悬疑叙事.md", "value": 5, "shared": ["伽利略", "古芝伸吾", "古芝秋穗", "神探伽利", "汤川学"]}, {"source": "信息不对称.md", "target": "社会阶层.md", "value": 4, "shared": ["人游戏", "参与者", "心理学", "杀人游"]}, {"source": "信息不对称.md", "target": "游戏化叙事.md", "value": 4, "shared": ["人游戏", "参与者", "心理学", "杀人游"]}, {"source": "信息不对称.md", "target": "认知失调.md", "value": 4, "shared": ["人游戏", "参与者", "心理学", "杀人游"]}, {"source": "信息不对称.md", "target": "心理博弈.md", "value": 4, "shared": ["人游戏", "参与者", "心理学", "杀人游"]}, {"source": "推理元素.md", "target": "观察力.md", "value": 4, "shared": ["细节", "马博远", "秦小曼", "示例"]}, {"source": "推理元素.md", "target": "案件谜题.md", "value": 5, "shared": ["示例", "秦小曼", "细节", "马博远", "民国上海"]}, {"source": "推理元素.md", "target": "道德推脱.md", "value": 4, "shared": ["细节", "马博远", "秦小曼", "示例"]}, {"source": "推理元素.md", "target": "人物设定.md", "value": 5, "shared": ["示例", "秦小曼", "细节", "马博远", "民国上海"]}, {"source": "推理元素.md", "target": "环境氛围.md", "value": 5, "shared": ["示例", "秦小曼", "细节", "马博远", "民国上海"]}, {"source": "侦探推理方法.md", "target": "象征性物件.md", "value": 4, "shared": ["金田一", "密室杀", "杀人诡", "室杀人"]}, {"source": "侦探推理方法.md", "target": "密室杀人诡计.md", "value": 4, "shared": ["金田一", "密室杀", "杀人诡", "室杀人"]}, {"source": "侦探推理方法.md", "target": "家族秘密.md", "value": 4, "shared": ["金田一", "密室杀", "杀人诡", "室杀人"]}, {"source": "社会阶层.md", "target": "游戏化叙事.md", "value": 4, "shared": ["人游戏", "参与者", "心理学", "杀人游"]}, {"source": "社会阶层.md", "target": "认知失调.md", "value": 4, "shared": ["人游戏", "参与者", "心理学", "杀人游"]}, {"source": "社会阶层.md", "target": "心理博弈.md", "value": 4, "shared": ["人游戏", "参与者", "心理学", "杀人游"]}, {"source": "本格推理.md", "target": "公平解谜.md", "value": 4, "shared": ["提升人际洞察力", "推理小", "坂口安吾", "训练结构化逻辑思维"]}, {"source": "本格推理.md", "target": "人际关系网.md", "value": 4, "shared": ["提升人际洞察力", "推理小", "坂口安吾", "训练结构化逻辑思维"]}, {"source": "本格推理.md", "target": "作者介入.md", "value": 4, "shared": ["提升人际洞察力", "推理小", "坂口安吾", "训练结构化逻辑思维"]}, {"source": "本格推理.md", "target": "封闭空间.md", "value": 4, "shared": ["提升人际洞察力", "推理小", "坂口安吾", "训练结构化逻辑思维"]}, {"source": "本格推理.md", "target": "挑战读者.md", "value": 4, "shared": ["提升人际洞察力", "推理小", "坂口安吾", "训练结构化逻辑思维"]}, {"source": "法律盲点.md", "target": "犯罪心理学.md", "value": 2, "shared": ["鹤冈七郎", "犯罪者"]}, {"source": "法律盲点.md", "target": "高智商犯罪.md", "value": 2, "shared": ["鹤冈七郎", "犯罪者"]}, {"source": "孤岛封闭空间.md", "target": "情报战伦理.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "孤岛封闭空间.md", "target": "间谍伦理.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "孤岛封闭空间.md", "target": "情报战.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "孤岛封闭空间.md", "target": "先事实后解释.md", "value": 4, "shared": ["我们都", "推理小", "詹姆斯", "理小说"]}, {"source": "孤岛封闭空间.md", "target": "二战谍战.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "孤岛封闭空间.md", "target": "权力与安全悖论.md", "value": 4, "shared": ["我们都", "推理小", "詹姆斯", "理小说"]}, {"source": "孤岛封闭空间.md", "target": "风机关.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "孤岛封闭空间.md", "target": "间谍组织竞争.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "孤岛封闭空间.md", "target": "D机关.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "孤岛封闭空间.md", "target": "职业倦怠与异化.md", "value": 4, "shared": ["我们都", "推理小", "詹姆斯", "理小说"]}, {"source": "情报战伦理.md", "target": "间谍伦理.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "情报战伦理.md", "target": "情报战.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "情报战伦理.md", "target": "先事实后解释.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "情报战伦理.md", "target": "二战谍战.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "情报战伦理.md", "target": "权力与安全悖论.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "情报战伦理.md", "target": "风机关.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "情报战伦理.md", "target": "间谍组织竞争.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "情报战伦理.md", "target": "D机关.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "情报战伦理.md", "target": "职业倦怠与异化.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "间谍伦理.md", "target": "情报战.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "间谍伦理.md", "target": "先事实后解释.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "间谍伦理.md", "target": "二战谍战.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "间谍伦理.md", "target": "权力与安全悖论.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "间谍伦理.md", "target": "风机关.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "间谍伦理.md", "target": "间谍组织竞争.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "间谍伦理.md", "target": "D机关.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "间谍伦理.md", "target": "职业倦怠与异化.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "观察力.md", "target": "案件谜题.md", "value": 4, "shared": ["细节", "马博远", "秦小曼", "示例"]}, {"source": "观察力.md", "target": "道德推脱.md", "value": 4, "shared": ["细节", "马博远", "秦小曼", "示例"]}, {"source": "观察力.md", "target": "人物设定.md", "value": 4, "shared": ["细节", "马博远", "秦小曼", "示例"]}, {"source": "观察力.md", "target": "环境氛围.md", "value": 4, "shared": ["细节", "马博远", "秦小曼", "示例"]}, {"source": "魔术技巧.md", "target": "密室讲义.md", "value": 2, "shared": ["凶手利用", "不可能"]}, {"source": "魔术技巧.md", "target": "密室杀人.md", "value": 2, "shared": ["凶手利用", "不可能"]}, {"source": "情报战.md", "target": "先事实后解释.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "情报战.md", "target": "二战谍战.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "情报战.md", "target": "权力与安全悖论.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "情报战.md", "target": "风机关.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "情报战.md", "target": "间谍组织竞争.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "情报战.md", "target": "D机关.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "情报战.md", "target": "职业倦怠与异化.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "恩情与正义.md", "target": "工具理性与价值理性.md", "value": 5, "shared": ["伽利略", "古芝伸吾", "古芝秋穗", "神探伽利", "汤川学"]}, {"source": "恩情与正义.md", "target": "悬疑叙事.md", "value": 5, "shared": ["伽利略", "古芝伸吾", "古芝秋穗", "神探伽利", "汤川学"]}, {"source": "公平解谜.md", "target": "人际关系网.md", "value": 4, "shared": ["提升人际洞察力", "推理小", "坂口安吾", "训练结构化逻辑思维"]}, {"source": "公平解谜.md", "target": "作者介入.md", "value": 4, "shared": ["提升人际洞察力", "推理小", "坂口安吾", "训练结构化逻辑思维"]}, {"source": "公平解谜.md", "target": "封闭空间.md", "value": 4, "shared": ["提升人际洞察力", "推理小", "坂口安吾", "训练结构化逻辑思维"]}, {"source": "公平解谜.md", "target": "挑战读者.md", "value": 4, "shared": ["提升人际洞察力", "推理小", "坂口安吾", "训练结构化逻辑思维"]}, {"source": "游戏化叙事.md", "target": "认知失调.md", "value": 4, "shared": ["人游戏", "参与者", "心理学", "杀人游"]}, {"source": "游戏化叙事.md", "target": "心理博弈.md", "value": 4, "shared": ["人游戏", "参与者", "心理学", "杀人游"]}, {"source": "工具理性与价值理性.md", "target": "悬疑叙事.md", "value": 5, "shared": ["伽利略", "古芝伸吾", "古芝秋穗", "神探伽利", "汤川学"]}, {"source": "象征性物件.md", "target": "密室杀人诡计.md", "value": 4, "shared": ["金田一", "密室杀", "杀人诡", "室杀人"]}, {"source": "象征性物件.md", "target": "家族秘密.md", "value": 4, "shared": ["金田一", "密室杀", "杀人诡", "室杀人"]}, {"source": "科学证据.md", "target": "批判性思维.md", "value": 2, "shared": ["桑戴克", "科学证据"]}, {"source": "科学证据.md", "target": "逻辑推理.md", "value": 2, "shared": ["桑戴克", "科学证据"]}, {"source": "先事实后解释.md", "target": "二战谍战.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "先事实后解释.md", "target": "权力与安全悖论.md", "value": 4, "shared": ["我们都", "推理小", "詹姆斯", "理小说"]}, {"source": "先事实后解释.md", "target": "风机关.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "先事实后解释.md", "target": "间谍组织竞争.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "先事实后解释.md", "target": "D机关.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "先事实后解释.md", "target": "职业倦怠与异化.md", "value": 4, "shared": ["我们都", "推理小", "詹姆斯", "理小说"]}, {"source": "犯罪心理学.md", "target": "高智商犯罪.md", "value": 2, "shared": ["鹤冈七郎", "犯罪者"]}, {"source": "案件谜题.md", "target": "道德推脱.md", "value": 4, "shared": ["细节", "马博远", "秦小曼", "示例"]}, {"source": "案件谜题.md", "target": "人物设定.md", "value": 5, "shared": ["示例", "秦小曼", "细节", "马博远", "民国上海"]}, {"source": "案件谜题.md", "target": "环境氛围.md", "value": 5, "shared": ["示例", "秦小曼", "细节", "马博远", "民国上海"]}, {"source": "人际关系网.md", "target": "作者介入.md", "value": 4, "shared": ["提升人际洞察力", "推理小", "坂口安吾", "训练结构化逻辑思维"]}, {"source": "人际关系网.md", "target": "封闭空间.md", "value": 4, "shared": ["提升人际洞察力", "推理小", "坂口安吾", "训练结构化逻辑思维"]}, {"source": "人际关系网.md", "target": "挑战读者.md", "value": 4, "shared": ["提升人际洞察力", "推理小", "坂口安吾", "训练结构化逻辑思维"]}, {"source": "道德推脱.md", "target": "人物设定.md", "value": 4, "shared": ["细节", "马博远", "秦小曼", "示例"]}, {"source": "道德推脱.md", "target": "环境氛围.md", "value": 4, "shared": ["细节", "马博远", "秦小曼", "示例"]}, {"source": "认知失调.md", "target": "心理博弈.md", "value": 4, "shared": ["人游戏", "参与者", "心理学", "杀人游"]}, {"source": "二战谍战.md", "target": "权力与安全悖论.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "二战谍战.md", "target": "风机关.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "二战谍战.md", "target": "间谍组织竞争.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "二战谍战.md", "target": "D机关.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "二战谍战.md", "target": "职业倦怠与异化.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "权力与安全悖论.md", "target": "风机关.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "权力与安全悖论.md", "target": "间谍组织竞争.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "权力与安全悖论.md", "target": "D机关.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "权力与安全悖论.md", "target": "职业倦怠与异化.md", "value": 4, "shared": ["我们都", "推理小", "詹姆斯", "理小说"]}, {"source": "风机关.md", "target": "间谍组织竞争.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "风机关.md", "target": "D机关.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "风机关.md", "target": "职业倦怠与异化.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "间谍组织竞争.md", "target": "D机关.md", "value": 4, "shared": ["风机关", "理小说", "推理小", "本推理"]}, {"source": "间谍组织竞争.md", "target": "职业倦怠与异化.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "密室杀人诡计.md", "target": "家族秘密.md", "value": 4, "shared": ["金田一", "密室杀", "杀人诡", "室杀人"]}, {"source": "密室讲义.md", "target": "密室杀人.md", "value": 2, "shared": ["凶手利用", "不可能"]}, {"source": "作者介入.md", "target": "封闭空间.md", "value": 4, "shared": ["提升人际洞察力", "推理小", "坂口安吾", "训练结构化逻辑思维"]}, {"source": "作者介入.md", "target": "挑战读者.md", "value": 4, "shared": ["提升人际洞察力", "推理小", "坂口安吾", "训练结构化逻辑思维"]}, {"source": "人物设定.md", "target": "环境氛围.md", "value": 5, "shared": ["示例", "秦小曼", "细节", "马博远", "民国上海"]}, {"source": "批判性思维.md", "target": "逻辑推理.md", "value": 2, "shared": ["桑戴克", "科学证据"]}, {"source": "D机关.md", "target": "职业倦怠与异化.md", "value": 2, "shared": ["理小说", "推理小"]}, {"source": "封闭空间.md", "target": "挑战读者.md", "value": 4, "shared": ["提升人际洞察力", "推理小", "坂口安吾", "训练结构化逻辑思维"]}];
+var CLUSTER_COLORS = {"推理小说": "#8b5cf6"};
+var SEARCH_DATA = [{"id": "社会派推理.md", "label": "社会派推理"}, {"id": "科学伦理.md", "label": "科学伦理"}, {"id": "民国推理.md", "label": "民国推理"}, {"id": "组织生存法则.md", "label": "组织生存法则"}, {"id": "道德困境.md", "label": "道德困境"}, {"id": "身份冲突.md", "label": "身份冲突"}, {"id": "组织竞争.md", "label": "组织竞争"}, {"id": "司法公正.md", "label": "司法公正"}, {"id": "恩情与正义的冲突.md", "label": "恩情与正义的冲突"}, {"id": "法医病理学.md", "label": "法医病理学"}, {"id": "技术双刃剑.md", "label": "技术双刃剑"}, {"id": "信息不对称.md", "label": "信息不对称"}, {"id": "推理元素.md", "label": "推理元素"}, {"id": "侦探推理方法.md", "label": "侦探推理方法"}, {"id": "社会阶层.md", "label": "社会阶层"}, {"id": "本格推理.md", "label": "本格推理"}, {"id": "法律盲点.md", "label": "法律盲点"}, {"id": "确认偏误.md", "label": "确认偏误"}, {"id": "孤岛封闭空间.md", "label": "孤岛封闭空间"}, {"id": "情报战伦理.md", "label": "情报战伦理"}, {"id": "间谍伦理.md", "label": "间谍伦理"}, {"id": "观察力.md", "label": "观察力"}, {"id": "不可能犯罪.md", "label": "不可能犯罪"}, {"id": "魔术技巧.md", "label": "魔术技巧"}, {"id": "情报战.md", "label": "情报战"}, {"id": "恩情与正义.md", "label": "恩情与正义"}, {"id": "公平解谜.md", "label": "公平解谜"}, {"id": "游戏化叙事.md", "label": "游戏化叙事"}, {"id": "工具理性与价值理性.md", "label": "工具理性与价值理性"}, {"id": "象征性物件.md", "label": "象征性物件"}, {"id": "科学证据.md", "label": "科学证据"}, {"id": "先事实后解释.md", "label": "先事实后解释"}, {"id": "犯罪心理学.md", "label": "犯罪心理学"}, {"id": "案件谜题.md", "label": "案件谜题"}, {"id": "高智商犯罪.md", "label": "高智商犯罪"}, {"id": "心理学操控.md", "label": "心理学操控"}, {"id": "人际关系网.md", "label": "人际关系网"}, {"id": "道德推脱.md", "label": "道德推脱"}, {"id": "认知失调.md", "label": "认知失调"}, {"id": "二战谍战.md", "label": "二战谍战"}, {"id": "权力与安全悖论.md", "label": "权力与安全悖论"}, {"id": "风机关.md", "label": "风机关"}, {"id": "间谍组织竞争.md", "label": "间谍组织竞争"}, {"id": "密室杀人诡计.md", "label": "密室杀人诡计"}, {"id": "密室讲义.md", "label": "密室讲义"}, {"id": "作者介入.md", "label": "作者介入"}, {"id": "人物设定.md", "label": "人物设定"}, {"id": "批判性思维.md", "label": "批判性思维"}, {"id": "D机关.md", "label": "D机关"}, {"id": "环境氛围.md", "label": "环境氛围"}, {"id": "密室杀人.md", "label": "密室杀人"}, {"id": "心理博弈.md", "label": "心理博弈"}, {"id": "逻辑推理.md", "label": "逻辑推理"}, {"id": "家族秘密.md", "label": "家族秘密"}, {"id": "职业倦怠与异化.md", "label": "职业倦怠与异化"}, {"id": "封闭空间.md", "label": "封闭空间"}, {"id": "挑战读者.md", "label": "挑战读者"}, {"id": "悬疑叙事.md", "label": "悬疑叙事"}];
+var CONCEPT_SEARCH = [];
+
+
+/* ---- 搜索 ---- */
+var searchBox = document.getElementById("search-box");
+var searchResults = document.getElementById("search-results");
+
+searchBox.addEventListener("input", function(){
+  var q = this.value.trim().toLowerCase();
+  if(!q) { searchResults.style.display="none"; return; }
+  var combined = SEARCH_DATA.concat(CONCEPT_SEARCH.map(function(c){ return {id:c,label:c,type:"concept"}; }));
+  var matches = combined.filter(function(d){ return d.label.toLowerCase().indexOf(q)>-1; }).slice(0,12);
+  if(!matches.length) { searchResults.style.display="none"; return; }
+  searchResults.innerHTML = matches.map(function(d){
+    return '<div class="sri" data-id="'+d.id+'">'+d.label+'</div>';
+  }).join("");
+  searchResults.style.display="block";
+});
+
+searchResults.addEventListener("click", function(e){
+  var el = e.target.closest(".sri");
+  if(!el) return;
+  highlightNode(el.getAttribute("data-id"));
+  searchResults.style.display="none";
+  searchBox.value="";
+});
+
+function highlightNode(id){
+  svg.selectAll(".node").classed("highlight", function(d){ return d.id===id; });
+  svg.selectAll(".link").classed("highlight", function(d){
+    return d.source.id===id || d.target.id===id;
+  });
+  var nd = nodeMap.get(id);
+  if(!nd) return;
+  var t = d3.zoomTransform(svg.node());
+  var x = -nd.x*t.k + width/2;
+  var y = -nd.y*t.k + height/2;
+  svg.transition().duration(600).call(zoom.transform, d3.zoomIdentity.translate(x,y).scale(t.k));
+}
+
+/* ---- 详情面板 ---- */
+function showDetail(d){
+  var panel = document.getElementById("detail-panel");
+  var title = document.getElementById("detail-title");
+  var body  = document.getElementById("detail-body");
+
+  title.textContent = (d.title || d.label || d.id || "").replace(/\.md$/, "");
+
+  var html = "";
+
+  /* 元信息 */
+  html += '<div class="section"><div class="meta-row"><span class="meta-label">类型</span><span>' + (d.type==="concept" ? "💡 概念" : "📖 笔记") + '</span></div>';
+  if(d.domain)   html += '<div class="meta-row"><span class="meta-label">领域</span><span>' + d.domain + '</span></div>';
+  if(d.cluster) html += '<div class="meta-row"><span class="meta-label">聚类</span><span>' + d.cluster + '</span></div>';
+  if(d.degree !== undefined) html += '<div class="meta-row"><span class="meta-label">连通度</span><span>' + d.degree + '</span></div>';
+  html += '</div>';
+
+  /* 摘要 */
+  if(d.summary){
+    html += '<div class="section"><div class="section-title">📝 摘要</div><div class="summary">' + escapeHtml(d.summary.slice(0,500)) + (d.summary.length>500 ? "..." : "") + '</div></div>';
+  }
+
+  /* 关键词 */
+  if(d.keywords && d.keywords.length){
+    html += '<div class="section"><div class="section-title">🔑 关键词</div>';
+    d.keywords.forEach(function(kw){ html += '<span class="keyword">' + escapeHtml(kw) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 标签 */
+  if(d.tags && d.tags.length){
+    html += '<div class="section"><div class="section-title">🏷️ 标签</div>';
+    d.tags.forEach(function(tg){ html += '<span class="tag">' + escapeHtml(tg) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 打开原文件：用 Obsidian URI 协议，避免浏览器 file:// 限制 */
+  if(d.path){
+    var obsidianUrl = "obsidian://open?path=" + encodeURIComponent(d.path);
+    html += '<div class="section"><a class="open-link" href="' + obsidianUrl + '">📂 在 Obsidian 中打开</a></div>';
+  }
+
+  body.innerHTML = html;
+  panel.classList.add("open");
+}
+
+function closeDetail(){
+  document.getElementById("detail-panel").classList.remove("open");
+}
+
+function escapeHtml(s){
+  if(!s) return "";
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ---- D3 力导向图 ---- */
+var width  = window.innerWidth;
+var height = window.innerHeight - 48;
+var svg = d3.select("#graph").append("svg").attr("width",width).attr("height",height);
+var g = svg.append("g");
+var zoom = d3.zoom().scaleExtent([0.05,5]).on("zoom", function(e){ g.attr("transform", e.transform); });
+svg.call(zoom);
+
+var simulation = d3.forceSimulation(NODES)
+  .force("link",    d3.forceLink(LINKS).id(function(d){ return d.id; }).distance(90))
+  .force("charge",  d3.forceManyBody().strength(-220))
+  .force("center",  d3.forceCenter(width/2, height/2))
+  .force("collision", d3.forceCollide(30))
+  .force("x",       d3.forceX(width/2).strength(0.06))
+  .force("y",       d3.forceY(height/2).strength(0.06));
+
+var link = g.append("g").attr("class","links").selectAll("line")
+  .data(LINKS).join("line")
+  .attr("class", function(d){ return "link" + ((d.type==="book-book") ? " link-book" : ""); });
+
+var node = g.append("g").attr("class","nodes").selectAll("g")
+  .data(NODES).join("g")
+  .attr("class","node")
+  .attr("data-id", function(d){ return d.id; })
+  .call(d3.drag()
+    .on("start", function(event,d){ if(!event.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+    .on("drag",  function(event,d){ d.fx=event.x; d.fy=event.y; })
+    .on("end",   function(event,d){ if(!event.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+node.append("circle")
+  .attr("r", function(d){ return d.type==="book" ? 5+Math.sqrt(d.degree||1)*1.5 : 7; })
+  .attr("fill", function(d){ return d.type==="book" ? (CLUSTER_COLORS[d.cluster]||"#94a3b8") : "#8b5cf6"; })
+  .attr("stroke", function(d){ return d.type==="book" ? "#0f172a" : "#d97706"; })
+  .on("mouseover", function(event,d){
+    var html = d.type==="book"
+      ? "<strong>📖 "+d.label+"</strong><br>连通度:"+d.degree+"<br>聚类:"+(d.cluster||"未分类")
+      : "<strong>💡 "+d.concept+"</strong><br>关联:"+d.book_count+" 篇";
+    d3.select("#tooltip").html(html).style("opacity",1)
+      .style("left",(event.pageX+12)+"px").style("top",(event.pageY-8)+"px");
+  })
+  .on("mouseout", function(){ d3.select("#tooltip").style("opacity",0); })
+  .on("click", function(event,d){
+    event.stopPropagation();
+    showDetail(d);
+  });
+
+node.append("text").attr("dx",11).attr("dy","0.35em").text(function(d){ return d.label; });
+
+var nodeMap = new Map();
+simulation.on("tick", function(){
+  link
+    .attr("x1", function(d){ return d.source.x; })
+    .attr("y1", function(d){ return d.source.y; })
+    .attr("x2", function(d){ return d.target.x; })
+    .attr("y2", function(d){ return d.target.y; });
+  node.attr("transform", function(d){
+    nodeMap.set(d.id, d);
+    return "translate("+d.x+","+d.y+")";
+  });
+});
+
+/* ---- 图例 ---- */
+var legendItems = d3.select("#legend").append("div").style("font-weight","bold").style("margin-bottom","8px").text("🎨 聚类").node().parentNode;
+Object.entries(CLUSTER_COLORS).forEach(function(entry){
+  var li = d3.select(legendItems).append("div").attr("class","li");
+  li.append("span").attr("class","ld").style("background",entry[1]);
+  li.append("span").text(entry[0]);
+});
+
+/* ---- 按钮 ---- */
+var conceptVisible = true;
+d3.select("#btn-toggle-concept").on("click", function(){
+  conceptVisible = !conceptVisible;
+  svg.selectAll(".node").filter(function(d){ return d.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  svg.selectAll(".link").filter(function(d){ return d.source.type==="concept"||d.target.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  d3.select(this).text(conceptVisible?"隐藏概念":"显示概念").classed("active",!conceptVisible);
+});
+d3.select("#btn-reset").on("click", function(){
+  closeDetail();
+  svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+});
+
+svg.on("click", function(){ searchResults.style.display="none"; });
+document.addEventListener("click", function(e){
+  if(!document.getElementById("detail-panel").contains(e.target) && !e.target.closest(".node")){
+    closeDetail();
+  }
+});
+
+/* 更新统计 */
+d3.select("#node-count").text(NODES.length);
+d3.select("#link-count").text(LINKS.length);
+</script>
+</body>
+</html>

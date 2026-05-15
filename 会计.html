@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>会计 - (全部) - 知识图谱</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#0f172a; color:#e2e8f0; overflow:hidden; }
+
+/* 侧边栏 */
+#sidebar { position:fixed; left:0; top:0; width:220px; height:100vh; background:#1e293b; border-right:1px solid #334155; overflow-y:auto; z-index:50; transition:transform 0.3s; font-size:12px; }
+#sidebar.collapsed { transform:translateX(-220px); }
+#sidebar h2 { font-size:13px; padding:12px 14px 8px; color:#94a3b8; border-bottom:1px solid #334155; }
+#sidebar .domain-header { padding:7px 14px; cursor:pointer; font-weight:600; border-bottom:1px solid #1a2332; transition:background 0.15s; user-select:none; }
+#sidebar .domain-header:hover { background:#334155; }
+#sidebar .domain-pages { display:none; }
+#sidebar .domain-pages a { display:block; padding:5px 14px 5px 24px; color:#cbd5e1; text-decoration:none; border-bottom:1px solid #1a2332; transition:background 0.15s; font-size:11px; }
+#sidebar .domain-pages a:hover { background:#334155; color:#fff; }
+#sidebar .domain-pages a.active { font-weight:600; }
+#sidebar a.active { background:#86efac; color:#0f172a; }
+#sidebar-toggle { position:fixed; left:8px; top:56px; z-index:60; background:#334155; border:1px solid #475569; color:#e2e8f0; border-radius:6px; padding:4px 7px; cursor:pointer; font-size:13px; transition:left 0.3s; }
+#sidebar:not(.collapsed) ~ #sidebar-toggle { left:228px; }
+
+/* 右侧详情面板 */
+#detail-panel { position:fixed; top:0; right:-420px; width:400px; height:100vh; background:#1e293b; border-left:1px solid #334155; z-index:55; transition:right 0.3s; display:flex; flex-direction:column; }
+#detail-panel.open { right:0; }
+#detail-header { padding:14px 16px; border-bottom:1px solid #334155; display:flex; align-items:flex-start; gap:10px; }
+#detail-header h2 { flex:1; font-size:14px; line-height:1.4; margin:0; word-break:break-all; }
+#detail-close { background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer; padding:0 4px; line-height:1; }
+#detail-close:hover { color:#fff; }
+#detail-body { flex:1; overflow-y:auto; padding:16px; font-size:13px; line-height:1.7; }
+#detail-body .section { margin-bottom:16px; }
+#detail-body .section-title { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+#detail-body .tag { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#334155; border-radius:4px; font-size:11px; color:#cbd5e1; }
+#detail-body .keyword { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#86efac22; border:1px solid #86efac66; border-radius:4px; font-size:11px; color:#e2e8f0; }
+#detail-body .summary { color:#cbd5e1; white-space:pre-wrap; }
+#detail-body .open-link { display:inline-block; margin-top:12px; padding:6px 14px; background:#86efac; color:#0f172a; border-radius:6px; text-decoration:none; font-size:12px; font-weight:600; }
+#detail-body .open-link:hover { opacity:0.85; }
+#detail-body .meta-row { display:flex; gap:12px; margin-bottom:8px; font-size:12px; }
+#detail-body .meta-label { color:#94a3b8; min-width:60px; }
+#detail-body .connected-list { list-style:none; padding:0; }
+#detail-body .connected-list li { padding:4px 0; border-bottom:1px solid #1a2332; font-size:12px; cursor:pointer; }
+#detail-body .connected-list li:hover { color:#86efac; }
+
+#header { padding:10px 20px 10px 50px; background:#1e293b; border-bottom:1px solid #334155; display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-left:200px; transition:margin-left 0.3s; }
+#sidebar.collapsed ~ #header { margin-left:0; }
+#header h1 { margin:0; font-size:17px; color:#86efac; white-space:nowrap; }
+#search-wrap { position:relative; }
+#search-box { width:220px; padding:5px 10px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#e2e8f0; font-size:13px; }
+#search-results { position:absolute; top:32px; left:0; width:260px; max-height:300px; overflow-y:auto; background:#1e293b; border:1px solid #475569; border-radius:6px; display:none; z-index:100; }
+.sri { padding:7px 10px; cursor:pointer; font-size:12px; border-bottom:1px solid #334155; }
+.sri:hover { background:#334155; }
+.stats { font-size:12px; color:#94a3b8; white-space:nowrap; }
+.ctrls { display:flex; gap:6px; margin-left:auto; }
+.btn { padding:5px 12px; border-radius:6px; border:1px solid #475569; background:#334155; color:#e2e8f0; cursor:pointer; font-size:12px; }
+.btn:hover { background:#475569; }
+.btn.active { background:#86efac; color:#0f172a; border-color:#86efac; }
+#legend { position:absolute; top:52px; left:220px; background:#1e293b; border:1px solid #475569; border-radius:8px; padding:10px 14px; font-size:12px; z-index:10; }
+.li { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+.ld { width:10px; height:10px; border-radius:50%; }
+#tooltip { position:absolute; padding:8px 12px; background:#1e293b; border:1px solid #475569; border-radius:8px; font-size:12px; pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:100; box-shadow:0 4px 20px rgba(0,0,0,0.5); max-width:320px; }
+#graph { width:calc(100vw - 200px); height:calc(100vh - 48px); margin-left:200px; transition:width 0.3s, margin-left 0.3s; }
+#sidebar.collapsed ~ #graph { margin-left:0; width:100vw; }
+#detail-panel.open ~ #graph { width:calc(100vw - 200px - 400px); }
+.link { stroke:#475569; stroke-opacity:0.3; }
+.link-book { stroke-opacity:0.12; }
+.node circle { cursor:pointer; stroke-width:1.5; }
+.node text { fill:#e2e8f0; font-size:10px; pointer-events:none; }
+.highlight circle { stroke:#fff !important; stroke-width:2.5px; }
+.highlight text { fill:#fff; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>📚 藏书阁 · 知识图谱</h2>
+  <div class="domain-header" data-target="IT" style="color:#67e8f9; border-left:3px solid #67e8f9;">IT ▾</div>
+  <div class="domain-pages" id="IT">
+    <a href="IT.json" style="border-left:3px solid #67e8f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(225篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="个人成长" style="color:#fb923c; border-left:3px solid #fb923c;">个人成长 ▾</div>
+  <div class="domain-pages" id="个人成长">
+    <a href="个人成长.json" style="border-left:3px solid #fb923c; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(461篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="产品" style="color:#a855f7; border-left:3px solid #a855f7;">产品 ▾</div>
+  <div class="domain-pages" id="产品">
+    <a href="产品_(其他).json" style="border-left:3px solid #a855f7; padding-left:18px;">(其他) <span style="font-size:10px;color:#64748b;">(553篇)</span></a>
+    <a href="产品_产品思维.json" style="border-left:3px solid #a855f7; padding-left:18px;">产品思维 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="产品_小程序生态.json" style="border-left:3px solid #a855f7; padding-left:18px;">小程序生态 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="产品_用户增长.json" style="border-left:3px solid #a855f7; padding-left:18px;">用户增长 <span style="font-size:10px;color:#64748b;">(49篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="会计" style="color:#86efac; border-left:3px solid #86efac;">会计 ▾</div>
+  <div class="domain-pages" id="会计">
+    <a href="会计.json" class="active" style="border-left:3px solid #86efac; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(67篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="健康" style="color:#34d399; border-left:3px solid #34d399;">健康 ▾</div>
+  <div class="domain-pages" id="健康">
+    <a href="健康.json" style="border-left:3px solid #34d399; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(284篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="写作" style="color:#c084fc; border-left:3px solid #c084fc;">写作 ▾</div>
+  <div class="domain-pages" id="写作">
+    <a href="写作.json" style="border-left:3px solid #c084fc; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(238篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="历史" style="color:#06b6d4; border-left:3px solid #06b6d4;">历史 ▾</div>
+  <div class="domain-pages" id="历史">
+    <a href="历史_(其他)_part1.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part2.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part3.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part4.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part5.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(541篇)</span></a>
+    <a href="历史_世界史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">世界史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="历史_中国历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国历史 <span style="font-size:10px;color:#64748b;">(96篇)</span></a>
+    <a href="历史_中国古代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国古代文学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="历史_中国现代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国现代文学 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="历史_中国近代史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国近代史 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="历史_人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">人物传记 <span style="font-size:10px;color:#64748b;">(143篇)</span></a>
+    <a href="历史_军事历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">军事历史 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="历史_历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史 <span style="font-size:10px;color:#64748b;">(538篇)</span></a>
+    <a href="历史_历史与政治.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史与政治 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史人物传记 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="历史_历史学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史学 <span style="font-size:10px;color:#64748b;">(189篇)</span></a>
+    <a href="历史_历史小说.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史小说 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史研究.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史研究 <span style="font-size:10px;color:#64748b;">(162篇)</span></a>
+    <a href="历史_思想史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">思想史 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="历史_文学与历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">文学与历史 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="历史_科技史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">科技史 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="历史_艺术史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">艺术史 <span style="font-size:10px;color:#64748b;">(83篇)</span></a>
+    <a href="历史_西方哲学史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">西方哲学史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="哲学" style="color:#14b8a6; border-left:3px solid #14b8a6;">哲学 ▾</div>
+  <div class="domain-pages" id="哲学">
+    <a href="哲学_(其他)_part1.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="哲学_(其他)_part2.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(272篇)</span></a>
+    <a href="哲学_中国哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">中国哲学 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="哲学_人生哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">人生哲学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="哲学_哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">哲学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+    <a href="哲学_政治哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">政治哲学 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="哲学_生活哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">生活哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+    <a href="哲学_社会哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">社会哲学 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="哲学_科学哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">科学哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="商业" style="color:#10b981; border-left:3px solid #10b981;">商业 ▾</div>
+  <div class="domain-pages" id="商业">
+    <a href="商业_(其他)_part1.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（1/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part2.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（2/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part3.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（3/3） <span style="font-size:10px;color:#64748b;">(391篇)</span></a>
+    <a href="商业_企业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">企业管理 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="商业_健康管理.json" style="border-left:3px solid #10b981; padding-left:18px;">健康管理 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="商业_创业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">创业管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业战略.json" style="border-left:3px solid #10b981; padding-left:18px;">商业战略 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">商业管理 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="商业_投资理财.json" style="border-left:3px solid #10b981; padding-left:18px;">投资理财 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_知识管理.json" style="border-left:3px solid #10b981; padding-left:18px;">知识管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_管理.json" style="border-left:3px solid #10b981; padding-left:18px;">管理 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_组织管理.json" style="border-left:3px solid #10b981; padding-left:18px;">组织管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_经济学.json" style="border-left:3px solid #10b981; padding-left:18px;">经济学 <span style="font-size:10px;color:#64748b;">(74篇)</span></a>
+    <a href="商业_金融投资.json" style="border-left:3px solid #10b981; padding-left:18px;">金融投资 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="商业_领导力.json" style="border-left:3px solid #10b981; padding-left:18px;">领导力 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="图书馆学" style="color:#5eead4; border-left:3px solid #5eead4;">图书馆学 ▾</div>
+  <div class="domain-pages" id="图书馆学">
+    <a href="图书馆学.json" style="border-left:3px solid #5eead4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(23篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="宗教" style="color:#c4b5fd; border-left:3px solid #c4b5fd;">宗教 ▾</div>
+  <div class="domain-pages" id="宗教">
+    <a href="宗教.json" style="border-left:3px solid #c4b5fd; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(19篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="心理学" style="color:#f59e0b; border-left:3px solid #f59e0b;">心理学 ▾</div>
+  <div class="domain-pages" id="心理学">
+    <a href="心理学_(其他)_part1.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（1/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part2.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（2/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part3.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（3/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part4.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（4/4） <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="心理学_个人成长与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">个人成长与心理学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理健康.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理健康 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理学 <span style="font-size:10px;color:#64748b;">(239篇)</span></a>
+    <a href="心理学_教育心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">教育心理学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="心理学_文学与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">文学与心理学 <span style="font-size:10px;color:#64748b;">(119篇)</span></a>
+    <a href="心理学_沟通技巧.json" style="border-left:3px solid #f59e0b; padding-left:18px;">沟通技巧 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="心理学_社会心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">社会心理学 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+    <a href="心理学_认知心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知心理学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="心理学_认知科学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知科学 <span style="font-size:10px;color:#64748b;">(39篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="房地产" style="color:#6ee7b7; border-left:3px solid #6ee7b7;">房地产 ▾</div>
+  <div class="domain-pages" id="房地产">
+    <a href="房地产.json" style="border-left:3px solid #6ee7b7; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(12篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="政治" style="color:#fbbf24; border-left:3px solid #fbbf24;">政治 ▾</div>
+  <div class="domain-pages" id="政治">
+    <a href="政治.json" style="border-left:3px solid #fbbf24; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(253篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="教育" style="color:#ec4899; border-left:3px solid #ec4899;">教育 ▾</div>
+  <div class="domain-pages" id="教育">
+    <a href="教育_(其他)_part1.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="教育_(其他)_part2.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(382篇)</span></a>
+    <a href="教育_个人成长.json" style="border-left:3px solid #ec4899; padding-left:18px;">个人成长 <span style="font-size:10px;color:#64748b;">(250篇)</span></a>
+    <a href="教育_儿童教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">儿童教育 <span style="font-size:10px;color:#64748b;">(62篇)</span></a>
+    <a href="教育_家庭教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">家庭教育 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="教育_教育理念.json" style="border-left:3px solid #ec4899; padding-left:18px;">教育理念 <span style="font-size:10px;color:#64748b;">(68篇)</span></a>
+    <a href="教育_财商教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">财商教育 <span style="font-size:10px;color:#64748b;">(48篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="文学" style="color:#8b5cf6; border-left:3px solid #8b5cf6;">文学 ▾</div>
+  <div class="domain-pages" id="文学">
+    <a href="文学_(其他)_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_中国古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">中国古典文学 <span style="font-size:10px;color:#64748b;">(112篇)</span></a>
+    <a href="文学_儿童文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">儿童文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">古典文学 <span style="font-size:10px;color:#64748b;">(92篇)</span></a>
+    <a href="文学_奇幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">奇幻文学 <span style="font-size:10px;color:#64748b;">(51篇)</span></a>
+    <a href="文学_女性主义文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">女性主义文学 <span style="font-size:10px;color:#64748b;">(38篇)</span></a>
+    <a href="文学_悬疑小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">悬疑小说分析 <span style="font-size:10px;color:#64748b;">(52篇)</span></a>
+    <a href="文学_推理小说.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="文学_推理小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说分析 <span style="font-size:10px;color:#64748b;">(126篇)</span></a>
+    <a href="文学_推理文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理文学 <span style="font-size:10px;color:#64748b;">(35篇)</span></a>
+    <a href="文学_文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学 <span style="font-size:10px;color:#64748b;">(223篇)</span></a>
+    <a href="文学_文学与个人成长.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与个人成长 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="文学_文学与人生哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与人生哲学 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="文学_文学与哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与哲学 <span style="font-size:10px;color:#64748b;">(303篇)</span></a>
+    <a href="文学_文学与社会学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与社会学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="文学_文学分析_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（1/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（2/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（3/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（4/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（5/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part6.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（6/6） <span style="font-size:10px;color:#64748b;">(254篇)</span></a>
+    <a href="文学_文学批评.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学批评 <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="文学_文学理论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学理论 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_文学研究.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学研究 <span style="font-size:10px;color:#64748b;">(84篇)</span></a>
+    <a href="文学_文学经典.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学经典 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="文学_文学解读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学解读 <span style="font-size:10px;color:#64748b;">(40篇)</span></a>
+    <a href="文学_文学评论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学评论 <span style="font-size:10px;color:#64748b;">(482篇)</span></a>
+    <a href="文学_文学赏析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学赏析 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="文学_文学鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学鉴赏 <span style="font-size:10px;color:#64748b;">(82篇)</span></a>
+    <a href="文学_文学阅读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学阅读 <span style="font-size:10px;color:#64748b;">(78篇)</span></a>
+    <a href="文学_旅行文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">旅行文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_日本文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">日本文学 <span style="font-size:10px;color:#64748b;">(98篇)</span></a>
+    <a href="文学_武侠文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">武侠文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_科幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学 <span style="font-size:10px;color:#64748b;">(175篇)</span></a>
+    <a href="文学_科幻文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学分析 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="文学_网络文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">网络文学分析 <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_艺术鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">艺术鉴赏 <span style="font-size:10px;color:#64748b;">(44篇)</span></a>
+    <a href="文学_非虚构文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">非虚构文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="时尚生活" style="color:#f9a8d4; border-left:3px solid #f9a8d4;">时尚生活 ▾</div>
+  <div class="domain-pages" id="时尚生活">
+    <a href="时尚生活.json" style="border-left:3px solid #f9a8d4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(71篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="未知" style="color:#94a3b8; border-left:3px solid #94a3b8;">未知 ▾</div>
+  <div class="domain-pages" id="未知">
+    <a href="未知.json" style="border-left:3px solid #94a3b8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(16篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="法学" style="color:#fcd34d; border-left:3px solid #fcd34d;">法学 ▾</div>
+  <div class="domain-pages" id="法学">
+    <a href="法学.json" style="border-left:3px solid #fcd34d; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="社会学" style="color:#6366f1; border-left:3px solid #6366f1;">社会学 ▾</div>
+  <div class="domain-pages" id="社会学">
+    <a href="社会学_(其他)_part1.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="社会学_(其他)_part2.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(484篇)</span></a>
+    <a href="社会学_文化研究.json" style="border-left:3px solid #6366f1; padding-left:18px;">文化研究 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="社会学_社会学.json" style="border-left:3px solid #6366f1; padding-left:18px;">社会学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="科学" style="color:#f97316; border-left:3px solid #f97316;">科学 ▾</div>
+  <div class="domain-pages" id="科学">
+    <a href="科学_(其他)_part1.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="科学_(其他)_part2.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(116篇)</span></a>
+    <a href="科学_医学人文.json" style="border-left:3px solid #f97316; padding-left:18px;">医学人文 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="科学_神经科学.json" style="border-left:3px solid #f97316; padding-left:18px;">神经科学 <span style="font-size:10px;color:#64748b;">(56篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="编程" style="color:#818cf8; border-left:3px solid #818cf8;">编程 ▾</div>
+  <div class="domain-pages" id="编程">
+    <a href="编程.json" style="border-left:3px solid #818cf8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(151篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="艺术" style="color:#e879f9; border-left:3px solid #e879f9;">艺术 ▾</div>
+  <div class="domain-pages" id="艺术">
+    <a href="艺术.json" style="border-left:3px solid #e879f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(365篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="英语" style="color:#f472b6; border-left:3px solid #f472b6;">英语 ▾</div>
+  <div class="domain-pages" id="英语">
+    <a href="英语.json" style="border-left:3px solid #f472b6; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(209篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="语言文学" style="color:#d8b4fe; border-left:3px solid #d8b4fe;">语言文学 ▾</div>
+  <div class="domain-pages" id="语言文学">
+    <a href="语言文学.json" style="border-left:3px solid #d8b4fe; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="金融" style="color:#a3e635; border-left:3px solid #a3e635;">金融 ▾</div>
+  <div class="domain-pages" id="金融">
+    <a href="金融.json" style="border-left:3px solid #a3e635; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(208篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="雅思" style="color:#22d3ee; border-left:3px solid #22d3ee;">雅思 ▾</div>
+  <div class="domain-pages" id="雅思">
+    <a href="雅思.json" style="border-left:3px solid #22d3ee; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(511篇)</span></a>
+  </div>
+
+    <script>
+    document.querySelectorAll('.domain-header').forEach(function(h){
+      h.addEventListener('click', function(){
+        var t = document.getElementById(this.dataset.target);
+        t.style.display = t.style.display==='none' ? 'block' : 'none';
+        this.innerHTML = this.innerHTML.replace(/[▾▸]/, t.style.display==='none'?'▸':'▾');
+      });
+    });
+    </script>
+    
+</div>
+<button id="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">☰</button>
+
+<div id="header">
+  <h1>📚 会计 · (全部)</h1>
+  <div id="search-wrap">
+    <input id="search-box" type="text" placeholder="🔍 搜索书名/概念...">
+    <div id="search-results"></div>
+  </div>
+  <div class="stats">
+    <span id="node-count">0</span> 节点 ·
+    <span id="link-count">0</span> 连接
+  </div>
+  <div class="ctrls">
+    <button class="btn" id="btn-toggle-concept">隐藏概念</button>
+    <button class="btn" id="btn-reset">重置视图</button>
+  </div>
+</div>
+
+<div id="graph"></div>
+<div id="tooltip"></div>
+
+<!-- 右侧详情面板 -->
+<div id="detail-panel">
+  <div id="detail-header">
+    <h2 id="detail-title"></h2>
+    <button id="detail-close" onclick="closeDetail()">✕</button>
+  </div>
+  <div id="detail-body"></div>
+</div>
+
+<script>
+var NODES = [{"id": "管理会计.md", "label": "管理会计", "title": "管理会计", "type": "book", "degree": 8, "cluster": "财务管理", "domain": "会计", "sub_domain": "财务管理", "summary": "书名：管理者14天看懂财务报表 (经理人自助教室)。核心主题：本书旨在帮助非财务背景的企业管理者，摒弃会计学原理的繁琐，从“管理者”视角理解财务数据背后的商业含义，学会运用财务报表进行业务决策、评估绩效和管控企业，最终实现从“知道”到“做到”的跨越。企业各级管理者（外企、国企、民企），尤其是患有“财务报表恐惧症”的经理人。它强调管理者在日常工作中（如产品投资、采购决策、渠道政策、项目评估等）都需要依赖财务数据分析做出理性决策，而非凭感觉。作者将财务报表比作飞机的仪表盘，管理者必须读懂利润表、资产负债表和现金流量表，并理解三者之间的关系", "keywords": ["管理者", "财务报表", "资产负债表", "现金流量表", "不适合", "利润表", "效率", "风险"], "tags": ["domain/会计", "sub_domain/财务管理", "type/concept", "source/管理者14天看懂财务报表 (经理人自助教室)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务管理/管理会计.md"}, {"id": "杜邦金字塔.md", "label": "杜邦金字塔", "title": "杜邦金字塔", "type": "book", "degree": 8, "cluster": "财务管理", "domain": "会计", "sub_domain": "财务管理", "summary": "书名：管理者14天看懂财务报表 (经理人自助教室)。核心主题：本书旨在帮助非财务背景的企业管理者，摒弃会计学原理的繁琐，从“管理者”视角理解财务数据背后的商业含义，学会运用财务报表进行业务决策、评估绩效和管控企业，最终实现从“知道”到“做到”的跨越。企业各级管理者（外企、国企、民企），尤其是患有“财务报表恐惧症”的经理人。它强调管理者在日常工作中（如产品投资、采购决策、渠道政策、项目评估等）都需要依赖财务数据分析做出理性决策，而非凭感觉。作者将财务报表比作飞机的仪表盘，管理者必须读懂利润表、资产负债表和现金流量表，并理解三者之间的关系", "keywords": ["管理者", "财务报表", "资产负债表", "现金流量表", "不适合", "利润表", "效率", "风险"], "tags": ["domain/会计", "sub_domain/财务管理", "type/concept", "source/管理者14天看懂财务报表 (经理人自助教室)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务管理/杜邦金字塔.md"}, {"id": "营运资本管理.md", "label": "营运资本管理", "title": "营运资本管理", "type": "book", "degree": 8, "cluster": "财务管理", "domain": "会计", "sub_domain": "财务管理", "summary": "书名：管理者14天看懂财务报表 (经理人自助教室)。核心主题：本书旨在帮助非财务背景的企业管理者，摒弃会计学原理的繁琐，从“管理者”视角理解财务数据背后的商业含义，学会运用财务报表进行业务决策、评估绩效和管控企业，最终实现从“知道”到“做到”的跨越。企业各级管理者（外企、国企、民企），尤其是患有“财务报表恐惧症”的经理人。它强调管理者在日常工作中（如产品投资、采购决策、渠道政策、项目评估等）都需要依赖财务数据分析做出理性决策，而非凭感觉。作者将财务报表比作飞机的仪表盘，管理者必须读懂利润表、资产负债表和现金流量表，并理解三者之间的关系", "keywords": ["管理者", "财务报表", "资产负债表", "现金流量表", "不适合", "利润表", "效率", "风险"], "tags": ["domain/会计", "sub_domain/财务管理", "type/concept", "source/管理者14天看懂财务报表 (经理人自助教室)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务管理/营运资本管理.md"}, {"id": "经济增加值.md", "label": "经济增加值", "title": "经济增加值", "type": "book", "degree": 8, "cluster": "财务管理", "domain": "会计", "sub_domain": "财务管理", "summary": "书名：管理者14天看懂财务报表 (经理人自助教室)。核心主题：本书旨在帮助非财务背景的企业管理者，摒弃会计学原理的繁琐，从“管理者”视角理解财务数据背后的商业含义，学会运用财务报表进行业务决策、评估绩效和管控企业，最终实现从“知道”到“做到”的跨越。企业各级管理者（外企、国企、民企），尤其是患有“财务报表恐惧症”的经理人。它强调管理者在日常工作中（如产品投资、采购决策、渠道政策、项目评估等）都需要依赖财务数据分析做出理性决策，而非凭感觉。作者将财务报表比作飞机的仪表盘，管理者必须读懂利润表、资产负债表和现金流量表，并理解三者之间的关系", "keywords": ["管理者", "财务报表", "资产负债表", "现金流量表", "不适合", "利润表", "效率", "风险"], "tags": ["domain/会计", "sub_domain/财务管理", "type/concept", "source/管理者14天看懂财务报表 (经理人自助教室)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务管理/经济增加值.md"}, {"id": "经济增加值(EVA).md", "label": "经济增加值(EVA)", "title": "经济增加值(EVA)", "type": "book", "degree": 8, "cluster": "财务管理", "domain": "会计", "sub_domain": "财务管理", "summary": "书名：管理者14天看懂财务报表 (经理人自助教室)。核心主题：本书旨在帮助非财务背景的企业管理者，摒弃会计学原理的繁琐，从“管理者”视角理解财务数据背后的商业含义，学会运用财务报表进行业务决策、评估绩效和管控企业，最终实现从“知道”到“做到”的跨越。企业各级管理者（外企、国企、民企），尤其是患有“财务报表恐惧症”的经理人。它强调管理者在日常工作中（如产品投资、采购决策、渠道政策、项目评估等）都需要依赖财务数据分析做出理性决策，而非凭感觉。作者将财务报表比作飞机的仪表盘，管理者必须读懂利润表、资产负债表和现金流量表，并理解三者之间的关系", "keywords": ["管理者", "财务报表", "资产负债表", "现金流量表", "不适合", "利润表", "效率", "风险"], "tags": ["domain/会计", "sub_domain/财务管理", "type/concept", "source/管理者14天看懂财务报表 (经理人自助教室)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务管理/经济增加值(EVA).md"}, {"id": "财务报表.md", "label": "财务报表", "title": "财务报表", "type": "book", "degree": 8, "cluster": "财务管理", "domain": "会计", "sub_domain": "财务管理", "summary": "书名：管理者14天看懂财务报表 (经理人自助教室)。核心主题：本书旨在帮助非财务背景的企业管理者，摒弃会计学原理的繁琐，从“管理者”视角理解财务数据背后的商业含义，学会运用财务报表进行业务决策、评估绩效和管控企业，最终实现从“知道”到“做到”的跨越。企业各级管理者（外企、国企、民企），尤其是患有“财务报表恐惧症”的经理人。它强调管理者在日常工作中（如产品投资、采购决策、渠道政策、项目评估等）都需要依赖财务数据分析做出理性决策，而非凭感觉。作者将财务报表比作飞机的仪表盘，管理者必须读懂利润表、资产负债表和现金流量表，并理解三者之间的关系", "keywords": ["管理者", "财务报表", "资产负债表", "现金流量表", "不适合", "利润表", "效率", "风险"], "tags": ["domain/会计", "sub_domain/财务管理", "type/concept", "source/管理者14天看懂财务报表 (经理人自助教室)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务管理/财务报表.md"}, {"id": "责任中心.md", "label": "责任中心", "title": "责任中心", "type": "book", "degree": 8, "cluster": "财务管理", "domain": "会计", "sub_domain": "财务管理", "summary": "书名：管理者14天看懂财务报表 (经理人自助教室)。核心主题：本书旨在帮助非财务背景的企业管理者，摒弃会计学原理的繁琐，从“管理者”视角理解财务数据背后的商业含义，学会运用财务报表进行业务决策、评估绩效和管控企业，最终实现从“知道”到“做到”的跨越。企业各级管理者（外企、国企、民企），尤其是患有“财务报表恐惧症”的经理人。它强调管理者在日常工作中（如产品投资、采购决策、渠道政策、项目评估等）都需要依赖财务数据分析做出理性决策，而非凭感觉。作者将财务报表比作飞机的仪表盘，管理者必须读懂利润表、资产负债表和现金流量表，并理解三者之间的关系", "keywords": ["管理者", "财务报表", "资产负债表", "现金流量表", "不适合", "利润表", "效率", "风险"], "tags": ["domain/会计", "sub_domain/财务管理", "type/concept", "source/管理者14天看懂财务报表 (经理人自助教室)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务管理/责任中心.md"}, {"id": "现金流.md", "label": "现金流", "title": "现金流", "type": "book", "degree": 8, "cluster": "财务管理", "domain": "会计", "sub_domain": "财务管理", "summary": "书名：管理者14天看懂财务报表 (经理人自助教室)。核心主题：本书旨在帮助非财务背景的企业管理者，摒弃会计学原理的繁琐，从“管理者”视角理解财务数据背后的商业含义，学会运用财务报表进行业务决策、评估绩效和管控企业，最终实现从“知道”到“做到”的跨越。企业各级管理者（外企、国企、民企），尤其是患有“财务报表恐惧症”的经理人。它强调管理者在日常工作中（如产品投资、采购决策、渠道政策、项目评估等）都需要依赖财务数据分析做出理性决策，而非凭感觉。作者将财务报表比作飞机的仪表盘，管理者必须读懂利润表、资产负债表和现金流量表，并理解三者之间的关系", "keywords": ["管理者", "财务报表", "资产负债表", "现金流量表", "不适合", "利润表", "效率", "风险"], "tags": ["domain/会计", "sub_domain/财务管理", "type/concept", "source/管理者14天看懂财务报表 (经理人自助教室)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务管理/现金流.md"}, {"id": "INDEX.md", "label": "财务管理", "title": "财务管理", "type": "book", "degree": 3, "cluster": "会计", "domain": "会计", "sub_domain": "会计", "summary": "> 笔记总数: 0 个（试点处理中）。> 最后更新: 2026-05-14", "keywords": ["财务管理", "笔记总数", "更新时"], "tags": ["domain/会计", "type/sub-domain-index"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务管理/INDEX.md"}, {"id": "TQM.md", "label": "TQM", "title": "TQM", "type": "book", "degree": 8, "cluster": "管理会计", "domain": "会计", "sub_domain": "管理会计", "summary": "成本与管理会计：本书的核心，是一门将成本会计（聚焦于产品成本计算）与管理会计（聚焦于为内部管理者提供决策信息）相结合的学科。其根本目的是通过提供与决策高度相关的财务与非财务信息，帮助企业实现战略目标、提升经营效率。信息相关性：会计信息能否真正服务于决策者，是衡量其价值的关键。委托-代理理论：一个重要的经济学理论框架，用于理解企业内部管理者（代理人）与所有者（委托人）之间的利益冲突，以及。利益冲突驱动管理会计工具的设计：委托-代理理论揭示了管理者和所有者目标可能不一致", "keywords": ["可执行的行动步骤", "与其他领域的联系", "成本与管理会计", "诊断信息相关性", "作业成本核算", "核心概念", "成本会计", "底层逻辑"], "tags": ["domain/会计", "sub_domain/管理会计", "type/concept", "source/亨格瑞 - 成本与管理会计(13)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/管理会计/TQM.md"}, {"id": "闭环管理.md", "label": "闭环管理", "title": "闭环管理", "type": "book", "degree": 2, "cluster": "管理会计", "domain": "会计", "sub_domain": "管理会计", "summary": "书名：全面预算管理：让企业全员奔跑。核心主题：本书旨在打破传统预算管理的僵化思维，将全面预算管理定位为企业的“动力系统”和“红舞鞋”，通过一套系统、理性、可操作的预算管理体系，将老板从“板儿爷”式的亲力亲为中解放出来，让企业摆脱对个人英雄的依赖，实现从“人治”到“法治”的转变，驱动企业全员为共同目标持续奔跑。适合人群：企业老板、CEO、高管、财务总监及经理、希望提升管理效率的各级业务管理者，以及所有对管理会计和现代企业制度建设感兴趣的读者。作者用“板儿爷拉车”比喻老板亲力亲为的困境，用“汽车的动力装置”比喻全面预算管理。预算的核心在于通过设定目标、配置资源、制定行动方案，驱动整个组织朝着既定方", "keywords": ["预算管理", "全面预"], "tags": ["domain/会计", "sub_domain/管理会计", "type/concept", "source/全面预算管理：让企业全员奔跑"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/管理会计/闭环管理.md"}, {"id": "动力系统.md", "label": "动力系统", "title": "动力系统", "type": "book", "degree": 2, "cluster": "管理会计", "domain": "会计", "sub_domain": "管理会计", "summary": "书名：全面预算管理：让企业全员奔跑。核心主题：本书旨在打破传统预算管理的僵化思维，将全面预算管理定位为企业的“动力系统”和“红舞鞋”，通过一套系统、理性、可操作的预算管理体系，将老板从“板儿爷”式的亲力亲为中解放出来，让企业摆脱对个人英雄的依赖，实现从“人治”到“法治”的转变，驱动企业全员为共同目标持续奔跑。适合人群：企业老板、CEO、高管、财务总监及经理、希望提升管理效率的各级业务管理者，以及所有对管理会计和现代企业制度建设感兴趣的读者。作者用“板儿爷拉车”比喻老板亲力亲为的困境，用“汽车的动力装置”比喻全面预算管理。预算的核心在于通过设定目标、配置资源、制定行动方案，驱动整个组织朝着既定方", "keywords": ["预算管理", "全面预"], "tags": ["domain/会计", "sub_domain/管理会计", "type/concept", "source/全面预算管理：让企业全员奔跑"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/管理会计/动力系统.md"}, {"id": "成本与管理会计.md", "label": "成本与管理会计", "title": "成本与管理会计", "type": "book", "degree": 8, "cluster": "管理会计", "domain": "会计", "sub_domain": "管理会计", "summary": "成本与管理会计：本书的核心，是一门将成本会计（聚焦于产品成本计算）与管理会计（聚焦于为内部管理者提供决策信息）相结合的学科。其根本目的是通过提供与决策高度相关的财务与非财务信息，帮助企业实现战略目标、提升经营效率。信息相关性：会计信息能否真正服务于决策者，是衡量其价值的关键。委托-代理理论：一个重要的经济学理论框架，用于理解企业内部管理者（代理人）与所有者（委托人）之间的利益冲突，以及。利益冲突驱动管理会计工具的设计：委托-代理理论揭示了管理者和所有者目标可能不一致", "keywords": ["可执行的行动步骤", "与其他领域的联系", "成本与管理会计", "诊断信息相关性", "作业成本核算", "核心概念", "成本会计", "底层逻辑"], "tags": ["domain/会计", "sub_domain/管理会计", "type/concept", "source/亨格瑞 - 成本与管理会计(13)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/管理会计/成本与管理会计.md"}, {"id": "责任中心.md", "label": "责任中心", "title": "责任中心", "type": "book", "degree": 2, "cluster": "管理会计", "domain": "会计", "sub_domain": "管理会计", "summary": "书名：全面预算管理：让企业全员奔跑。核心主题：本书旨在打破传统预算管理的僵化思维，将全面预算管理定位为企业的“动力系统”和“红舞鞋”，通过一套系统、理性、可操作的预算管理体系，将老板从“板儿爷”式的亲力亲为中解放出来，让企业摆脱对个人英雄的依赖，实现从“人治”到“法治”的转变，驱动企业全员为共同目标持续奔跑。适合人群：企业老板、CEO、高管、财务总监及经理、希望提升管理效率的各级业务管理者，以及所有对管理会计和现代企业制度建设感兴趣的读者。作者用“板儿爷拉车”比喻老板亲力亲为的困境，用“汽车的动力装置”比喻全面预算管理。预算的核心在于通过设定目标、配置资源、制定行动方案，驱动整个组织朝着既定方", "keywords": ["预算管理", "全面预"], "tags": ["domain/会计", "sub_domain/管理会计", "type/concept", "source/全面预算管理：让企业全员奔跑"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/管理会计/责任中心.md"}, {"id": "增量预算法.md", "label": "增量预算法", "title": "增量预算法", "type": "book", "degree": 2, "cluster": "管理会计", "domain": "会计", "sub_domain": "管理会计", "summary": "书名：全面预算管理：让企业全员奔跑。核心主题：本书旨在打破传统预算管理的僵化思维，将全面预算管理定位为企业的“动力系统”和“红舞鞋”，通过一套系统、理性、可操作的预算管理体系，将老板从“板儿爷”式的亲力亲为中解放出来，让企业摆脱对个人英雄的依赖，实现从“人治”到“法治”的转变，驱动企业全员为共同目标持续奔跑。适合人群：企业老板、CEO、高管、财务总监及经理、希望提升管理效率的各级业务管理者，以及所有对管理会计和现代企业制度建设感兴趣的读者。作者用“板儿爷拉车”比喻老板亲力亲为的困境，用“汽车的动力装置”比喻全面预算管理。预算的核心在于通过设定目标、配置资源、制定行动方案，驱动整个组织朝着既定方", "keywords": ["预算管理", "全面预"], "tags": ["domain/会计", "sub_domain/管理会计", "type/concept", "source/全面预算管理：让企业全员奔跑"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/管理会计/增量预算法.md"}, {"id": "管理会计演进.md", "label": "管理会计演进", "title": "管理会计演进", "type": "book", "degree": 8, "cluster": "管理会计", "domain": "会计", "sub_domain": "管理会计", "summary": "成本与管理会计：本书的核心，是一门将成本会计（聚焦于产品成本计算）与管理会计（聚焦于为内部管理者提供决策信息）相结合的学科。其根本目的是通过提供与决策高度相关的财务与非财务信息，帮助企业实现战略目标、提升经营效率。信息相关性：会计信息能否真正服务于决策者，是衡量其价值的关键。委托-代理理论：一个重要的经济学理论框架，用于理解企业内部管理者（代理人）与所有者（委托人）之间的利益冲突，以及。利益冲突驱动管理会计工具的设计：委托-代理理论揭示了管理者和所有者目标可能不一致", "keywords": ["可执行的行动步骤", "与其他领域的联系", "成本与管理会计", "诊断信息相关性", "作业成本核算", "核心概念", "成本会计", "底层逻辑"], "tags": ["domain/会计", "sub_domain/管理会计", "type/concept", "source/亨格瑞 - 成本与管理会计(13)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/管理会计/管理会计演进.md"}, {"id": "JIT.md", "label": "JIT", "title": "JIT", "type": "book", "degree": 8, "cluster": "管理会计", "domain": "会计", "sub_domain": "管理会计", "summary": "成本与管理会计：本书的核心，是一门将成本会计（聚焦于产品成本计算）与管理会计（聚焦于为内部管理者提供决策信息）相结合的学科。其根本目的是通过提供与决策高度相关的财务与非财务信息，帮助企业实现战略目标、提升经营效率。信息相关性：会计信息能否真正服务于决策者，是衡量其价值的关键。委托-代理理论：一个重要的经济学理论框架，用于理解企业内部管理者（代理人）与所有者（委托人）之间的利益冲突，以及。利益冲突驱动管理会计工具的设计：委托-代理理论揭示了管理者和所有者目标可能不一致", "keywords": ["可执行的行动步骤", "与其他领域的联系", "成本与管理会计", "诊断信息相关性", "作业成本核算", "核心概念", "成本会计", "底层逻辑"], "tags": ["domain/会计", "sub_domain/管理会计", "type/concept", "source/亨格瑞 - 成本与管理会计(13)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/管理会计/JIT.md"}, {"id": "INDEX.md", "label": "管理会计", "title": "管理会计", "type": "book", "degree": 3, "cluster": "会计", "domain": "会计", "sub_domain": "会计", "summary": "> 笔记总数: 0 个（试点处理中）。> 最后更新: 2026-05-14", "keywords": ["管理会计", "笔记总数", "更新时"], "tags": ["domain/会计", "type/sub-domain-index"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/管理会计/INDEX.md"}, {"id": "委托-代理理论.md", "label": "委托-代理理论", "title": "委托-代理理论", "type": "book", "degree": 8, "cluster": "管理会计", "domain": "会计", "sub_domain": "管理会计", "summary": "成本与管理会计：本书的核心，是一门将成本会计（聚焦于产品成本计算）与管理会计（聚焦于为内部管理者提供决策信息）相结合的学科。其根本目的是通过提供与决策高度相关的财务与非财务信息，帮助企业实现战略目标、提升经营效率。信息相关性：会计信息能否真正服务于决策者，是衡量其价值的关键。委托-代理理论：一个重要的经济学理论框架，用于理解企业内部管理者（代理人）与所有者（委托人）之间的利益冲突，以及。利益冲突驱动管理会计工具的设计：委托-代理理论揭示了管理者和所有者目标可能不一致", "keywords": ["可执行的行动步骤", "与其他领域的联系", "成本与管理会计", "诊断信息相关性", "作业成本核算", "核心概念", "成本会计", "底层逻辑"], "tags": ["domain/会计", "sub_domain/管理会计", "type/concept", "source/亨格瑞 - 成本与管理会计(13)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/管理会计/委托-代理理论.md"}, {"id": "信息相关性.md", "label": "信息相关性", "title": "信息相关性", "type": "book", "degree": 8, "cluster": "管理会计", "domain": "会计", "sub_domain": "管理会计", "summary": "成本与管理会计：本书的核心，是一门将成本会计（聚焦于产品成本计算）与管理会计（聚焦于为内部管理者提供决策信息）相结合的学科。其根本目的是通过提供与决策高度相关的财务与非财务信息，帮助企业实现战略目标、提升经营效率。信息相关性：会计信息能否真正服务于决策者，是衡量其价值的关键。委托-代理理论：一个重要的经济学理论框架，用于理解企业内部管理者（代理人）与所有者（委托人）之间的利益冲突，以及。利益冲突驱动管理会计工具的设计：委托-代理理论揭示了管理者和所有者目标可能不一致", "keywords": ["可执行的行动步骤", "与其他领域的联系", "成本与管理会计", "诊断信息相关性", "作业成本核算", "核心概念", "成本会计", "底层逻辑"], "tags": ["domain/会计", "sub_domain/管理会计", "type/concept", "source/亨格瑞 - 成本与管理会计(13)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/管理会计/信息相关性.md"}, {"id": "全面预算管理.md", "label": "全面预算管理", "title": "全面预算管理", "type": "book", "degree": 2, "cluster": "管理会计", "domain": "会计", "sub_domain": "管理会计", "summary": "书名：全面预算管理：让企业全员奔跑。核心主题：本书旨在打破传统预算管理的僵化思维，将全面预算管理定位为企业的“动力系统”和“红舞鞋”，通过一套系统、理性、可操作的预算管理体系，将老板从“板儿爷”式的亲力亲为中解放出来，让企业摆脱对个人英雄的依赖，实现从“人治”到“法治”的转变，驱动企业全员为共同目标持续奔跑。适合人群：企业老板、CEO、高管、财务总监及经理、希望提升管理效率的各级业务管理者，以及所有对管理会计和现代企业制度建设感兴趣的读者。作者用“板儿爷拉车”比喻老板亲力亲为的困境，用“汽车的动力装置”比喻全面预算管理。预算的核心在于通过设定目标、配置资源、制定行动方案，驱动整个组织朝着既定方", "keywords": ["预算管理", "全面预"], "tags": ["domain/会计", "sub_domain/管理会计", "type/concept", "source/全面预算管理：让企业全员奔跑"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/管理会计/全面预算管理.md"}, {"id": "会计信息系统.md", "label": "会计信息系统", "title": "会计信息系统", "type": "book", "degree": 2, "cluster": "会计电算化", "domain": "会计", "sub_domain": "会计电算化", "summary": "作者：中华人民共和国财政部;Yan Wenhong。核心主题：系统阐述了会计电算化的基本概念、软件配备与功能模块，以及企业会计信息化的工作规范，旨在为会计从业人员提供标准化、规范化的电算化知识框架与操作指南。适合人群：准备参加会计从业资格考试或会计电算化相关考试的考生；希望系统了解企业会计信息化建设与软件应用的财务人员、企业管理者及IT项目实施人员。大纲清晰界定了会计电算化、会计信息化、会计软件、会计信息系统（AIS）、ERP及XBRL等核心概念。其中，会计电算化是基础，指电子技术在会计中的应用；会计信息化是更高级的飞跃，强调信息技术与经营管理的深度融合", "keywords": ["电算化", "会计电算"], "tags": ["domain/会计", "sub_domain/会计电算化", "type/concept", "source/会计电算化考试大纲"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/会计电算化/会计信息系统.md"}, {"id": "XBRL.md", "label": "XBRL", "title": "XBRL", "type": "book", "degree": 2, "cluster": "会计电算化", "domain": "会计", "sub_domain": "会计电算化", "summary": "作者：中华人民共和国财政部;Yan Wenhong。核心主题：系统阐述了会计电算化的基本概念、软件配备与功能模块，以及企业会计信息化的工作规范，旨在为会计从业人员提供标准化、规范化的电算化知识框架与操作指南。适合人群：准备参加会计从业资格考试或会计电算化相关考试的考生；希望系统了解企业会计信息化建设与软件应用的财务人员、企业管理者及IT项目实施人员。大纲清晰界定了会计电算化、会计信息化、会计软件、会计信息系统（AIS）、ERP及XBRL等核心概念。其中，会计电算化是基础，指电子技术在会计中的应用；会计信息化是更高级的飞跃，强调信息技术与经营管理的深度融合", "keywords": ["电算化", "会计电算"], "tags": ["domain/会计", "sub_domain/会计电算化", "type/concept", "source/会计电算化考试大纲"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/会计电算化/XBRL.md"}, {"id": "内部控制.md", "label": "内部控制", "title": "内部控制", "type": "book", "degree": 2, "cluster": "会计电算化", "domain": "会计", "sub_domain": "会计电算化", "summary": "作者：中华人民共和国财政部;Yan Wenhong。核心主题：系统阐述了会计电算化的基本概念、软件配备与功能模块，以及企业会计信息化的工作规范，旨在为会计从业人员提供标准化、规范化的电算化知识框架与操作指南。适合人群：准备参加会计从业资格考试或会计电算化相关考试的考生；希望系统了解企业会计信息化建设与软件应用的财务人员、企业管理者及IT项目实施人员。大纲清晰界定了会计电算化、会计信息化、会计软件、会计信息系统（AIS）、ERP及XBRL等核心概念。其中，会计电算化是基础，指电子技术在会计中的应用；会计信息化是更高级的飞跃，强调信息技术与经营管理的深度融合", "keywords": ["电算化", "会计电算"], "tags": ["domain/会计", "sub_domain/会计电算化", "type/concept", "source/会计电算化考试大纲"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/会计电算化/内部控制.md"}, {"id": "ERP.md", "label": "ERP", "title": "ERP", "type": "book", "degree": 2, "cluster": "会计电算化", "domain": "会计", "sub_domain": "会计电算化", "summary": "作者：中华人民共和国财政部;Yan Wenhong。核心主题：系统阐述了会计电算化的基本概念、软件配备与功能模块，以及企业会计信息化的工作规范，旨在为会计从业人员提供标准化、规范化的电算化知识框架与操作指南。适合人群：准备参加会计从业资格考试或会计电算化相关考试的考生；希望系统了解企业会计信息化建设与软件应用的财务人员、企业管理者及IT项目实施人员。大纲清晰界定了会计电算化、会计信息化、会计软件、会计信息系统（AIS）、ERP及XBRL等核心概念。其中，会计电算化是基础，指电子技术在会计中的应用；会计信息化是更高级的飞跃，强调信息技术与经营管理的深度融合", "keywords": ["电算化", "会计电算"], "tags": ["domain/会计", "sub_domain/会计电算化", "type/concept", "source/会计电算化考试大纲"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/会计电算化/ERP.md"}, {"id": "INDEX.md", "label": "会计电算化", "title": "会计电算化", "type": "book", "degree": 3, "cluster": "会计", "domain": "会计", "sub_domain": "会计", "summary": "> 笔记总数: 0 个（试点处理中）。> 最后更新: 2026-05-14", "keywords": ["会计电算", "电算化", "笔记总数"], "tags": ["domain/会计", "type/sub-domain-index"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/会计电算化/INDEX.md"}, {"id": "功能模块.md", "label": "功能模块", "title": "功能模块", "type": "book", "degree": 2, "cluster": "会计电算化", "domain": "会计", "sub_domain": "会计电算化", "summary": "作者：中华人民共和国财政部;Yan Wenhong。核心主题：系统阐述了会计电算化的基本概念、软件配备与功能模块，以及企业会计信息化的工作规范，旨在为会计从业人员提供标准化、规范化的电算化知识框架与操作指南。适合人群：准备参加会计从业资格考试或会计电算化相关考试的考生；希望系统了解企业会计信息化建设与软件应用的财务人员、企业管理者及IT项目实施人员。大纲清晰界定了会计电算化、会计信息化、会计软件、会计信息系统（AIS）、ERP及XBRL等核心概念。其中，会计电算化是基础，指电子技术在会计中的应用；会计信息化是更高级的飞跃，强调信息技术与经营管理的深度融合", "keywords": ["电算化", "会计电算"], "tags": ["domain/会计", "sub_domain/会计电算化", "type/concept", "source/会计电算化考试大纲"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/会计电算化/功能模块.md"}, {"id": "会计软件.md", "label": "会计软件", "title": "会计软件", "type": "book", "degree": 2, "cluster": "会计电算化", "domain": "会计", "sub_domain": "会计电算化", "summary": "作者：中华人民共和国财政部;Yan Wenhong。核心主题：系统阐述了会计电算化的基本概念、软件配备与功能模块，以及企业会计信息化的工作规范，旨在为会计从业人员提供标准化、规范化的电算化知识框架与操作指南。适合人群：准备参加会计从业资格考试或会计电算化相关考试的考生；希望系统了解企业会计信息化建设与软件应用的财务人员、企业管理者及IT项目实施人员。大纲清晰界定了会计电算化、会计信息化、会计软件、会计信息系统（AIS）、ERP及XBRL等核心概念。其中，会计电算化是基础，指电子技术在会计中的应用；会计信息化是更高级的飞跃，强调信息技术与经营管理的深度融合", "keywords": ["电算化", "会计电算"], "tags": ["domain/会计", "sub_domain/会计电算化", "type/concept", "source/会计电算化考试大纲"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/会计电算化/会计软件.md"}, {"id": "会计电算化.md", "label": "会计电算化", "title": "会计电算化", "type": "book", "degree": 2, "cluster": "会计电算化", "domain": "会计", "sub_domain": "会计电算化", "summary": "作者：中华人民共和国财政部;Yan Wenhong。核心主题：系统阐述了会计电算化的基本概念、软件配备与功能模块，以及企业会计信息化的工作规范，旨在为会计从业人员提供标准化、规范化的电算化知识框架与操作指南。适合人群：准备参加会计从业资格考试或会计电算化相关考试的考生；希望系统了解企业会计信息化建设与软件应用的财务人员、企业管理者及IT项目实施人员。大纲清晰界定了会计电算化、会计信息化、会计软件、会计信息系统（AIS）、ERP及XBRL等核心概念。其中，会计电算化是基础，指电子技术在会计中的应用；会计信息化是更高级的飞跃，强调信息技术与经营管理的深度融合", "keywords": ["电算化", "会计电算"], "tags": ["domain/会计", "sub_domain/会计电算化", "type/concept", "source/会计电算化考试大纲"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/会计电算化/会计电算化.md"}, {"id": "会计信息化.md", "label": "会计信息化", "title": "会计信息化", "type": "book", "degree": 2, "cluster": "会计电算化", "domain": "会计", "sub_domain": "会计电算化", "summary": "作者：中华人民共和国财政部;Yan Wenhong。核心主题：系统阐述了会计电算化的基本概念、软件配备与功能模块，以及企业会计信息化的工作规范，旨在为会计从业人员提供标准化、规范化的电算化知识框架与操作指南。适合人群：准备参加会计从业资格考试或会计电算化相关考试的考生；希望系统了解企业会计信息化建设与软件应用的财务人员、企业管理者及IT项目实施人员。大纲清晰界定了会计电算化、会计信息化、会计软件、会计信息系统（AIS）、ERP及XBRL等核心概念。其中，会计电算化是基础，指电子技术在会计中的应用；会计信息化是更高级的飞跃，强调信息技术与经营管理的深度融合", "keywords": ["电算化", "会计电算"], "tags": ["domain/会计", "sub_domain/会计电算化", "type/concept", "source/会计电算化考试大纲"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/会计电算化/会计信息化.md"}, {"id": "现金流量诡计.md", "label": "现金流量诡计", "title": "现金流量诡计", "type": "book", "degree": 8, "cluster": "财务分析", "domain": "会计", "sub_domain": "财务分析", "summary": "书名：财务诡计：如何识别财务报告中的会计诡计和舞弊（原书第4版）。作者：霍华德·M.施利特（Howard M. Schilit）。核心主题：系统性地揭示上市公司在财务报告中可能使用的各类操纵和舞弊手法（即“财务诡计”），并提供一套“法证式”的分析框架，帮助投资者、分析师等识别并规避这些风险。并购会计诡计：本书第4版新增内容，指企业通过并购交易来虚增收入、利润、现金流量或操纵关键指标。财务诡计并非单纯的会计技术问题，其根源往往在于激进的业务模式", "keywords": ["财务诡计", "盈余操纵诡计", "现金流量诡计", "关键指标诡计", "并购会计诡计", "资产负债表", "管理层动机", "收入质量"], "tags": ["domain/会计", "sub_domain/财务分析", "type/concept", "source/财务诡计：如何识别财务报告中的会计诡计和舞弊（原书第4版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务分析/现金流量诡计.md"}, {"id": "法证式思维模式.md", "label": "法证式思维模式", "title": "法证式思维模式", "type": "book", "degree": 8, "cluster": "财务分析", "domain": "会计", "sub_domain": "财务分析", "summary": "书名：财务诡计：如何识别财务报告中的会计诡计和舞弊（原书第4版）。作者：霍华德·M.施利特（Howard M. Schilit）。核心主题：系统性地揭示上市公司在财务报告中可能使用的各类操纵和舞弊手法（即“财务诡计”），并提供一套“法证式”的分析框架，帮助投资者、分析师等识别并规避这些风险。并购会计诡计：本书第4版新增内容，指企业通过并购交易来虚增收入、利润、现金流量或操纵关键指标。财务诡计并非单纯的会计技术问题，其根源往往在于激进的业务模式", "keywords": ["财务诡计", "盈余操纵诡计", "现金流量诡计", "关键指标诡计", "并购会计诡计", "资产负债表", "管理层动机", "收入质量"], "tags": ["domain/会计", "sub_domain/财务分析", "type/concept", "source/财务诡计：如何识别财务报告中的会计诡计和舞弊（原书第4版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务分析/法证式思维模式.md"}, {"id": "盈余操纵诡计.md", "label": "盈余操纵诡计", "title": "盈余操纵诡计", "type": "book", "degree": 8, "cluster": "财务分析", "domain": "会计", "sub_domain": "财务分析", "summary": "书名：财务诡计：如何识别财务报告中的会计诡计和舞弊（原书第4版）。作者：霍华德·M.施利特（Howard M. Schilit）。核心主题：系统性地揭示上市公司在财务报告中可能使用的各类操纵和舞弊手法（即“财务诡计”），并提供一套“法证式”的分析框架，帮助投资者、分析师等识别并规避这些风险。并购会计诡计：本书第4版新增内容，指企业通过并购交易来虚增收入、利润、现金流量或操纵关键指标。财务诡计并非单纯的会计技术问题，其根源往往在于激进的业务模式", "keywords": ["财务诡计", "盈余操纵诡计", "现金流量诡计", "关键指标诡计", "并购会计诡计", "资产负债表", "管理层动机", "收入质量"], "tags": ["domain/会计", "sub_domain/财务分析", "type/concept", "source/财务诡计：如何识别财务报告中的会计诡计和舞弊（原书第4版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务分析/盈余操纵诡计.md"}, {"id": "INDEX.md", "label": "财务分析", "title": "财务分析", "type": "book", "degree": 3, "cluster": "会计", "domain": "会计", "sub_domain": "会计", "summary": "> 笔记总数: 0 个（试点处理中）。> 最后更新: 2026-05-14", "keywords": ["财务分析", "笔记总数", "更新时"], "tags": ["domain/会计", "type/sub-domain-index"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务分析/INDEX.md"}, {"id": "并购会计诡计.md", "label": "并购会计诡计", "title": "并购会计诡计", "type": "book", "degree": 8, "cluster": "财务分析", "domain": "会计", "sub_domain": "财务分析", "summary": "书名：财务诡计：如何识别财务报告中的会计诡计和舞弊（原书第4版）。作者：霍华德·M.施利特（Howard M. Schilit）。核心主题：系统性地揭示上市公司在财务报告中可能使用的各类操纵和舞弊手法（即“财务诡计”），并提供一套“法证式”的分析框架，帮助投资者、分析师等识别并规避这些风险。并购会计诡计：本书第4版新增内容，指企业通过并购交易来虚增收入、利润、现金流量或操纵关键指标。财务诡计并非单纯的会计技术问题，其根源往往在于激进的业务模式", "keywords": ["财务诡计", "盈余操纵诡计", "现金流量诡计", "关键指标诡计", "并购会计诡计", "资产负债表", "管理层动机", "收入质量"], "tags": ["domain/会计", "sub_domain/财务分析", "type/concept", "source/财务诡计：如何识别财务报告中的会计诡计和舞弊（原书第4版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务分析/并购会计诡计.md"}, {"id": "关键指标诡计.md", "label": "关键指标诡计", "title": "关键指标诡计", "type": "book", "degree": 8, "cluster": "财务分析", "domain": "会计", "sub_domain": "财务分析", "summary": "书名：财务诡计：如何识别财务报告中的会计诡计和舞弊（原书第4版）。作者：霍华德·M.施利特（Howard M. Schilit）。核心主题：系统性地揭示上市公司在财务报告中可能使用的各类操纵和舞弊手法（即“财务诡计”），并提供一套“法证式”的分析框架，帮助投资者、分析师等识别并规避这些风险。并购会计诡计：本书第4版新增内容，指企业通过并购交易来虚增收入、利润、现金流量或操纵关键指标。财务诡计并非单纯的会计技术问题，其根源往往在于激进的业务模式", "keywords": ["财务诡计", "盈余操纵诡计", "现金流量诡计", "关键指标诡计", "并购会计诡计", "资产负债表", "管理层动机", "收入质量"], "tags": ["domain/会计", "sub_domain/财务分析", "type/concept", "source/财务诡计：如何识别财务报告中的会计诡计和舞弊（原书第4版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务分析/关键指标诡计.md"}, {"id": "现金流量表.md", "label": "现金流量表", "title": "现金流量表", "type": "book", "degree": 6, "cluster": "财务报表分析", "domain": "会计", "sub_domain": "财务报表分析", "summary": "书名：一本书读懂财报——清华会计系主任课程。核心主题：本书旨在将复杂的财务报表解读为一种描述企业商业活动的“语言”，帮助非财务背景的读者理解资产负债表、利润表和现金流量表的逻辑、内在联系以及如何通过分析这些报表来洞察企业的经营状况、盈利能力和风险。适合人群：企业管理者、创业者、投资者、对财务知识感兴趣的职场人士，以及所有希望快速掌握财务报表分析基础逻辑的零基础读者。要点2：企业的经济活动可以抽象为“经营、投资、融资”三项活动，并由此产生三张核心报表。如果你是一名员工或管理者，可以尝试获取自己公司的财务报表（哪怕是内部管理报表）", "keywords": ["经营活动", "投资活动", "融资活动", "资产负债表", "财务报表", "本书开"], "tags": ["domain/会计", "sub_domain/财务报表分析", "type/concept", "source/一本书读懂财报——清华会计系主任课程。秒通财报，从本书开始"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务报表分析/现金流量表.md"}, {"id": "现金流量诡计.md", "label": "现金流量诡计", "title": "现金流量诡计", "type": "book", "degree": 8, "cluster": "财务报表分析", "domain": "会计", "sub_domain": "财务报表分析", "summary": "书名：财务诡计：如何识别财务报告中的会计诡计和舞弊（原书第4版）。作者：霍华德·M.施利特（Howard M. Schilit）。核心主题：系统性地揭示上市公司在财务报告中可能使用的各类操纵和舞弊手法（即“财务诡计”），并提供一套“法证式”的分析框架，帮助投资者、分析师等识别并规避这些风险。现金流量诡计：由于投资者开始关注现金流，企业开始操纵经营活动现金流。并购会计诡计：本书第4版新增内容，指企业通过并购交易来虚增收入、利润、现金流量或操纵关键指标", "keywords": ["财务诡计", "盈余操纵诡计", "现金流量诡计", "关键指标诡计", "并购会计诡计", "资产负债表", "管理层动机", "收入质量"], "tags": ["domain/会计", "sub_domain/财务报表分析", "type/concept", "source/财务诡计：如何识别财务报告中的会计诡计和舞弊（原书第4版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务报表分析/现金流量诡计.md"}, {"id": "利润表.md", "label": "利润表", "title": "利润表", "type": "book", "degree": 6, "cluster": "财务报表分析", "domain": "会计", "sub_domain": "财务报表分析", "summary": "书名：一本书读懂财报——清华会计系主任课程。核心主题：本书旨在将复杂的财务报表解读为一种描述企业商业活动的“语言”，帮助非财务背景的读者理解资产负债表、利润表和现金流量表的逻辑、内在联系以及如何通过分析这些报表来洞察企业的经营状况、盈利能力和风险。适合人群：企业管理者、创业者、投资者、对财务知识感兴趣的职场人士，以及所有希望快速掌握财务报表分析基础逻辑的零基础读者。要点2：企业的经济活动可以抽象为“经营、投资、融资”三项活动，并由此产生三张核心报表。如果你是一名员工或管理者，可以尝试获取自己公司的财务报表（哪怕是内部管理报表）", "keywords": ["经营活动", "投资活动", "融资活动", "资产负债表", "财务报表", "本书开"], "tags": ["domain/会计", "sub_domain/财务报表分析", "type/concept", "source/一本书读懂财报——清华会计系主任课程。秒通财报，从本书开始"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务报表分析/利润表.md"}, {"id": "法证式思维模式.md", "label": "法证式思维模式", "title": "法证式思维模式", "type": "book", "degree": 8, "cluster": "财务报表分析", "domain": "会计", "sub_domain": "财务报表分析", "summary": "书名：财务诡计：如何识别财务报告中的会计诡计和舞弊（原书第4版）。作者：霍华德·M.施利特（Howard M. Schilit）。核心主题：系统性地揭示上市公司在财务报告中可能使用的各类操纵和舞弊手法（即“财务诡计”），并提供一套“法证式”的分析框架，帮助投资者、分析师等识别并规避这些风险。并购会计诡计：本书第4版新增内容，指企业通过并购交易来虚增收入、利润、现金流量或操纵关键指标。财务诡计并非单纯的会计技术问题，其根源往往在于激进的业务模式", "keywords": ["财务诡计", "盈余操纵诡计", "现金流量诡计", "关键指标诡计", "并购会计诡计", "资产负债表", "管理层动机", "收入质量"], "tags": ["domain/会计", "sub_domain/财务报表分析", "type/concept", "source/财务诡计：如何识别财务报告中的会计诡计和舞弊（原书第4版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务报表分析/法证式思维模式.md"}, {"id": "盈余操纵诡计.md", "label": "盈余操纵诡计", "title": "盈余操纵诡计", "type": "book", "degree": 8, "cluster": "财务报表分析", "domain": "会计", "sub_domain": "财务报表分析", "summary": "书名：财务诡计：如何识别财务报告中的会计诡计和舞弊（原书第4版）。作者：霍华德·M.施利特（Howard M. Schilit）。核心主题：系统性地揭示上市公司在财务报告中可能使用的各类操纵和舞弊手法（即“财务诡计”），并提供一套“法证式”的分析框架，帮助投资者、分析师等识别并规避这些风险。并购会计诡计：本书第4版新增内容，指企业通过并购交易来虚增收入、利润、现金流量或操纵关键指标。财务诡计并非单纯的会计技术问题，其根源往往在于激进的业务模式", "keywords": ["财务诡计", "盈余操纵诡计", "现金流量诡计", "关键指标诡计", "并购会计诡计", "资产负债表", "管理层动机", "收入质量"], "tags": ["domain/会计", "sub_domain/财务报表分析", "type/concept", "source/财务诡计：如何识别财务报告中的会计诡计和舞弊（原书第4版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务报表分析/盈余操纵诡计.md"}, {"id": "会计语言.md", "label": "会计语言", "title": "会计语言", "type": "book", "degree": 6, "cluster": "财务报表分析", "domain": "会计", "sub_domain": "财务报表分析", "summary": "书名：一本书读懂财报——清华会计系主任课程。核心主题：本书旨在将复杂的财务报表解读为一种描述企业商业活动的“语言”，帮助非财务背景的读者理解资产负债表、利润表和现金流量表的逻辑、内在联系以及如何通过分析这些报表来洞察企业的经营状况、盈利能力和风险。适合人群：企业管理者、创业者、投资者、对财务知识感兴趣的职场人士，以及所有希望快速掌握财务报表分析基础逻辑的零基础读者。要点2：企业的经济活动可以抽象为“经营、投资、融资”三项活动，并由此产生三张核心报表。如果你是一名员工或管理者，可以尝试获取自己公司的财务报表（哪怕是内部管理报表）", "keywords": ["经营活动", "投资活动", "融资活动", "资产负债表", "财务报表", "本书开"], "tags": ["domain/会计", "sub_domain/财务报表分析", "type/concept", "source/一本书读懂财报——清华会计系主任课程。秒通财报，从本书开始"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务报表分析/会计语言.md"}, {"id": "经营活动.md", "label": "经营活动", "title": "经营活动", "type": "book", "degree": 6, "cluster": "财务报表分析", "domain": "会计", "sub_domain": "财务报表分析", "summary": "书名：一本书读懂财报——清华会计系主任课程。核心主题：本书旨在将复杂的财务报表解读为一种描述企业商业活动的“语言”，帮助非财务背景的读者理解资产负债表、利润表和现金流量表的逻辑、内在联系以及如何通过分析这些报表来洞察企业的经营状况、盈利能力和风险。适合人群：企业管理者、创业者、投资者、对财务知识感兴趣的职场人士，以及所有希望快速掌握财务报表分析基础逻辑的零基础读者。要点2：企业的经济活动可以抽象为“经营、投资、融资”三项活动，并由此产生三张核心报表。如果你是一名员工或管理者，可以尝试获取自己公司的财务报表（哪怕是内部管理报表）", "keywords": ["经营活动", "投资活动", "融资活动", "资产负债表", "财务报表", "本书开"], "tags": ["domain/会计", "sub_domain/财务报表分析", "type/concept", "source/一本书读懂财报——清华会计系主任课程。秒通财报，从本书开始"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务报表分析/经营活动.md"}, {"id": "INDEX.md", "label": "财务报表分析", "title": "财务报表分析", "type": "book", "degree": 5, "cluster": "会计", "domain": "会计", "sub_domain": "会计", "summary": "> 笔记总数: 0 个（试点处理中）。> 最后更新: 2026-05-14", "keywords": ["财务报", "务报表", "报表分", "表分析", "笔记总数"], "tags": ["domain/会计", "type/sub-domain-index"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务报表分析/INDEX.md"}, {"id": "权责发生制.md", "label": "权责发生制", "title": "权责发生制", "type": "book", "degree": 6, "cluster": "财务报表分析", "domain": "会计", "sub_domain": "财务报表分析", "summary": "书名：一本书读懂财报——清华会计系主任课程。核心主题：本书旨在将复杂的财务报表解读为一种描述企业商业活动的“语言”，帮助非财务背景的读者理解资产负债表、利润表和现金流量表的逻辑、内在联系以及如何通过分析这些报表来洞察企业的经营状况、盈利能力和风险。适合人群：企业管理者、创业者、投资者、对财务知识感兴趣的职场人士，以及所有希望快速掌握财务报表分析基础逻辑的零基础读者。要点2：企业的经济活动可以抽象为“经营、投资、融资”三项活动，并由此产生三张核心报表。如果你是一名员工或管理者，可以尝试获取自己公司的财务报表（哪怕是内部管理报表）", "keywords": ["经营活动", "投资活动", "融资活动", "资产负债表", "财务报表", "本书开"], "tags": ["domain/会计", "sub_domain/财务报表分析", "type/concept", "source/一本书读懂财报——清华会计系主任课程。秒通财报，从本书开始"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务报表分析/权责发生制.md"}, {"id": "并购会计诡计.md", "label": "并购会计诡计", "title": "并购会计诡计", "type": "book", "degree": 8, "cluster": "财务报表分析", "domain": "会计", "sub_domain": "财务报表分析", "summary": "书名：财务诡计：如何识别财务报告中的会计诡计和舞弊（原书第4版）。作者：霍华德·M.施利特（Howard M. Schilit）。核心主题：系统性地揭示上市公司在财务报告中可能使用的各类操纵和舞弊手法（即“财务诡计”），并提供一套“法证式”的分析框架，帮助投资者、分析师等识别并规避这些风险。并购会计诡计：本书第4版新增内容，指企业通过并购交易来虚增收入、利润、现金流量或操纵关键指标。财务诡计并非单纯的会计技术问题，其根源往往在于激进的业务模式", "keywords": ["财务诡计", "盈余操纵诡计", "现金流量诡计", "关键指标诡计", "并购会计诡计", "资产负债表", "管理层动机", "收入质量"], "tags": ["domain/会计", "sub_domain/财务报表分析", "type/concept", "source/财务诡计：如何识别财务报告中的会计诡计和舞弊（原书第4版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务报表分析/并购会计诡计.md"}, {"id": "资产负债表.md", "label": "资产负债表", "title": "资产负债表", "type": "book", "degree": 6, "cluster": "财务报表分析", "domain": "会计", "sub_domain": "财务报表分析", "summary": "书名：一本书读懂财报——清华会计系主任课程。核心主题：本书旨在将复杂的财务报表解读为一种描述企业商业活动的“语言”，帮助非财务背景的读者理解资产负债表、利润表和现金流量表的逻辑、内在联系以及如何通过分析这些报表来洞察企业的经营状况、盈利能力和风险。适合人群：企业管理者、创业者、投资者、对财务知识感兴趣的职场人士，以及所有希望快速掌握财务报表分析基础逻辑的零基础读者。资产负债表：像一张“单反相机”，在某一时点“定格”企业的家底，展示其拥有什么（资产）、欠别人什么。）然后，对比资产负债表和利润表，看看利润的增长是否伴随着应收账款的激增", "keywords": ["经营活动", "投资活动", "融资活动", "资产负债表", "财务报表", "资产负债表"], "tags": ["domain/会计", "sub_domain/财务报表分析", "type/concept", "source/一本书读懂财报——清华会计系主任课程。秒通财报，从本书开始"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务报表分析/资产负债表.md"}, {"id": "关键指标诡计.md", "label": "关键指标诡计", "title": "关键指标诡计", "type": "book", "degree": 8, "cluster": "财务报表分析", "domain": "会计", "sub_domain": "财务报表分析", "summary": "书名：财务诡计：如何识别财务报告中的会计诡计和舞弊（原书第4版）。作者：霍华德·M.施利特（Howard M. Schilit）。核心主题：系统性地揭示上市公司在财务报告中可能使用的各类操纵和舞弊手法（即“财务诡计”），并提供一套“法证式”的分析框架，帮助投资者、分析师等识别并规避这些风险。并购会计诡计：本书第4版新增内容，指企业通过并购交易来虚增收入、利润、现金流量或操纵关键指标。财务诡计并非单纯的会计技术问题，其根源往往在于激进的业务模式", "keywords": ["财务诡计", "盈余操纵诡计", "现金流量诡计", "关键指标诡计", "并购会计诡计", "资产负债表", "管理层动机", "收入质量"], "tags": ["domain/会计", "sub_domain/财务报表分析", "type/concept", "source/财务诡计：如何识别财务报告中的会计诡计和舞弊（原书第4版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/财务报表分析/关键指标诡计.md"}, {"id": "会计职能.md", "label": "会计职能", "title": "会计职能", "type": "book", "degree": 8, "cluster": "会计基础", "domain": "会计", "sub_domain": "会计基础", "summary": "作者：中华人民共和国财政部;Yan Wenhong。核心主题：系统阐述会计学的基本概念、原理、方法和规范，为初学者构建会计知识框架，并明确会计从业资格考试的基础要求。零基础、希望系统学习会计原理的初学者。核算职能要求对经济活动进行确认、计量和报告；监督职能则关注经济活动的真实性、合法性和合理性，贯穿于事前、事中和事后。它通过一系列规则（如会计准则、质量要求），将杂乱的经济活动原始数据，加工成对决策有用的“会计信息”", "keywords": ["权责发生制", "收付实现制", "会计主体", "持续经营", "会计分期", "货币计量", "可理解性", "可靠性"], "tags": ["domain/会计", "sub_domain/会计基础", "type/concept", "source/《会计基础"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/会计基础/会计职能.md"}, {"id": "INDEX.md", "label": "会计基础", "title": "会计基础", "type": "book", "degree": 3, "cluster": "会计", "domain": "会计", "sub_domain": "会计", "summary": "> 笔记总数: 0 个（试点处理中）。> 最后更新: 2026-05-14", "keywords": ["会计基础", "笔记总数", "更新时"], "tags": ["domain/会计", "type/sub-domain-index"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/会计基础/INDEX.md"}, {"id": "会计要素.md", "label": "会计要素", "title": "会计要素", "type": "book", "degree": 8, "cluster": "会计基础", "domain": "会计", "sub_domain": "会计基础", "summary": "作者：中华人民共和国财政部;Yan Wenhong。核心主题：系统阐述会计学的基本概念、原理、方法和规范，为初学者构建会计知识框架，并明确会计从业资格考试的基础要求。零基础、希望系统学习会计原理的初学者。核算职能要求对经济活动进行确认、计量和报告；监督职能则关注经济活动的真实性、合法性和合理性，贯穿于事前、事中和事后。它通过一系列规则（如会计准则、质量要求），将杂乱的经济活动原始数据，加工成对决策有用的“会计信息”", "keywords": ["权责发生制", "收付实现制", "会计主体", "持续经营", "会计分期", "货币计量", "可理解性", "可靠性"], "tags": ["domain/会计", "sub_domain/会计基础", "type/concept", "source/《会计基础"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/会计基础/会计要素.md"}, {"id": "会计假设.md", "label": "会计假设", "title": "会计假设", "type": "book", "degree": 8, "cluster": "会计基础", "domain": "会计", "sub_domain": "会计基础", "summary": "作者：中华人民共和国财政部;Yan Wenhong。核心主题：系统阐述会计学的基本概念、原理、方法和规范，为初学者构建会计知识框架，并明确会计从业资格考试的基础要求。零基础、希望系统学习会计原理的初学者。核算职能要求对经济活动进行确认、计量和报告；监督职能则关注经济活动的真实性、合法性和合理性，贯穿于事前、事中和事后。它通过一系列规则（如会计准则、质量要求），将杂乱的经济活动原始数据，加工成对决策有用的“会计信息”", "keywords": ["权责发生制", "收付实现制", "会计主体", "持续经营", "会计分期", "货币计量", "可理解性", "可靠性"], "tags": ["domain/会计", "sub_domain/会计基础", "type/concept", "source/《会计基础"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/会计基础/会计假设.md"}, {"id": "会计等式.md", "label": "会计等式", "title": "会计等式", "type": "book", "degree": 8, "cluster": "会计基础", "domain": "会计", "sub_domain": "会计基础", "summary": "作者：中华人民共和国财政部;Yan Wenhong。核心主题：系统阐述会计学的基本概念、原理、方法和规范，为初学者构建会计知识框架，并明确会计从业资格考试的基础要求。零基础、希望系统学习会计原理的初学者。核算职能要求对经济活动进行确认、计量和报告；监督职能则关注经济活动的真实性、合法性和合理性，贯穿于事前、事中和事后。它通过一系列规则（如会计准则、质量要求），将杂乱的经济活动原始数据，加工成对决策有用的“会计信息”", "keywords": ["权责发生制", "收付实现制", "会计主体", "持续经营", "会计分期", "货币计量", "可理解性", "可靠性"], "tags": ["domain/会计", "sub_domain/会计基础", "type/concept", "source/《会计基础"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/会计基础/会计等式.md"}, {"id": "会计循环.md", "label": "会计循环", "title": "会计循环", "type": "book", "degree": 8, "cluster": "会计基础", "domain": "会计", "sub_domain": "会计基础", "summary": "作者：中华人民共和国财政部;Yan Wenhong。核心主题：系统阐述会计学的基本概念、原理、方法和规范，为初学者构建会计知识框架，并明确会计从业资格考试的基础要求。零基础、希望系统学习会计原理的初学者。核算职能要求对经济活动进行确认、计量和报告；监督职能则关注经济活动的真实性、合法性和合理性，贯穿于事前、事中和事后。它通过一系列规则（如会计准则、质量要求），将杂乱的经济活动原始数据，加工成对决策有用的“会计信息”", "keywords": ["权责发生制", "收付实现制", "会计主体", "持续经营", "会计分期", "货币计量", "可理解性", "可靠性"], "tags": ["domain/会计", "sub_domain/会计基础", "type/concept", "source/《会计基础"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/会计基础/会计循环.md"}, {"id": "现金流量表.md", "label": "现金流量表", "title": "现金流量表", "type": "book", "degree": 2, "cluster": "基础会计", "domain": "会计", "sub_domain": "基础会计", "summary": "作者：达雷尔·穆利斯、朱迪丝·奥洛夫。核心主题：通过一个柠檬汁售货摊的创业故事，以“做中学”的方式，零基础讲解三大财务报表（资产负债表、利润表、现金流量表）的结构、编制方法及其内在钩稽关系，帮助读者理解商业语言的核心概念。适合人群：完全零基础、对会计感到恐惧或枯燥的初学者；需要快速掌握财务基础概念的创业者、管理者及非财务岗位的职场人士；希望以轻松有趣的方式重温会计原理的学生。书中用“柠檬汁摊”的初始投资（5美元）和向父母借款（10美元）的案例，清晰地构建了第一张资产负债表，让读者直观理解左边（资产）永远等于右边（负债+所有者权益）的平衡关系。权责发生制（会计常用）记录“权利与义务”的发生时间，", "keywords": ["资产负债", "负债表"], "tags": ["domain/会计", "sub_domain/基础会计", "type/concept", "source/世界上最简单的会计书"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/基础会计/现金流量表.md"}, {"id": "存货计价.md", "label": "存货计价", "title": "存货计价", "type": "book", "degree": 2, "cluster": "基础会计", "domain": "会计", "sub_domain": "基础会计", "summary": "作者：达雷尔·穆利斯、朱迪丝·奥洛夫。核心主题：通过一个柠檬汁售货摊的创业故事，以“做中学”的方式，零基础讲解三大财务报表（资产负债表、利润表、现金流量表）的结构、编制方法及其内在钩稽关系，帮助读者理解商业语言的核心概念。适合人群：完全零基础、对会计感到恐惧或枯燥的初学者；需要快速掌握财务基础概念的创业者、管理者及非财务岗位的职场人士；希望以轻松有趣的方式重温会计原理的学生。书中用“柠檬汁摊”的初始投资（5美元）和向父母借款（10美元）的案例，清晰地构建了第一张资产负债表，让读者直观理解左边（资产）永远等于右边（负债+所有者权益）的平衡关系。权责发生制（会计常用）记录“权利与义务”的发生时间，", "keywords": ["资产负债", "负债表"], "tags": ["domain/会计", "sub_domain/基础会计", "type/concept", "source/世界上最简单的会计书"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/基础会计/存货计价.md"}, {"id": "利润表.md", "label": "利润表", "title": "利润表", "type": "book", "degree": 2, "cluster": "基础会计", "domain": "会计", "sub_domain": "基础会计", "summary": "作者：达雷尔·穆利斯、朱迪丝·奥洛夫。核心主题：通过一个柠檬汁售货摊的创业故事，以“做中学”的方式，零基础讲解三大财务报表（资产负债表、利润表、现金流量表）的结构、编制方法及其内在钩稽关系，帮助读者理解商业语言的核心概念。适合人群：完全零基础、对会计感到恐惧或枯燥的初学者；需要快速掌握财务基础概念的创业者、管理者及非财务岗位的职场人士；希望以轻松有趣的方式重温会计原理的学生。书中用“柠檬汁摊”的初始投资（5美元）和向父母借款（10美元）的案例，清晰地构建了第一张资产负债表，让读者直观理解左边（资产）永远等于右边（负债+所有者权益）的平衡关系。权责发生制（会计常用）记录“权利与义务”的发生时间，", "keywords": ["资产负债", "负债表"], "tags": ["domain/会计", "sub_domain/基础会计", "type/concept", "source/世界上最简单的会计书"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/基础会计/利润表.md"}, {"id": "折旧.md", "label": "折旧", "title": "折旧", "type": "book", "degree": 2, "cluster": "基础会计", "domain": "会计", "sub_domain": "基础会计", "summary": "作者：达雷尔·穆利斯、朱迪丝·奥洛夫。核心主题：通过一个柠檬汁售货摊的创业故事，以“做中学”的方式，零基础讲解三大财务报表（资产负债表、利润表、现金流量表）的结构、编制方法及其内在钩稽关系，帮助读者理解商业语言的核心概念。适合人群：完全零基础、对会计感到恐惧或枯燥的初学者；需要快速掌握财务基础概念的创业者、管理者及非财务岗位的职场人士；希望以轻松有趣的方式重温会计原理的学生。书中用“柠檬汁摊”的初始投资（5美元）和向父母借款（10美元）的案例，清晰地构建了第一张资产负债表，让读者直观理解左边（资产）永远等于右边（负债+所有者权益）的平衡关系。权责发生制（会计常用）记录“权利与义务”的发生时间，", "keywords": ["资产负债", "负债表"], "tags": ["domain/会计", "sub_domain/基础会计", "type/concept", "source/世界上最简单的会计书"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/基础会计/折旧.md"}, {"id": "INDEX.md", "label": "基础会计", "title": "基础会计", "type": "book", "degree": 3, "cluster": "会计", "domain": "会计", "sub_domain": "会计", "summary": "> 笔记总数: 0 个（试点处理中）。> 最后更新: 2026-05-14", "keywords": ["基础会计", "笔记总数", "更新时"], "tags": ["domain/会计", "type/sub-domain-index"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/基础会计/INDEX.md"}, {"id": "权责发生制.md", "label": "权责发生制", "title": "权责发生制", "type": "book", "degree": 2, "cluster": "基础会计", "domain": "会计", "sub_domain": "基础会计", "summary": "作者：达雷尔·穆利斯、朱迪丝·奥洛夫。核心主题：通过一个柠檬汁售货摊的创业故事，以“做中学”的方式，零基础讲解三大财务报表（资产负债表、利润表、现金流量表）的结构、编制方法及其内在钩稽关系，帮助读者理解商业语言的核心概念。适合人群：完全零基础、对会计感到恐惧或枯燥的初学者；需要快速掌握财务基础概念的创业者、管理者及非财务岗位的职场人士；希望以轻松有趣的方式重温会计原理的学生。书中用“柠檬汁摊”的初始投资（5美元）和向父母借款（10美元）的案例，清晰地构建了第一张资产负债表，让读者直观理解左边（资产）永远等于右边（负债+所有者权益）的平衡关系。权责发生制（会计常用）记录“权利与义务”的发生时间，", "keywords": ["资产负债", "负债表"], "tags": ["domain/会计", "sub_domain/基础会计", "type/concept", "source/世界上最简单的会计书"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/基础会计/权责发生制.md"}, {"id": "资产负债表.md", "label": "资产负债表", "title": "资产负债表", "type": "book", "degree": 2, "cluster": "基础会计", "domain": "会计", "sub_domain": "基础会计", "summary": "作者：达雷尔·穆利斯、朱迪丝·奥洛夫。核心主题：通过一个柠檬汁售货摊的创业故事，以“做中学”的方式，零基础讲解三大财务报表（资产负债表、利润表、现金流量表）的结构、编制方法及其内在钩稽关系，帮助读者理解商业语言的核心概念。适合人群：完全零基础、对会计感到恐惧或枯燥的初学者；需要快速掌握财务基础概念的创业者、管理者及非财务岗位的职场人士；希望以轻松有趣的方式重温会计原理的学生。书中用“柠檬汁摊”的初始投资（5美元）和向父母借款（10美元）的案例，清晰地构建了第一张资产负债表，让读者直观理解左边（资产）永远等于右边（负债+所有者权益）的平衡关系。权责发生制（会计常用）记录“权利与义务”的发生时间，", "keywords": ["资产负债", "负债表"], "tags": ["domain/会计", "sub_domain/基础会计", "type/concept", "source/世界上最简单的会计书"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/基础会计/资产负债表.md"}, {"id": "TQM.md", "label": "TQM", "title": "TQM", "type": "book", "degree": 8, "cluster": "成本与管理会计", "domain": "会计", "sub_domain": "成本与管理会计", "summary": "成本与管理会计：本书的核心，是一门将成本会计（聚焦于产品成本计算）与管理会计（聚焦于为内部管理者提供决策信息）相结合的学科。其根本目的是通过提供与决策高度相关的财务与非财务信息，帮助企业实现战略目标、提升经营效率。信息相关性：会计信息能否真正服务于决策者，是衡量其价值的关键。委托-代理理论：一个重要的经济学理论框架，用于理解企业内部管理者（代理人）与所有者（委托人）之间的利益冲突，以及。利益冲突驱动管理会计工具的设计：委托-代理理论揭示了管理者和所有者目标可能不一致", "keywords": ["管理会计", "可执行的行动步骤", "与其他领域的联系", "诊断信息相关性", "作业成本核算", "核心概念", "成本会计", "管理会计"], "tags": ["domain/会计", "sub_domain/成本与管理会计", "type/concept", "source/亨格瑞 - 成本与管理会计(13)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/成本与管理会计/TQM.md"}, {"id": "成本与管理会计.md", "label": "成本与管理会计", "title": "成本与管理会计", "type": "book", "degree": 8, "cluster": "成本与管理会计", "domain": "会计", "sub_domain": "成本与管理会计", "summary": "成本与管理会计：本书的核心，是一门将成本会计（聚焦于产品成本计算）与管理会计（聚焦于为内部管理者提供决策信息）相结合的学科。其根本目的是通过提供与决策高度相关的财务与非财务信息，帮助企业实现战略目标、提升经营效率。信息相关性：会计信息能否真正服务于决策者，是衡量其价值的关键。委托-代理理论：一个重要的经济学理论框架，用于理解企业内部管理者（代理人）与所有者（委托人）之间的利益冲突，以及。利益冲突驱动管理会计工具的设计：委托-代理理论揭示了管理者和所有者目标可能不一致", "keywords": ["管理会计", "可执行的行动步骤", "与其他领域的联系", "诊断信息相关性", "作业成本核算", "核心概念", "成本会计", "管理会计"], "tags": ["domain/会计", "sub_domain/成本与管理会计", "type/concept", "source/亨格瑞 - 成本与管理会计(13)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/成本与管理会计/成本与管理会计.md"}, {"id": "JIT.md", "label": "JIT", "title": "JIT", "type": "book", "degree": 8, "cluster": "成本与管理会计", "domain": "会计", "sub_domain": "成本与管理会计", "summary": "成本与管理会计：本书的核心，是一门将成本会计（聚焦于产品成本计算）与管理会计（聚焦于为内部管理者提供决策信息）相结合的学科。其根本目的是通过提供与决策高度相关的财务与非财务信息，帮助企业实现战略目标、提升经营效率。信息相关性：会计信息能否真正服务于决策者，是衡量其价值的关键。委托-代理理论：一个重要的经济学理论框架，用于理解企业内部管理者（代理人）与所有者（委托人）之间的利益冲突，以及。利益冲突驱动管理会计工具的设计：委托-代理理论揭示了管理者和所有者目标可能不一致", "keywords": ["管理会计", "可执行的行动步骤", "与其他领域的联系", "诊断信息相关性", "作业成本核算", "核心概念", "成本会计", "管理会计"], "tags": ["domain/会计", "sub_domain/成本与管理会计", "type/concept", "source/亨格瑞 - 成本与管理会计(13)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/成本与管理会计/JIT.md"}, {"id": "INDEX.md", "label": "成本与管理会计", "title": "成本与管理会计", "type": "book", "degree": 3, "cluster": "会计", "domain": "会计", "sub_domain": "会计", "summary": "> 笔记总数: 0 个（试点处理中）。> 最后更新: 2026-05-14", "keywords": ["管理会计", "本与管", "笔记总数"], "tags": ["domain/会计", "type/sub-domain-index"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/成本与管理会计/INDEX.md"}, {"id": "委托-代理理论.md", "label": "委托-代理理论", "title": "委托-代理理论", "type": "book", "degree": 8, "cluster": "成本与管理会计", "domain": "会计", "sub_domain": "成本与管理会计", "summary": "成本与管理会计：本书的核心，是一门将成本会计（聚焦于产品成本计算）与管理会计（聚焦于为内部管理者提供决策信息）相结合的学科。其根本目的是通过提供与决策高度相关的财务与非财务信息，帮助企业实现战略目标、提升经营效率。信息相关性：会计信息能否真正服务于决策者，是衡量其价值的关键。委托-代理理论：一个重要的经济学理论框架，用于理解企业内部管理者（代理人）与所有者（委托人）之间的利益冲突，以及。利益冲突驱动管理会计工具的设计：委托-代理理论揭示了管理者和所有者目标可能不一致", "keywords": ["管理会计", "可执行的行动步骤", "与其他领域的联系", "诊断信息相关性", "作业成本核算", "核心概念", "成本会计", "管理会计"], "tags": ["domain/会计", "sub_domain/成本与管理会计", "type/concept", "source/亨格瑞 - 成本与管理会计(13)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/成本与管理会计/委托-代理理论.md"}, {"id": "信息相关性.md", "label": "信息相关性", "title": "信息相关性", "type": "book", "degree": 8, "cluster": "成本与管理会计", "domain": "会计", "sub_domain": "成本与管理会计", "summary": "成本与管理会计：本书的核心，是一门将成本会计（聚焦于产品成本计算）与管理会计（聚焦于为内部管理者提供决策信息）相结合的学科。其根本目的是通过提供与决策高度相关的财务与非财务信息，帮助企业实现战略目标、提升经营效率。信息相关性：会计信息能否真正服务于决策者，是衡量其价值的关键。委托-代理理论：一个重要的经济学理论框架，用于理解企业内部管理者（代理人）与所有者（委托人）之间的利益冲突，以及。利益冲突驱动管理会计工具的设计：委托-代理理论揭示了管理者和所有者目标可能不一致", "keywords": ["管理会计", "可执行的行动步骤", "与其他领域的联系", "诊断信息相关性", "作业成本核算", "核心概念", "成本会计", "管理会计"], "tags": ["domain/会计", "sub_domain/成本与管理会计", "type/concept", "source/亨格瑞 - 成本与管理会计(13)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/会计/成本与管理会计/信息相关性.md"}];
+var LINKS = [{"source": "管理会计.md", "target": "杜邦金字塔.md", "value": 8, "shared": ["效率", "不适合", "利润表", "管理者", "资产负债表"]}, {"source": "管理会计.md", "target": "营运资本管理.md", "value": 8, "shared": ["效率", "不适合", "利润表", "管理者", "资产负债表"]}, {"source": "管理会计.md", "target": "经济增加值.md", "value": 8, "shared": ["效率", "不适合", "利润表", "管理者", "资产负债表"]}, {"source": "管理会计.md", "target": "经济增加值(EVA).md", "value": 8, "shared": ["效率", "不适合", "利润表", "管理者", "资产负债表"]}, {"source": "管理会计.md", "target": "财务报表.md", "value": 8, "shared": ["效率", "不适合", "利润表", "管理者", "资产负债表"]}, {"source": "管理会计.md", "target": "现金流.md", "value": 8, "shared": ["效率", "不适合", "利润表", "管理者", "资产负债表"]}, {"source": "管理会计.md", "target": "会计语言.md", "value": 2, "shared": ["财务报表", "资产负债表"]}, {"source": "管理会计.md", "target": "经营活动.md", "value": 2, "shared": ["财务报表", "资产负债表"]}, {"source": "杜邦金字塔.md", "target": "营运资本管理.md", "value": 8, "shared": ["效率", "不适合", "利润表", "管理者", "资产负债表"]}, {"source": "杜邦金字塔.md", "target": "经济增加值.md", "value": 8, "shared": ["效率", "不适合", "利润表", "管理者", "资产负债表"]}, {"source": "杜邦金字塔.md", "target": "经济增加值(EVA).md", "value": 8, "shared": ["效率", "不适合", "利润表", "管理者", "资产负债表"]}, {"source": "杜邦金字塔.md", "target": "财务报表.md", "value": 8, "shared": ["效率", "不适合", "利润表", "管理者", "资产负债表"]}, {"source": "杜邦金字塔.md", "target": "现金流.md", "value": 8, "shared": ["效率", "不适合", "利润表", "管理者", "资产负债表"]}, {"source": "杜邦金字塔.md", "target": "会计语言.md", "value": 2, "shared": ["财务报表", "资产负债表"]}, {"source": "杜邦金字塔.md", "target": "经营活动.md", "value": 2, "shared": ["财务报表", "资产负债表"]}, {"source": "营运资本管理.md", "target": "经济增加值.md", "value": 8, "shared": ["效率", "不适合", "利润表", "管理者", "资产负债表"]}, {"source": "营运资本管理.md", "target": "经济增加值(EVA).md", "value": 8, "shared": ["效率", "不适合", "利润表", "管理者", "资产负债表"]}, {"source": "营运资本管理.md", "target": "财务报表.md", "value": 8, "shared": ["效率", "不适合", "利润表", "管理者", "资产负债表"]}, {"source": "营运资本管理.md", "target": "现金流.md", "value": 8, "shared": ["效率", "不适合", "利润表", "管理者", "资产负债表"]}, {"source": "营运资本管理.md", "target": "会计语言.md", "value": 2, "shared": ["财务报表", "资产负债表"]}, {"source": "营运资本管理.md", "target": "经营活动.md", "value": 2, "shared": ["财务报表", "资产负债表"]}, {"source": "经济增加值.md", "target": "经济增加值(EVA).md", "value": 8, "shared": ["效率", "不适合", "利润表", "管理者", "资产负债表"]}, {"source": "经济增加值.md", "target": "财务报表.md", "value": 8, "shared": ["效率", "不适合", "利润表", "管理者", "资产负债表"]}, {"source": "经济增加值.md", "target": "现金流.md", "value": 8, "shared": ["效率", "不适合", "利润表", "管理者", "资产负债表"]}, {"source": "经济增加值.md", "target": "会计语言.md", "value": 2, "shared": ["财务报表", "资产负债表"]}, {"source": "经济增加值.md", "target": "经营活动.md", "value": 2, "shared": ["财务报表", "资产负债表"]}, {"source": "经济增加值(EVA).md", "target": "财务报表.md", "value": 8, "shared": ["效率", "不适合", "利润表", "管理者", "资产负债表"]}, {"source": "经济增加值(EVA).md", "target": "现金流.md", "value": 8, "shared": ["效率", "不适合", "利润表", "管理者", "资产负债表"]}, {"source": "经济增加值(EVA).md", "target": "会计语言.md", "value": 2, "shared": ["财务报表", "资产负债表"]}, {"source": "经济增加值(EVA).md", "target": "经营活动.md", "value": 2, "shared": ["财务报表", "资产负债表"]}, {"source": "财务报表.md", "target": "现金流.md", "value": 8, "shared": ["效率", "不适合", "利润表", "管理者", "资产负债表"]}, {"source": "财务报表.md", "target": "会计语言.md", "value": 2, "shared": ["财务报表", "资产负债表"]}, {"source": "财务报表.md", "target": "经营活动.md", "value": 2, "shared": ["财务报表", "资产负债表"]}, {"source": "责任中心.md", "target": "闭环管理.md", "value": 2, "shared": ["预算管理", "全面预"]}, {"source": "责任中心.md", "target": "动力系统.md", "value": 2, "shared": ["预算管理", "全面预"]}, {"source": "责任中心.md", "target": "责任中心.md", "value": 2, "shared": ["全面预", "预算管理"]}, {"source": "责任中心.md", "target": "增量预算法.md", "value": 2, "shared": ["预算管理", "全面预"]}, {"source": "责任中心.md", "target": "全面预算管理.md", "value": 2, "shared": ["预算管理", "全面预"]}, {"source": "现金流.md", "target": "会计语言.md", "value": 2, "shared": ["财务报表", "资产负债表"]}, {"source": "现金流.md", "target": "经营活动.md", "value": 2, "shared": ["财务报表", "资产负债表"]}, {"source": "INDEX.md", "target": "INDEX.md", "value": 3, "shared": ["笔记总数", "管理会计", "本与管"]}, {"source": "TQM.md", "target": "成本与管理会计.md", "value": 7, "shared": ["管理会计", "核心概念", "可执行的行动步骤", "与其他领域的联系", "作业成本核算"]}, {"source": "TQM.md", "target": "管理会计演进.md", "value": 6, "shared": ["核心概念", "可执行的行动步骤", "与其他领域的联系", "作业成本核算", "诊断信息相关性"]}, {"source": "TQM.md", "target": "JIT.md", "value": 7, "shared": ["管理会计", "核心概念", "可执行的行动步骤", "与其他领域的联系", "作业成本核算"]}, {"source": "TQM.md", "target": "委托-代理理论.md", "value": 7, "shared": ["管理会计", "核心概念", "可执行的行动步骤", "与其他领域的联系", "作业成本核算"]}, {"source": "TQM.md", "target": "信息相关性.md", "value": 7, "shared": ["管理会计", "核心概念", "可执行的行动步骤", "与其他领域的联系", "作业成本核算"]}, {"source": "TQM.md", "target": "TQM.md", "value": 7, "shared": ["管理会计", "与其他领域的联系", "核心概念", "诊断信息相关性", "可执行的行动步骤"]}, {"source": "闭环管理.md", "target": "动力系统.md", "value": 2, "shared": ["预算管理", "全面预"]}, {"source": "闭环管理.md", "target": "增量预算法.md", "value": 2, "shared": ["预算管理", "全面预"]}, {"source": "闭环管理.md", "target": "全面预算管理.md", "value": 2, "shared": ["预算管理", "全面预"]}, {"source": "动力系统.md", "target": "增量预算法.md", "value": 2, "shared": ["预算管理", "全面预"]}, {"source": "动力系统.md", "target": "全面预算管理.md", "value": 2, "shared": ["预算管理", "全面预"]}, {"source": "成本与管理会计.md", "target": "管理会计演进.md", "value": 6, "shared": ["核心概念", "可执行的行动步骤", "与其他领域的联系", "作业成本核算", "诊断信息相关性"]}, {"source": "成本与管理会计.md", "target": "JIT.md", "value": 7, "shared": ["管理会计", "核心概念", "可执行的行动步骤", "与其他领域的联系", "作业成本核算"]}, {"source": "成本与管理会计.md", "target": "委托-代理理论.md", "value": 7, "shared": ["管理会计", "核心概念", "可执行的行动步骤", "与其他领域的联系", "作业成本核算"]}, {"source": "成本与管理会计.md", "target": "信息相关性.md", "value": 7, "shared": ["管理会计", "核心概念", "可执行的行动步骤", "与其他领域的联系", "作业成本核算"]}, {"source": "成本与管理会计.md", "target": "成本与管理会计.md", "value": 7, "shared": ["管理会计", "与其他领域的联系", "核心概念", "诊断信息相关性", "可执行的行动步骤"]}, {"source": "增量预算法.md", "target": "全面预算管理.md", "value": 2, "shared": ["预算管理", "全面预"]}, {"source": "管理会计演进.md", "target": "JIT.md", "value": 6, "shared": ["核心概念", "可执行的行动步骤", "与其他领域的联系", "作业成本核算", "诊断信息相关性"]}, {"source": "管理会计演进.md", "target": "委托-代理理论.md", "value": 6, "shared": ["核心概念", "可执行的行动步骤", "与其他领域的联系", "作业成本核算", "诊断信息相关性"]}, {"source": "管理会计演进.md", "target": "信息相关性.md", "value": 6, "shared": ["核心概念", "可执行的行动步骤", "与其他领域的联系", "作业成本核算", "诊断信息相关性"]}, {"source": "JIT.md", "target": "委托-代理理论.md", "value": 7, "shared": ["管理会计", "核心概念", "可执行的行动步骤", "与其他领域的联系", "作业成本核算"]}, {"source": "JIT.md", "target": "信息相关性.md", "value": 7, "shared": ["管理会计", "核心概念", "可执行的行动步骤", "与其他领域的联系", "作业成本核算"]}, {"source": "JIT.md", "target": "JIT.md", "value": 7, "shared": ["管理会计", "与其他领域的联系", "核心概念", "诊断信息相关性", "可执行的行动步骤"]}, {"source": "委托-代理理论.md", "target": "信息相关性.md", "value": 7, "shared": ["管理会计", "核心概念", "可执行的行动步骤", "与其他领域的联系", "作业成本核算"]}, {"source": "委托-代理理论.md", "target": "委托-代理理论.md", "value": 7, "shared": ["管理会计", "与其他领域的联系", "核心概念", "诊断信息相关性", "可执行的行动步骤"]}, {"source": "信息相关性.md", "target": "信息相关性.md", "value": 7, "shared": ["管理会计", "与其他领域的联系", "核心概念", "诊断信息相关性", "可执行的行动步骤"]}, {"source": "会计信息系统.md", "target": "XBRL.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "会计信息系统.md", "target": "内部控制.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "会计信息系统.md", "target": "ERP.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "会计信息系统.md", "target": "功能模块.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "会计信息系统.md", "target": "会计软件.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "会计信息系统.md", "target": "会计电算化.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "会计信息系统.md", "target": "会计信息化.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "XBRL.md", "target": "内部控制.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "XBRL.md", "target": "ERP.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "XBRL.md", "target": "功能模块.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "XBRL.md", "target": "会计软件.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "XBRL.md", "target": "会计电算化.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "XBRL.md", "target": "会计信息化.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "内部控制.md", "target": "ERP.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "内部控制.md", "target": "功能模块.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "内部控制.md", "target": "会计软件.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "内部控制.md", "target": "会计电算化.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "内部控制.md", "target": "会计信息化.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "ERP.md", "target": "功能模块.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "ERP.md", "target": "会计软件.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "ERP.md", "target": "会计电算化.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "ERP.md", "target": "会计信息化.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "功能模块.md", "target": "会计软件.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "功能模块.md", "target": "会计电算化.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "功能模块.md", "target": "会计信息化.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "会计软件.md", "target": "会计电算化.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "会计软件.md", "target": "会计信息化.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "会计电算化.md", "target": "会计信息化.md", "value": 2, "shared": ["电算化", "会计电算"]}, {"source": "现金流量诡计.md", "target": "法证式思维模式.md", "value": 8, "shared": ["并购会计诡计", "现金流量诡计", "资产负债表", "盈余操纵诡计", "关键指标诡计"]}, {"source": "现金流量诡计.md", "target": "盈余操纵诡计.md", "value": 8, "shared": ["并购会计诡计", "现金流量诡计", "资产负债表", "盈余操纵诡计", "关键指标诡计"]}, {"source": "现金流量诡计.md", "target": "并购会计诡计.md", "value": 8, "shared": ["并购会计诡计", "现金流量诡计", "资产负债表", "盈余操纵诡计", "关键指标诡计"]}, {"source": "现金流量诡计.md", "target": "关键指标诡计.md", "value": 8, "shared": ["并购会计诡计", "现金流量诡计", "资产负债表", "盈余操纵诡计", "关键指标诡计"]}, {"source": "现金流量诡计.md", "target": "现金流量诡计.md", "value": 8, "shared": ["并购会计诡计", "现金流量诡计", "资产负债表", "盈余操纵诡计", "关键指标诡计"]}, {"source": "法证式思维模式.md", "target": "盈余操纵诡计.md", "value": 8, "shared": ["并购会计诡计", "现金流量诡计", "资产负债表", "盈余操纵诡计", "关键指标诡计"]}, {"source": "法证式思维模式.md", "target": "并购会计诡计.md", "value": 8, "shared": ["并购会计诡计", "现金流量诡计", "资产负债表", "盈余操纵诡计", "关键指标诡计"]}, {"source": "法证式思维模式.md", "target": "关键指标诡计.md", "value": 8, "shared": ["并购会计诡计", "现金流量诡计", "资产负债表", "盈余操纵诡计", "关键指标诡计"]}, {"source": "法证式思维模式.md", "target": "法证式思维模式.md", "value": 8, "shared": ["并购会计诡计", "现金流量诡计", "资产负债表", "盈余操纵诡计", "关键指标诡计"]}, {"source": "盈余操纵诡计.md", "target": "并购会计诡计.md", "value": 8, "shared": ["并购会计诡计", "现金流量诡计", "资产负债表", "盈余操纵诡计", "关键指标诡计"]}, {"source": "盈余操纵诡计.md", "target": "关键指标诡计.md", "value": 8, "shared": ["并购会计诡计", "现金流量诡计", "资产负债表", "盈余操纵诡计", "关键指标诡计"]}, {"source": "盈余操纵诡计.md", "target": "盈余操纵诡计.md", "value": 8, "shared": ["并购会计诡计", "现金流量诡计", "资产负债表", "盈余操纵诡计", "关键指标诡计"]}, {"source": "并购会计诡计.md", "target": "关键指标诡计.md", "value": 8, "shared": ["并购会计诡计", "现金流量诡计", "资产负债表", "盈余操纵诡计", "关键指标诡计"]}, {"source": "并购会计诡计.md", "target": "并购会计诡计.md", "value": 8, "shared": ["并购会计诡计", "现金流量诡计", "资产负债表", "盈余操纵诡计", "关键指标诡计"]}, {"source": "关键指标诡计.md", "target": "关键指标诡计.md", "value": 8, "shared": ["并购会计诡计", "现金流量诡计", "资产负债表", "盈余操纵诡计", "关键指标诡计"]}, {"source": "现金流量表.md", "target": "利润表.md", "value": 2, "shared": ["资产负债", "负债表"]}, {"source": "现金流量表.md", "target": "权责发生制.md", "value": 2, "shared": ["资产负债", "负债表"]}, {"source": "现金流量表.md", "target": "资产负债表.md", "value": 2, "shared": ["资产负债", "负债表"]}, {"source": "现金流量表.md", "target": "现金流量表.md", "value": 2, "shared": ["资产负债", "负债表"]}, {"source": "现金流量表.md", "target": "存货计价.md", "value": 2, "shared": ["资产负债", "负债表"]}, {"source": "现金流量表.md", "target": "折旧.md", "value": 2, "shared": ["资产负债", "负债表"]}, {"source": "利润表.md", "target": "权责发生制.md", "value": 2, "shared": ["资产负债", "负债表"]}, {"source": "利润表.md", "target": "资产负债表.md", "value": 2, "shared": ["资产负债", "负债表"]}, {"source": "利润表.md", "target": "存货计价.md", "value": 2, "shared": ["资产负债", "负债表"]}, {"source": "利润表.md", "target": "利润表.md", "value": 2, "shared": ["资产负债", "负债表"]}, {"source": "利润表.md", "target": "折旧.md", "value": 2, "shared": ["资产负债", "负债表"]}, {"source": "会计语言.md", "target": "经营活动.md", "value": 6, "shared": ["本书开", "资产负债表", "融资活动", "财务报表", "经营活动"]}, {"source": "权责发生制.md", "target": "资产负债表.md", "value": 2, "shared": ["资产负债", "负债表"]}, {"source": "权责发生制.md", "target": "存货计价.md", "value": 2, "shared": ["资产负债", "负债表"]}, {"source": "权责发生制.md", "target": "折旧.md", "value": 2, "shared": ["资产负债", "负债表"]}, {"source": "权责发生制.md", "target": "权责发生制.md", "value": 2, "shared": ["资产负债", "负债表"]}, {"source": "资产负债表.md", "target": "存货计价.md", "value": 2, "shared": ["资产负债", "负债表"]}, {"source": "资产负债表.md", "target": "折旧.md", "value": 2, "shared": ["资产负债", "负债表"]}, {"source": "资产负债表.md", "target": "资产负债表.md", "value": 2, "shared": ["资产负债", "负债表"]}, {"source": "会计职能.md", "target": "会计要素.md", "value": 8, "shared": ["会计分期", "可理解性", "收付实现制", "会计主体", "持续经营"]}, {"source": "会计职能.md", "target": "会计假设.md", "value": 8, "shared": ["会计分期", "可理解性", "收付实现制", "会计主体", "持续经营"]}, {"source": "会计职能.md", "target": "会计等式.md", "value": 8, "shared": ["会计分期", "可理解性", "收付实现制", "会计主体", "持续经营"]}, {"source": "会计职能.md", "target": "会计循环.md", "value": 8, "shared": ["会计分期", "可理解性", "收付实现制", "会计主体", "持续经营"]}, {"source": "会计要素.md", "target": "会计假设.md", "value": 8, "shared": ["会计分期", "可理解性", "收付实现制", "会计主体", "持续经营"]}, {"source": "会计要素.md", "target": "会计等式.md", "value": 8, "shared": ["会计分期", "可理解性", "收付实现制", "会计主体", "持续经营"]}, {"source": "会计要素.md", "target": "会计循环.md", "value": 8, "shared": ["会计分期", "可理解性", "收付实现制", "会计主体", "持续经营"]}, {"source": "会计假设.md", "target": "会计等式.md", "value": 8, "shared": ["会计分期", "可理解性", "收付实现制", "会计主体", "持续经营"]}, {"source": "会计假设.md", "target": "会计循环.md", "value": 8, "shared": ["会计分期", "可理解性", "收付实现制", "会计主体", "持续经营"]}, {"source": "会计等式.md", "target": "会计循环.md", "value": 8, "shared": ["会计分期", "可理解性", "收付实现制", "会计主体", "持续经营"]}, {"source": "存货计价.md", "target": "折旧.md", "value": 2, "shared": ["资产负债", "负债表"]}];
+var CLUSTER_COLORS = {"(全部)": "#86efac"};
+var SEARCH_DATA = [{"id": "管理会计.md", "label": "管理会计"}, {"id": "杜邦金字塔.md", "label": "杜邦金字塔"}, {"id": "营运资本管理.md", "label": "营运资本管理"}, {"id": "经济增加值.md", "label": "经济增加值"}, {"id": "经济增加值(EVA).md", "label": "经济增加值(EVA)"}, {"id": "财务报表.md", "label": "财务报表"}, {"id": "责任中心.md", "label": "责任中心"}, {"id": "现金流.md", "label": "现金流"}, {"id": "INDEX.md", "label": "财务管理"}, {"id": "TQM.md", "label": "TQM"}, {"id": "闭环管理.md", "label": "闭环管理"}, {"id": "动力系统.md", "label": "动力系统"}, {"id": "成本与管理会计.md", "label": "成本与管理会计"}, {"id": "责任中心.md", "label": "责任中心"}, {"id": "增量预算法.md", "label": "增量预算法"}, {"id": "管理会计演进.md", "label": "管理会计演进"}, {"id": "JIT.md", "label": "JIT"}, {"id": "INDEX.md", "label": "管理会计"}, {"id": "委托-代理理论.md", "label": "委托-代理理论"}, {"id": "信息相关性.md", "label": "信息相关性"}, {"id": "全面预算管理.md", "label": "全面预算管理"}, {"id": "会计信息系统.md", "label": "会计信息系统"}, {"id": "XBRL.md", "label": "XBRL"}, {"id": "内部控制.md", "label": "内部控制"}, {"id": "ERP.md", "label": "ERP"}, {"id": "INDEX.md", "label": "会计电算化"}, {"id": "功能模块.md", "label": "功能模块"}, {"id": "会计软件.md", "label": "会计软件"}, {"id": "会计电算化.md", "label": "会计电算化"}, {"id": "会计信息化.md", "label": "会计信息化"}, {"id": "现金流量诡计.md", "label": "现金流量诡计"}, {"id": "法证式思维模式.md", "label": "法证式思维模式"}, {"id": "盈余操纵诡计.md", "label": "盈余操纵诡计"}, {"id": "INDEX.md", "label": "财务分析"}, {"id": "并购会计诡计.md", "label": "并购会计诡计"}, {"id": "关键指标诡计.md", "label": "关键指标诡计"}, {"id": "现金流量表.md", "label": "现金流量表"}, {"id": "现金流量诡计.md", "label": "现金流量诡计"}, {"id": "利润表.md", "label": "利润表"}, {"id": "法证式思维模式.md", "label": "法证式思维模式"}, {"id": "盈余操纵诡计.md", "label": "盈余操纵诡计"}, {"id": "会计语言.md", "label": "会计语言"}, {"id": "经营活动.md", "label": "经营活动"}, {"id": "INDEX.md", "label": "财务报表分析"}, {"id": "权责发生制.md", "label": "权责发生制"}, {"id": "并购会计诡计.md", "label": "并购会计诡计"}, {"id": "资产负债表.md", "label": "资产负债表"}, {"id": "关键指标诡计.md", "label": "关键指标诡计"}, {"id": "会计职能.md", "label": "会计职能"}, {"id": "INDEX.md", "label": "会计基础"}, {"id": "会计要素.md", "label": "会计要素"}, {"id": "会计假设.md", "label": "会计假设"}, {"id": "会计等式.md", "label": "会计等式"}, {"id": "会计循环.md", "label": "会计循环"}, {"id": "现金流量表.md", "label": "现金流量表"}, {"id": "存货计价.md", "label": "存货计价"}, {"id": "利润表.md", "label": "利润表"}, {"id": "折旧.md", "label": "折旧"}, {"id": "INDEX.md", "label": "基础会计"}, {"id": "权责发生制.md", "label": "权责发生制"}, {"id": "资产负债表.md", "label": "资产负债表"}, {"id": "TQM.md", "label": "TQM"}, {"id": "成本与管理会计.md", "label": "成本与管理会计"}, {"id": "JIT.md", "label": "JIT"}, {"id": "INDEX.md", "label": "成本与管理会计"}, {"id": "委托-代理理论.md", "label": "委托-代理理论"}, {"id": "信息相关性.md", "label": "信息相关性"}];
+var CONCEPT_SEARCH = [];
+
+
+/* ---- 搜索 ---- */
+var searchBox = document.getElementById("search-box");
+var searchResults = document.getElementById("search-results");
+
+searchBox.addEventListener("input", function(){
+  var q = this.value.trim().toLowerCase();
+  if(!q) { searchResults.style.display="none"; return; }
+  var combined = SEARCH_DATA.concat(CONCEPT_SEARCH.map(function(c){ return {id:c,label:c,type:"concept"}; }));
+  var matches = combined.filter(function(d){ return d.label.toLowerCase().indexOf(q)>-1; }).slice(0,12);
+  if(!matches.length) { searchResults.style.display="none"; return; }
+  searchResults.innerHTML = matches.map(function(d){
+    return '<div class="sri" data-id="'+d.id+'">'+d.label+'</div>';
+  }).join("");
+  searchResults.style.display="block";
+});
+
+searchResults.addEventListener("click", function(e){
+  var el = e.target.closest(".sri");
+  if(!el) return;
+  highlightNode(el.getAttribute("data-id"));
+  searchResults.style.display="none";
+  searchBox.value="";
+});
+
+function highlightNode(id){
+  svg.selectAll(".node").classed("highlight", function(d){ return d.id===id; });
+  svg.selectAll(".link").classed("highlight", function(d){
+    return d.source.id===id || d.target.id===id;
+  });
+  var nd = nodeMap.get(id);
+  if(!nd) return;
+  var t = d3.zoomTransform(svg.node());
+  var x = -nd.x*t.k + width/2;
+  var y = -nd.y*t.k + height/2;
+  svg.transition().duration(600).call(zoom.transform, d3.zoomIdentity.translate(x,y).scale(t.k));
+}
+
+/* ---- 详情面板 ---- */
+function showDetail(d){
+  var panel = document.getElementById("detail-panel");
+  var title = document.getElementById("detail-title");
+  var body  = document.getElementById("detail-body");
+
+  title.textContent = (d.title || d.label || d.id || "").replace(/\.md$/, "");
+
+  var html = "";
+
+  /* 元信息 */
+  html += '<div class="section"><div class="meta-row"><span class="meta-label">类型</span><span>' + (d.type==="concept" ? "💡 概念" : "📖 笔记") + '</span></div>';
+  if(d.domain)   html += '<div class="meta-row"><span class="meta-label">领域</span><span>' + d.domain + '</span></div>';
+  if(d.cluster) html += '<div class="meta-row"><span class="meta-label">聚类</span><span>' + d.cluster + '</span></div>';
+  if(d.degree !== undefined) html += '<div class="meta-row"><span class="meta-label">连通度</span><span>' + d.degree + '</span></div>';
+  html += '</div>';
+
+  /* 摘要 */
+  if(d.summary){
+    html += '<div class="section"><div class="section-title">📝 摘要</div><div class="summary">' + escapeHtml(d.summary.slice(0,500)) + (d.summary.length>500 ? "..." : "") + '</div></div>';
+  }
+
+  /* 关键词 */
+  if(d.keywords && d.keywords.length){
+    html += '<div class="section"><div class="section-title">🔑 关键词</div>';
+    d.keywords.forEach(function(kw){ html += '<span class="keyword">' + escapeHtml(kw) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 标签 */
+  if(d.tags && d.tags.length){
+    html += '<div class="section"><div class="section-title">🏷️ 标签</div>';
+    d.tags.forEach(function(tg){ html += '<span class="tag">' + escapeHtml(tg) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 打开原文件：用 Obsidian URI 协议，避免浏览器 file:// 限制 */
+  if(d.path){
+    var obsidianUrl = "obsidian://open?path=" + encodeURIComponent(d.path);
+    html += '<div class="section"><a class="open-link" href="' + obsidianUrl + '">📂 在 Obsidian 中打开</a></div>';
+  }
+
+  body.innerHTML = html;
+  panel.classList.add("open");
+}
+
+function closeDetail(){
+  document.getElementById("detail-panel").classList.remove("open");
+}
+
+function escapeHtml(s){
+  if(!s) return "";
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ---- D3 力导向图 ---- */
+var width  = window.innerWidth;
+var height = window.innerHeight - 48;
+var svg = d3.select("#graph").append("svg").attr("width",width).attr("height",height);
+var g = svg.append("g");
+var zoom = d3.zoom().scaleExtent([0.05,5]).on("zoom", function(e){ g.attr("transform", e.transform); });
+svg.call(zoom);
+
+var simulation = d3.forceSimulation(NODES)
+  .force("link",    d3.forceLink(LINKS).id(function(d){ return d.id; }).distance(90))
+  .force("charge",  d3.forceManyBody().strength(-220))
+  .force("center",  d3.forceCenter(width/2, height/2))
+  .force("collision", d3.forceCollide(30))
+  .force("x",       d3.forceX(width/2).strength(0.06))
+  .force("y",       d3.forceY(height/2).strength(0.06));
+
+var link = g.append("g").attr("class","links").selectAll("line")
+  .data(LINKS).join("line")
+  .attr("class", function(d){ return "link" + ((d.type==="book-book") ? " link-book" : ""); });
+
+var node = g.append("g").attr("class","nodes").selectAll("g")
+  .data(NODES).join("g")
+  .attr("class","node")
+  .attr("data-id", function(d){ return d.id; })
+  .call(d3.drag()
+    .on("start", function(event,d){ if(!event.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+    .on("drag",  function(event,d){ d.fx=event.x; d.fy=event.y; })
+    .on("end",   function(event,d){ if(!event.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+node.append("circle")
+  .attr("r", function(d){ return d.type==="book" ? 5+Math.sqrt(d.degree||1)*1.5 : 7; })
+  .attr("fill", function(d){ return d.type==="book" ? (CLUSTER_COLORS[d.cluster]||"#94a3b8") : "#86efac"; })
+  .attr("stroke", function(d){ return d.type==="book" ? "#0f172a" : "#d97706"; })
+  .on("mouseover", function(event,d){
+    var html = d.type==="book"
+      ? "<strong>📖 "+d.label+"</strong><br>连通度:"+d.degree+"<br>聚类:"+(d.cluster||"未分类")
+      : "<strong>💡 "+d.concept+"</strong><br>关联:"+d.book_count+" 篇";
+    d3.select("#tooltip").html(html).style("opacity",1)
+      .style("left",(event.pageX+12)+"px").style("top",(event.pageY-8)+"px");
+  })
+  .on("mouseout", function(){ d3.select("#tooltip").style("opacity",0); })
+  .on("click", function(event,d){
+    event.stopPropagation();
+    showDetail(d);
+  });
+
+node.append("text").attr("dx",11).attr("dy","0.35em").text(function(d){ return d.label; });
+
+var nodeMap = new Map();
+simulation.on("tick", function(){
+  link
+    .attr("x1", function(d){ return d.source.x; })
+    .attr("y1", function(d){ return d.source.y; })
+    .attr("x2", function(d){ return d.target.x; })
+    .attr("y2", function(d){ return d.target.y; });
+  node.attr("transform", function(d){
+    nodeMap.set(d.id, d);
+    return "translate("+d.x+","+d.y+")";
+  });
+});
+
+/* ---- 图例 ---- */
+var legendItems = d3.select("#legend").append("div").style("font-weight","bold").style("margin-bottom","8px").text("🎨 聚类").node().parentNode;
+Object.entries(CLUSTER_COLORS).forEach(function(entry){
+  var li = d3.select(legendItems).append("div").attr("class","li");
+  li.append("span").attr("class","ld").style("background",entry[1]);
+  li.append("span").text(entry[0]);
+});
+
+/* ---- 按钮 ---- */
+var conceptVisible = true;
+d3.select("#btn-toggle-concept").on("click", function(){
+  conceptVisible = !conceptVisible;
+  svg.selectAll(".node").filter(function(d){ return d.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  svg.selectAll(".link").filter(function(d){ return d.source.type==="concept"||d.target.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  d3.select(this).text(conceptVisible?"隐藏概念":"显示概念").classed("active",!conceptVisible);
+});
+d3.select("#btn-reset").on("click", function(){
+  closeDetail();
+  svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+});
+
+svg.on("click", function(){ searchResults.style.display="none"; });
+document.addEventListener("click", function(e){
+  if(!document.getElementById("detail-panel").contains(e.target) && !e.target.closest(".node")){
+    closeDetail();
+  }
+});
+
+/* 更新统计 */
+d3.select("#node-count").text(NODES.length);
+d3.select("#link-count").text(LINKS.length);
+</script>
+</body>
+</html>

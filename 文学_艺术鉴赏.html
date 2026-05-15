@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>文学 - 艺术鉴赏 - 知识图谱</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#0f172a; color:#e2e8f0; overflow:hidden; }
+
+/* 侧边栏 */
+#sidebar { position:fixed; left:0; top:0; width:220px; height:100vh; background:#1e293b; border-right:1px solid #334155; overflow-y:auto; z-index:50; transition:transform 0.3s; font-size:12px; }
+#sidebar.collapsed { transform:translateX(-220px); }
+#sidebar h2 { font-size:13px; padding:12px 14px 8px; color:#94a3b8; border-bottom:1px solid #334155; }
+#sidebar .domain-header { padding:7px 14px; cursor:pointer; font-weight:600; border-bottom:1px solid #1a2332; transition:background 0.15s; user-select:none; }
+#sidebar .domain-header:hover { background:#334155; }
+#sidebar .domain-pages { display:none; }
+#sidebar .domain-pages a { display:block; padding:5px 14px 5px 24px; color:#cbd5e1; text-decoration:none; border-bottom:1px solid #1a2332; transition:background 0.15s; font-size:11px; }
+#sidebar .domain-pages a:hover { background:#334155; color:#fff; }
+#sidebar .domain-pages a.active { font-weight:600; }
+#sidebar a.active { background:#8b5cf6; color:#0f172a; }
+#sidebar-toggle { position:fixed; left:8px; top:56px; z-index:60; background:#334155; border:1px solid #475569; color:#e2e8f0; border-radius:6px; padding:4px 7px; cursor:pointer; font-size:13px; transition:left 0.3s; }
+#sidebar:not(.collapsed) ~ #sidebar-toggle { left:228px; }
+
+/* 右侧详情面板 */
+#detail-panel { position:fixed; top:0; right:-420px; width:400px; height:100vh; background:#1e293b; border-left:1px solid #334155; z-index:55; transition:right 0.3s; display:flex; flex-direction:column; }
+#detail-panel.open { right:0; }
+#detail-header { padding:14px 16px; border-bottom:1px solid #334155; display:flex; align-items:flex-start; gap:10px; }
+#detail-header h2 { flex:1; font-size:14px; line-height:1.4; margin:0; word-break:break-all; }
+#detail-close { background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer; padding:0 4px; line-height:1; }
+#detail-close:hover { color:#fff; }
+#detail-body { flex:1; overflow-y:auto; padding:16px; font-size:13px; line-height:1.7; }
+#detail-body .section { margin-bottom:16px; }
+#detail-body .section-title { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+#detail-body .tag { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#334155; border-radius:4px; font-size:11px; color:#cbd5e1; }
+#detail-body .keyword { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#8b5cf622; border:1px solid #8b5cf666; border-radius:4px; font-size:11px; color:#e2e8f0; }
+#detail-body .summary { color:#cbd5e1; white-space:pre-wrap; }
+#detail-body .open-link { display:inline-block; margin-top:12px; padding:6px 14px; background:#8b5cf6; color:#0f172a; border-radius:6px; text-decoration:none; font-size:12px; font-weight:600; }
+#detail-body .open-link:hover { opacity:0.85; }
+#detail-body .meta-row { display:flex; gap:12px; margin-bottom:8px; font-size:12px; }
+#detail-body .meta-label { color:#94a3b8; min-width:60px; }
+#detail-body .connected-list { list-style:none; padding:0; }
+#detail-body .connected-list li { padding:4px 0; border-bottom:1px solid #1a2332; font-size:12px; cursor:pointer; }
+#detail-body .connected-list li:hover { color:#8b5cf6; }
+
+#header { padding:10px 20px 10px 50px; background:#1e293b; border-bottom:1px solid #334155; display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-left:200px; transition:margin-left 0.3s; }
+#sidebar.collapsed ~ #header { margin-left:0; }
+#header h1 { margin:0; font-size:17px; color:#8b5cf6; white-space:nowrap; }
+#search-wrap { position:relative; }
+#search-box { width:220px; padding:5px 10px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#e2e8f0; font-size:13px; }
+#search-results { position:absolute; top:32px; left:0; width:260px; max-height:300px; overflow-y:auto; background:#1e293b; border:1px solid #475569; border-radius:6px; display:none; z-index:100; }
+.sri { padding:7px 10px; cursor:pointer; font-size:12px; border-bottom:1px solid #334155; }
+.sri:hover { background:#334155; }
+.stats { font-size:12px; color:#94a3b8; white-space:nowrap; }
+.ctrls { display:flex; gap:6px; margin-left:auto; }
+.btn { padding:5px 12px; border-radius:6px; border:1px solid #475569; background:#334155; color:#e2e8f0; cursor:pointer; font-size:12px; }
+.btn:hover { background:#475569; }
+.btn.active { background:#8b5cf6; color:#0f172a; border-color:#8b5cf6; }
+#legend { position:absolute; top:52px; left:220px; background:#1e293b; border:1px solid #475569; border-radius:8px; padding:10px 14px; font-size:12px; z-index:10; }
+.li { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+.ld { width:10px; height:10px; border-radius:50%; }
+#tooltip { position:absolute; padding:8px 12px; background:#1e293b; border:1px solid #475569; border-radius:8px; font-size:12px; pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:100; box-shadow:0 4px 20px rgba(0,0,0,0.5); max-width:320px; }
+#graph { width:calc(100vw - 200px); height:calc(100vh - 48px); margin-left:200px; transition:width 0.3s, margin-left 0.3s; }
+#sidebar.collapsed ~ #graph { margin-left:0; width:100vw; }
+#detail-panel.open ~ #graph { width:calc(100vw - 200px - 400px); }
+.link { stroke:#475569; stroke-opacity:0.3; }
+.link-book { stroke-opacity:0.12; }
+.node circle { cursor:pointer; stroke-width:1.5; }
+.node text { fill:#e2e8f0; font-size:10px; pointer-events:none; }
+.highlight circle { stroke:#fff !important; stroke-width:2.5px; }
+.highlight text { fill:#fff; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>📚 藏书阁 · 知识图谱</h2>
+  <div class="domain-header" data-target="IT" style="color:#67e8f9; border-left:3px solid #67e8f9;">IT ▾</div>
+  <div class="domain-pages" id="IT">
+    <a href="IT.json" style="border-left:3px solid #67e8f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(225篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="个人成长" style="color:#fb923c; border-left:3px solid #fb923c;">个人成长 ▾</div>
+  <div class="domain-pages" id="个人成长">
+    <a href="个人成长.json" style="border-left:3px solid #fb923c; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(461篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="产品" style="color:#a855f7; border-left:3px solid #a855f7;">产品 ▾</div>
+  <div class="domain-pages" id="产品">
+    <a href="产品_(其他).json" style="border-left:3px solid #a855f7; padding-left:18px;">(其他) <span style="font-size:10px;color:#64748b;">(553篇)</span></a>
+    <a href="产品_产品思维.json" style="border-left:3px solid #a855f7; padding-left:18px;">产品思维 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="产品_小程序生态.json" style="border-left:3px solid #a855f7; padding-left:18px;">小程序生态 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="产品_用户增长.json" style="border-left:3px solid #a855f7; padding-left:18px;">用户增长 <span style="font-size:10px;color:#64748b;">(49篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="会计" style="color:#86efac; border-left:3px solid #86efac;">会计 ▾</div>
+  <div class="domain-pages" id="会计">
+    <a href="会计.json" style="border-left:3px solid #86efac; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(67篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="健康" style="color:#34d399; border-left:3px solid #34d399;">健康 ▾</div>
+  <div class="domain-pages" id="健康">
+    <a href="健康.json" style="border-left:3px solid #34d399; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(284篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="写作" style="color:#c084fc; border-left:3px solid #c084fc;">写作 ▾</div>
+  <div class="domain-pages" id="写作">
+    <a href="写作.json" style="border-left:3px solid #c084fc; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(238篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="历史" style="color:#06b6d4; border-left:3px solid #06b6d4;">历史 ▾</div>
+  <div class="domain-pages" id="历史">
+    <a href="历史_(其他)_part1.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part2.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part3.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part4.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part5.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(541篇)</span></a>
+    <a href="历史_世界史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">世界史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="历史_中国历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国历史 <span style="font-size:10px;color:#64748b;">(96篇)</span></a>
+    <a href="历史_中国古代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国古代文学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="历史_中国现代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国现代文学 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="历史_中国近代史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国近代史 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="历史_人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">人物传记 <span style="font-size:10px;color:#64748b;">(143篇)</span></a>
+    <a href="历史_军事历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">军事历史 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="历史_历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史 <span style="font-size:10px;color:#64748b;">(538篇)</span></a>
+    <a href="历史_历史与政治.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史与政治 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史人物传记 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="历史_历史学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史学 <span style="font-size:10px;color:#64748b;">(189篇)</span></a>
+    <a href="历史_历史小说.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史小说 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史研究.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史研究 <span style="font-size:10px;color:#64748b;">(162篇)</span></a>
+    <a href="历史_思想史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">思想史 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="历史_文学与历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">文学与历史 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="历史_科技史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">科技史 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="历史_艺术史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">艺术史 <span style="font-size:10px;color:#64748b;">(83篇)</span></a>
+    <a href="历史_西方哲学史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">西方哲学史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="哲学" style="color:#14b8a6; border-left:3px solid #14b8a6;">哲学 ▾</div>
+  <div class="domain-pages" id="哲学">
+    <a href="哲学_(其他)_part1.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="哲学_(其他)_part2.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(272篇)</span></a>
+    <a href="哲学_中国哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">中国哲学 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="哲学_人生哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">人生哲学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="哲学_哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">哲学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+    <a href="哲学_政治哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">政治哲学 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="哲学_生活哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">生活哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+    <a href="哲学_社会哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">社会哲学 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="哲学_科学哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">科学哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="商业" style="color:#10b981; border-left:3px solid #10b981;">商业 ▾</div>
+  <div class="domain-pages" id="商业">
+    <a href="商业_(其他)_part1.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（1/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part2.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（2/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part3.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（3/3） <span style="font-size:10px;color:#64748b;">(391篇)</span></a>
+    <a href="商业_企业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">企业管理 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="商业_健康管理.json" style="border-left:3px solid #10b981; padding-left:18px;">健康管理 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="商业_创业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">创业管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业战略.json" style="border-left:3px solid #10b981; padding-left:18px;">商业战略 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">商业管理 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="商业_投资理财.json" style="border-left:3px solid #10b981; padding-left:18px;">投资理财 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_知识管理.json" style="border-left:3px solid #10b981; padding-left:18px;">知识管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_管理.json" style="border-left:3px solid #10b981; padding-left:18px;">管理 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_组织管理.json" style="border-left:3px solid #10b981; padding-left:18px;">组织管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_经济学.json" style="border-left:3px solid #10b981; padding-left:18px;">经济学 <span style="font-size:10px;color:#64748b;">(74篇)</span></a>
+    <a href="商业_金融投资.json" style="border-left:3px solid #10b981; padding-left:18px;">金融投资 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="商业_领导力.json" style="border-left:3px solid #10b981; padding-left:18px;">领导力 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="图书馆学" style="color:#5eead4; border-left:3px solid #5eead4;">图书馆学 ▾</div>
+  <div class="domain-pages" id="图书馆学">
+    <a href="图书馆学.json" style="border-left:3px solid #5eead4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(23篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="宗教" style="color:#c4b5fd; border-left:3px solid #c4b5fd;">宗教 ▾</div>
+  <div class="domain-pages" id="宗教">
+    <a href="宗教.json" style="border-left:3px solid #c4b5fd; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(19篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="心理学" style="color:#f59e0b; border-left:3px solid #f59e0b;">心理学 ▾</div>
+  <div class="domain-pages" id="心理学">
+    <a href="心理学_(其他)_part1.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（1/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part2.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（2/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part3.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（3/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part4.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（4/4） <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="心理学_个人成长与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">个人成长与心理学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理健康.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理健康 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理学 <span style="font-size:10px;color:#64748b;">(239篇)</span></a>
+    <a href="心理学_教育心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">教育心理学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="心理学_文学与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">文学与心理学 <span style="font-size:10px;color:#64748b;">(119篇)</span></a>
+    <a href="心理学_沟通技巧.json" style="border-left:3px solid #f59e0b; padding-left:18px;">沟通技巧 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="心理学_社会心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">社会心理学 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+    <a href="心理学_认知心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知心理学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="心理学_认知科学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知科学 <span style="font-size:10px;color:#64748b;">(39篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="房地产" style="color:#6ee7b7; border-left:3px solid #6ee7b7;">房地产 ▾</div>
+  <div class="domain-pages" id="房地产">
+    <a href="房地产.json" style="border-left:3px solid #6ee7b7; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(12篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="政治" style="color:#fbbf24; border-left:3px solid #fbbf24;">政治 ▾</div>
+  <div class="domain-pages" id="政治">
+    <a href="政治.json" style="border-left:3px solid #fbbf24; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(253篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="教育" style="color:#ec4899; border-left:3px solid #ec4899;">教育 ▾</div>
+  <div class="domain-pages" id="教育">
+    <a href="教育_(其他)_part1.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="教育_(其他)_part2.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(382篇)</span></a>
+    <a href="教育_个人成长.json" style="border-left:3px solid #ec4899; padding-left:18px;">个人成长 <span style="font-size:10px;color:#64748b;">(250篇)</span></a>
+    <a href="教育_儿童教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">儿童教育 <span style="font-size:10px;color:#64748b;">(62篇)</span></a>
+    <a href="教育_家庭教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">家庭教育 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="教育_教育理念.json" style="border-left:3px solid #ec4899; padding-left:18px;">教育理念 <span style="font-size:10px;color:#64748b;">(68篇)</span></a>
+    <a href="教育_财商教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">财商教育 <span style="font-size:10px;color:#64748b;">(48篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="文学" style="color:#8b5cf6; border-left:3px solid #8b5cf6;">文学 ▾</div>
+  <div class="domain-pages" id="文学">
+    <a href="文学_(其他)_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_中国古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">中国古典文学 <span style="font-size:10px;color:#64748b;">(112篇)</span></a>
+    <a href="文学_儿童文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">儿童文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">古典文学 <span style="font-size:10px;color:#64748b;">(92篇)</span></a>
+    <a href="文学_奇幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">奇幻文学 <span style="font-size:10px;color:#64748b;">(51篇)</span></a>
+    <a href="文学_女性主义文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">女性主义文学 <span style="font-size:10px;color:#64748b;">(38篇)</span></a>
+    <a href="文学_悬疑小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">悬疑小说分析 <span style="font-size:10px;color:#64748b;">(52篇)</span></a>
+    <a href="文学_推理小说.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="文学_推理小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说分析 <span style="font-size:10px;color:#64748b;">(126篇)</span></a>
+    <a href="文学_推理文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理文学 <span style="font-size:10px;color:#64748b;">(35篇)</span></a>
+    <a href="文学_文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学 <span style="font-size:10px;color:#64748b;">(223篇)</span></a>
+    <a href="文学_文学与个人成长.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与个人成长 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="文学_文学与人生哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与人生哲学 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="文学_文学与哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与哲学 <span style="font-size:10px;color:#64748b;">(303篇)</span></a>
+    <a href="文学_文学与社会学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与社会学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="文学_文学分析_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（1/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（2/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（3/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（4/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（5/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part6.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（6/6） <span style="font-size:10px;color:#64748b;">(254篇)</span></a>
+    <a href="文学_文学批评.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学批评 <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="文学_文学理论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学理论 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_文学研究.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学研究 <span style="font-size:10px;color:#64748b;">(84篇)</span></a>
+    <a href="文学_文学经典.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学经典 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="文学_文学解读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学解读 <span style="font-size:10px;color:#64748b;">(40篇)</span></a>
+    <a href="文学_文学评论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学评论 <span style="font-size:10px;color:#64748b;">(482篇)</span></a>
+    <a href="文学_文学赏析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学赏析 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="文学_文学鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学鉴赏 <span style="font-size:10px;color:#64748b;">(82篇)</span></a>
+    <a href="文学_文学阅读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学阅读 <span style="font-size:10px;color:#64748b;">(78篇)</span></a>
+    <a href="文学_旅行文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">旅行文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_日本文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">日本文学 <span style="font-size:10px;color:#64748b;">(98篇)</span></a>
+    <a href="文学_武侠文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">武侠文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_科幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学 <span style="font-size:10px;color:#64748b;">(175篇)</span></a>
+    <a href="文学_科幻文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学分析 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="文学_网络文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">网络文学分析 <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_艺术鉴赏.json" class="active" style="border-left:3px solid #8b5cf6; padding-left:18px;">艺术鉴赏 <span style="font-size:10px;color:#64748b;">(44篇)</span></a>
+    <a href="文学_非虚构文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">非虚构文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="时尚生活" style="color:#f9a8d4; border-left:3px solid #f9a8d4;">时尚生活 ▾</div>
+  <div class="domain-pages" id="时尚生活">
+    <a href="时尚生活.json" style="border-left:3px solid #f9a8d4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(71篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="未知" style="color:#94a3b8; border-left:3px solid #94a3b8;">未知 ▾</div>
+  <div class="domain-pages" id="未知">
+    <a href="未知.json" style="border-left:3px solid #94a3b8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(16篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="法学" style="color:#fcd34d; border-left:3px solid #fcd34d;">法学 ▾</div>
+  <div class="domain-pages" id="法学">
+    <a href="法学.json" style="border-left:3px solid #fcd34d; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="社会学" style="color:#6366f1; border-left:3px solid #6366f1;">社会学 ▾</div>
+  <div class="domain-pages" id="社会学">
+    <a href="社会学_(其他)_part1.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="社会学_(其他)_part2.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(484篇)</span></a>
+    <a href="社会学_文化研究.json" style="border-left:3px solid #6366f1; padding-left:18px;">文化研究 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="社会学_社会学.json" style="border-left:3px solid #6366f1; padding-left:18px;">社会学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="科学" style="color:#f97316; border-left:3px solid #f97316;">科学 ▾</div>
+  <div class="domain-pages" id="科学">
+    <a href="科学_(其他)_part1.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="科学_(其他)_part2.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(116篇)</span></a>
+    <a href="科学_医学人文.json" style="border-left:3px solid #f97316; padding-left:18px;">医学人文 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="科学_神经科学.json" style="border-left:3px solid #f97316; padding-left:18px;">神经科学 <span style="font-size:10px;color:#64748b;">(56篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="编程" style="color:#818cf8; border-left:3px solid #818cf8;">编程 ▾</div>
+  <div class="domain-pages" id="编程">
+    <a href="编程.json" style="border-left:3px solid #818cf8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(151篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="艺术" style="color:#e879f9; border-left:3px solid #e879f9;">艺术 ▾</div>
+  <div class="domain-pages" id="艺术">
+    <a href="艺术.json" style="border-left:3px solid #e879f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(365篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="英语" style="color:#f472b6; border-left:3px solid #f472b6;">英语 ▾</div>
+  <div class="domain-pages" id="英语">
+    <a href="英语.json" style="border-left:3px solid #f472b6; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(209篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="语言文学" style="color:#d8b4fe; border-left:3px solid #d8b4fe;">语言文学 ▾</div>
+  <div class="domain-pages" id="语言文学">
+    <a href="语言文学.json" style="border-left:3px solid #d8b4fe; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="金融" style="color:#a3e635; border-left:3px solid #a3e635;">金融 ▾</div>
+  <div class="domain-pages" id="金融">
+    <a href="金融.json" style="border-left:3px solid #a3e635; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(208篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="雅思" style="color:#22d3ee; border-left:3px solid #22d3ee;">雅思 ▾</div>
+  <div class="domain-pages" id="雅思">
+    <a href="雅思.json" style="border-left:3px solid #22d3ee; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(511篇)</span></a>
+  </div>
+
+    <script>
+    document.querySelectorAll('.domain-header').forEach(function(h){
+      h.addEventListener('click', function(){
+        var t = document.getElementById(this.dataset.target);
+        t.style.display = t.style.display==='none' ? 'block' : 'none';
+        this.innerHTML = this.innerHTML.replace(/[▾▸]/, t.style.display==='none'?'▸':'▾');
+      });
+    });
+    </script>
+    
+</div>
+<button id="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">☰</button>
+
+<div id="header">
+  <h1>📚 文学 · 艺术鉴赏</h1>
+  <div id="search-wrap">
+    <input id="search-box" type="text" placeholder="🔍 搜索书名/概念...">
+    <div id="search-results"></div>
+  </div>
+  <div class="stats">
+    <span id="node-count">0</span> 节点 ·
+    <span id="link-count">0</span> 连接
+  </div>
+  <div class="ctrls">
+    <button class="btn" id="btn-toggle-concept">隐藏概念</button>
+    <button class="btn" id="btn-reset">重置视图</button>
+  </div>
+</div>
+
+<div id="graph"></div>
+<div id="tooltip"></div>
+
+<!-- 右侧详情面板 -->
+<div id="detail-panel">
+  <div id="detail-header">
+    <h2 id="detail-title"></h2>
+    <button id="detail-close" onclick="closeDetail()">✕</button>
+  </div>
+  <div id="detail-body"></div>
+</div>
+
+<script>
+var NODES = [{"id": "日本绘画特质.md", "label": "日本绘画特质", "title": "日本绘画特质", "type": "book", "degree": 2, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "作者：髙畑勋（吉卜力工作室创始人之一，动画电影导演）。核心主题：通过一位资深动画人的个人视角，以随笔形式分享对31幅东西方名画的赏画心得，强调“随性欣赏、以自我感受为先”的赏画态度，并探讨日本绘画与中国、西洋绘画的差异与渊源。适合人群：对艺术感兴趣但非专业的普通读者；动画、美术爱好者；希望打破“艺术高冷”印象、学习如何自由赏画的人；对日本文化与中国绘画关系感兴趣的研究者。他主张像看电影一样去欣赏画作：先凭直觉喜欢，再自由发表感想，甚至可以“跑题”去联想其他事物。作者通过对比中国宋代绘画与日本绘画，指出日本美术一以贯之的倾向是重视“观美”（装饰性与抒情性），而非“真”（对客观事物的逼真再现与空间", "keywords": ["相关笔记", "日本绘"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/一幅画开启的世界"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/日本绘画特质.md"}, {"id": "记忆与写生.md", "label": "记忆与写生", "title": "记忆与写生", "type": "book", "degree": 2, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "《西方绘画大师经典佳作：德加》以高清细节图版呈现法国印象派大师爱德加·德加（1834-1917）逾百幅代表性作品，系统梳理其从青年时期至晚年的艺术生涯。全书按四章展开：德加生平概述、特立独行的青年时期（1857-1861）、艺术探索印象派的中年时期（1865-1886）、现实主义写意的中晚年时期（1888-1915）。核心思想在于：德加虽常被归入印象派，却始终坚守严格的素描形体，以记忆与观察相结合的方式捕捉运动中的瞬间，尤其以芭蕾舞女、赛马、浴女等题材著称，将光色实验服务于坚实的造型结构。首先，“古典主义的素描”源自德加早年师从安格尔画派的经历，书中强调他“功夫很深的素描行家”身份，这与印象派", "keywords": ["相关笔记", "印象派"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/西方绘画大师经典佳作：德加_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/记忆与写生.md"}, {"id": "权力与宣传.md", "label": "权力与宣传", "title": "权力与宣传", "type": "book", "degree": 2, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "核心主题：通过解读卢浮宫17幅经典画作背后的历史故事、画家意图与人物命运，揭示艺术作品中隐藏的权力运作、人性复杂性与时代精神，引导读者从“看画”走向“读画”。适合人群：对西方艺术史感兴趣的入门读者；希望提升艺术鉴赏力的爱好者；喜欢从历史、政治、人性角度解读名画的读者。书中多次揭示，名画并非纯粹的艺术表达，而是权力者塑造自身形象、巩固统治的媒介。最典型的例子是《拿破仑加冕礼》：大卫受拿破仑委托，刻意美化皇帝形象——删去拿破仑自己加冕的争议细节，改为为皇后授冠；虚构拿破仑母亲出席；将教皇画成被动祝福者。例如《拿破仑加冕礼》中每个关键人物：拿破仑仅做10年皇帝后被流放；约瑟芬因无子被离婚；教皇庇护七", "keywords": ["相关笔记", "拿破仑"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/初见卢浮宫"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/权力与宣传.md"}, {"id": "塞尚.md", "label": "塞尚", "title": "塞尚", "type": "book", "degree": 2, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "《西方绘画大师经典佳作：塞尚》是一部系统介绍印象派巨匠保罗·塞尚生平与艺术创作的图文著作。全书以时间为纵轴，将塞尚的艺术生涯划分为四个时期：潜心学艺的酝酿时期（1839-1870）、艺术风格探索时期（1871-1880）、闻名遐迩的成熟时期（1881-1890）、献身艺术的奋斗时期（1891-1906）。每一章均以代表性作品赏析为核心，辅以高清局部细节图，共计收录超过100幅画作，包括《圣维克多山》《玩纸牌的人》《大浴女》等经典之作。对本书核心观点的认同：塞尚将绘画从“再现外部世界”转向“创造内在结构”的贡献，完全契合现代人的审美需求——在影像泛滥的时代，绘画不必与照片争胜，而应回归视觉的纯粹", "keywords": ["相关笔记", "西方绘"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/西方绘画大师经典佳作：塞尚_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/塞尚.md"}, {"id": "卡拉瓦乔画作.md", "label": "卡拉瓦乔画作", "title": "卡拉瓦乔画作", "type": "book", "degree": 2, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "作者：弗朗切斯卡·卡丝特丽雅·马尔凯蒂。核心主题：本书是“伟大的博物馆”系列中的一卷，旨在系统性地介绍罗马博尔盖塞美术馆的建筑历史、核心馆藏的来源与艺术价值，为读者提供一份兼具深度与可读性的参观指南和艺术鉴赏手册。适合人群：计划前往罗马旅游的艺术爱好者、学习西方艺术史的学生、对巴洛克艺术和文艺复兴大师（如贝尼尼、卡拉瓦乔、拉斐尔）感兴趣的读者，以及希望足不出户便能“云游”世界著名博物馆的读者。本书详细介绍了博尔盖塞美术馆的建筑历史。它最初是红衣主教希皮奥内·博尔盖塞（教皇保罗五世的侄子）于17世纪初建造的郊外别墅", "keywords": ["相关笔记", "博尔盖"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/罗马博尔盖塞美术馆"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/卡拉瓦乔画作.md"}, {"id": "形式分析.md", "label": "形式分析", "title": "形式分析", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "《西方绘画大师经典佳作：塞尚》是一部系统介绍印象派巨匠保罗·塞尚生平与艺术创作的图文著作。全书以时间为纵轴，将塞尚的艺术生涯划分为四个时期：潜心学艺的酝酿时期（1839-1870）、艺术风格探索时期（1871-1880）、闻名遐迩的成熟时期（1881-1890）、献身艺术的奋斗时期（1891-1906）。每一章均以代表性作品赏析为核心，辅以高清局部细节图，共计收录超过100幅画作，包括《圣维克多山》《玩纸牌的人》《大浴女》等经典之作。全书核心思想在于：塞尚作为“现代绘画之父”，其艺术实践突破了传统透视与色彩观念，将几何形体。本书作为“西方绘画大师经典佳作”系列之一，继承了中国改革开放以来系统引", "keywords": ["西方绘", "方绘画", "绘画大", "画大师"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/西方绘画大师经典佳作：塞尚_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/形式分析.md"}, {"id": "艺术与政治悖论.md", "label": "艺术与政治悖论", "title": "艺术与政治悖论", "type": "book", "degree": 2, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "作者：髙畑勋（吉卜力工作室创始人之一，动画电影导演）。核心主题：通过一位资深动画人的个人视角，以随笔形式分享对31幅东西方名画的赏画心得，强调“随性欣赏、以自我感受为先”的赏画态度，并探讨日本绘画与中国、西洋绘画的差异与渊源。适合人群：对艺术感兴趣但非专业的普通读者；动画、美术爱好者；希望打破“艺术高冷”印象、学习如何自由赏画的人；对日本文化与中国绘画关系感兴趣的研究者。他主张像看电影一样去欣赏画作：先凭直觉喜欢，再自由发表感想，甚至可以“跑题”去联想其他事物。作者通过对比中国宋代绘画与日本绘画，指出日本美术一以贯之的倾向是重视“观美”（装饰性与抒情性），而非“真”（对客观事物的逼真再现与空间", "keywords": ["日本绘画", "一幅画"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/一幅画开启的世界"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/艺术与政治悖论.md"}, {"id": "艺术史重构.md", "label": "艺术史重构", "title": "艺术史重构", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "核心主题：通过解读卢浮宫17幅经典画作背后的历史故事、画家意图与人物命运，揭示艺术作品中隐藏的权力运作、人性复杂性与时代精神，引导读者从“看画”走向“读画”。适合人群：对西方艺术史感兴趣的入门读者；希望提升艺术鉴赏力的爱好者；喜欢从历史、政治、人性角度解读名画的读者。书中多次揭示，名画并非纯粹的艺术表达，而是权力者塑造自身形象、巩固统治的媒介。最典型的例子是《拿破仑加冕礼》：大卫受拿破仑委托，刻意美化皇帝形象——删去拿破仑自己加冕的争议细节，改为为皇后授冠；虚构拿破仑母亲出席；将教皇画成被动祝福者。例如《拿破仑加冕礼》中每个关键人物：拿破仑仅做10年皇帝后被流放；约瑟芬因无子被离婚；教皇庇护七", "keywords": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/初见卢浮宫"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/艺术史重构.md"}, {"id": "系列组画.md", "label": "系列组画", "title": "系列组画", "type": "book", "degree": 6, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "本书以高清细节图版集中呈现印象派大师克洛德·莫奈跨越六十余年的艺术生涯，系统梳理其从早期写实探索到印象派巅峰、再到晚年“后花园世界”的创作脉络。全书按时间分五章：生平概述、青年初露锋芒（1860-1869）、迷恋印象派的中年（1870-1882）、艺术升华的中晚年（1883-1903）及晚年睡莲系列（1904-1926），收录逾百幅代表作，强调莫奈对光线、色彩与笔触的极致追求。其核心思想在于“不关心造型与阴影，只以色彩与自然光线为唯一真实”，通过瞬时印象的捕捉，将绘画从再现对象转向表现视觉感知本身，开创了西方现代艺术的新纪元。莫奈艺术的精髓在于“印象”（impression）——即以快速笔触记", "keywords": ["与中国艺术思想的互证", "关键概念与术语解释", "作品细节与技法辨析", "认同与质疑", "印象派", "系列组画"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/西方绘画大师经典佳作：莫奈_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/系列组画.md"}, {"id": "静物画技法革新.md", "label": "静物画技法革新", "title": "静物画技法革新", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "《西方绘画大师经典佳作：塞尚》是一部系统介绍印象派巨匠保罗·塞尚生平与艺术创作的图文著作。全书以时间为纵轴，将塞尚的艺术生涯划分为四个时期：潜心学艺的酝酿时期（1839-1870）、艺术风格探索时期（1871-1880）、闻名遐迩的成熟时期（1881-1890）、献身艺术的奋斗时期（1891-1906）。每一章均以代表性作品赏析为核心，辅以高清局部细节图，共计收录超过100幅画作，包括《圣维克多山》《玩纸牌的人》《大浴女》等经典之作。全书核心思想在于：塞尚作为“现代绘画之父”，其艺术实践突破了传统透视与色彩观念，将几何形体。本书作为“西方绘画大师经典佳作”系列之一，继承了中国改革开放以来系统引", "keywords": ["西方绘", "方绘画", "绘画大", "画大师"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/西方绘画大师经典佳作：塞尚_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/静物画技法革新.md"}, {"id": "艺术收藏与权力.md", "label": "艺术收藏与权力", "title": "艺术收藏与权力", "type": "book", "degree": 2, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "作者：弗朗切斯卡·卡丝特丽雅·马尔凯蒂。核心主题：本书是“伟大的博物馆”系列中的一卷，旨在系统性地介绍罗马博尔盖塞美术馆的建筑历史、核心馆藏的来源与艺术价值，为读者提供一份兼具深度与可读性的参观指南和艺术鉴赏手册。适合人群：计划前往罗马旅游的艺术爱好者、学习西方艺术史的学生、对巴洛克艺术和文艺复兴大师（如贝尼尼、卡拉瓦乔、拉斐尔）感兴趣的读者，以及希望足不出户便能“云游”世界著名博物馆的读者。本书详细介绍了博尔盖塞美术馆的建筑历史。美术馆收藏了贝尼尼青年时期（20岁左右）创作的四组惊世骇俗的雕塑群像：《埃涅阿斯与安喀塞斯》、《普鲁托和普洛塞尔皮娜》、《阿波罗与达芙妮》和《大卫》", "keywords": ["博尔盖塞", "美术馆"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/罗马博尔盖塞美术馆"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/艺术收藏与权力.md"}, {"id": "系列化创作.md", "label": "系列化创作", "title": "系列化创作", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "《西方绘画大师经典佳作：塞尚》是一部系统介绍印象派巨匠保罗·塞尚生平与艺术创作的图文著作。全书以时间为纵轴，将塞尚的艺术生涯划分为四个时期：潜心学艺的酝酿时期（1839-1870）、艺术风格探索时期（1871-1880）、闻名遐迩的成熟时期（1881-1890）、献身艺术的奋斗时期（1891-1906）。每一章均以代表性作品赏析为核心，辅以高清局部细节图，共计收录超过100幅画作，包括《圣维克多山》《玩纸牌的人》《大浴女》等经典之作。全书核心思想在于：塞尚作为“现代绘画之父”，其艺术实践突破了传统透视与色彩观念，将几何形体。本书作为“西方绘画大师经典佳作”系列之一，继承了中国改革开放以来系统引", "keywords": ["西方绘", "方绘画", "绘画大", "画大师"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/西方绘画大师经典佳作：塞尚_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/系列化创作.md"}, {"id": "素描.md", "label": "素描", "title": "素描", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "《西方绘画大师经典佳作：德加》以高清细节图版呈现法国印象派大师爱德加·德加（1834-1917）逾百幅代表性作品，系统梳理其从青年时期至晚年的艺术生涯。全书按四章展开：德加生平概述、特立独行的青年时期（1857-1861）、艺术探索印象派的中年时期（1865-1886）、现实主义写意的中晚年时期（1888-1915）。核心思想在于：德加虽常被归入印象派，却始终坚守严格的素描形体，以记忆与观察相结合的方式捕捉运动中的瞬间，尤其以芭蕾舞女、赛马、浴女等题材著称，将光色实验服务于坚实的造型结构。首先，“古典主义的素描”源自德加早年师从安格尔画派的经历，书中强调他“功夫很深的素描行家”身份，这与印象派", "keywords": ["印象派", "年时期", "西方绘", "方绘画"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/西方绘画大师经典佳作：德加_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/素描.md"}, {"id": "现代绘画之父.md", "label": "现代绘画之父", "title": "现代绘画之父", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "《西方绘画大师经典佳作：塞尚》是一部系统介绍印象派巨匠保罗·塞尚生平与艺术创作的图文著作。全书以时间为纵轴，将塞尚的艺术生涯划分为四个时期：潜心学艺的酝酿时期（1839-1870）、艺术风格探索时期（1871-1880）、闻名遐迩的成熟时期（1881-1890）、献身艺术的奋斗时期（1891-1906）。每一章均以代表性作品赏析为核心，辅以高清局部细节图，共计收录超过100幅画作，包括《圣维克多山》《玩纸牌的人》《大浴女》等经典之作。全书核心思想在于：塞尚作为“现代绘画之父”，其艺术实践突破了传统透视与色彩观念，将几何形体。本书作为“西方绘画大师经典佳作”系列之一，继承了中国改革开放以来系统引", "keywords": ["西方绘", "方绘画", "绘画大", "画大师"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/西方绘画大师经典佳作：塞尚_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/现代绘画之父.md"}, {"id": "伪装.md", "label": "伪装", "title": "伪装", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "本书的核心主题是：艺术欣赏不应被抽象术语和既定知识束缚，而应回归作品本身，通过仔细观察发现画作中的细节、线索和“伪装”，从而揭开画作的真实含义。问题意识源于作者自身经历——传统艺术史学习让人疲惫，阅读了大量逸闻八卦、笔触技法后，仍无法理解一幅画带给人的最初感动。作者质疑：为什么人们面对画作时常常“看不懂”。作者对《拿破仑加冕》的解读非常精彩：不仅指认了母亲和红衣主教被“PS”上画，还揭示了拿破仑通过位置布局（十字架>拿破仑>教皇）实现“君权神授O2O”的巧思——这种洞察力让人拍案。同时，本书对《拿破仑加冕》的“修图”分析，可以关联到视觉修辞学——大卫通过构图、位置、尺寸来“说服”观众拿破仑的权", "keywords": ["拿破仑", "艺术史", "核心主", "心主题"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/被误诊的艺术史_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/伪装.md"}, {"id": "中西艺术比较.md", "label": "中西艺术比较", "title": "中西艺术比较", "type": "book", "degree": 2, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "【核心经典文本与思想主旨，主要篇章结构与内容概要，1-2段】。本书《西方绘画大师经典佳作：梵高》以图文并茂的形式系统梳理了文森特·梵·高短暂而辉煌的艺术生涯。全书共八章，按时间顺序依次呈现梵·高从海牙与德伦斯时期、纽南时期、安特卫普时期、巴黎时期、阿尔时期、圣·雷米时期直至奥维时期的创作历程。印象主义将光与色彩的科学观念引入绘画，对传统绘画观念形成革新；梵·高作为代表人物，其作品中的“笔触”与“色彩”成为关键术语。本书核心观点之一：梵·高是印象主义的代表人物及创始人之一，其艺术革新在于将光与色彩科学引入绘画", "keywords": ["印象主义", "西方绘"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/西方绘画大师经典佳作：梵高_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/中西艺术比较.md"}, {"id": "艺术史选择性遗忘.md", "label": "艺术史选择性遗忘", "title": "艺术史选择性遗忘", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "核心主题：通过解读卢浮宫17幅经典画作背后的历史故事、画家意图与人物命运，揭示艺术作品中隐藏的权力运作、人性复杂性与时代精神，引导读者从“看画”走向“读画”。适合人群：对西方艺术史感兴趣的入门读者；希望提升艺术鉴赏力的爱好者；喜欢从历史、政治、人性角度解读名画的读者。书中多次揭示，名画并非纯粹的艺术表达，而是权力者塑造自身形象、巩固统治的媒介。最典型的例子是《拿破仑加冕礼》：大卫受拿破仑委托，刻意美化皇帝形象——删去拿破仑自己加冕的争议细节，改为为皇后授冠；虚构拿破仑母亲出席；将教皇画成被动祝福者。例如《拿破仑加冕礼》中每个关键人物：拿破仑仅做10年皇帝后被流放；约瑟芬因无子被离婚；教皇庇护七", "keywords": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/初见卢浮宫"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/艺术史选择性遗忘.md"}, {"id": "绘画技法分析.md", "label": "绘画技法分析", "title": "绘画技法分析", "type": "book", "degree": 2, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "【核心经典文本与思想主旨，主要篇章结构与内容概要，1-2段】。本书《西方绘画大师经典佳作：梵高》以图文并茂的形式系统梳理了文森特·梵·高短暂而辉煌的艺术生涯。全书共八章，按时间顺序依次呈现梵·高从海牙与德伦斯时期、纽南时期、安特卫普时期、巴黎时期、阿尔时期、圣·雷米时期直至奥维时期的创作历程。印象主义将光与色彩的科学观念引入绘画，对传统绘画观念形成革新；梵·高作为代表人物，其作品中的“笔触”与“色彩”成为关键术语。本书核心观点之一：梵·高是印象主义的代表人物及创始人之一，其艺术革新在于将光与色彩科学引入绘画", "keywords": ["印象主义", "西方绘"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/西方绘画大师经典佳作：梵高_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/绘画技法分析.md"}, {"id": "运动捕捉.md", "label": "运动捕捉", "title": "运动捕捉", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "《西方绘画大师经典佳作：德加》以高清细节图版呈现法国印象派大师爱德加·德加（1834-1917）逾百幅代表性作品，系统梳理其从青年时期至晚年的艺术生涯。全书按四章展开：德加生平概述、特立独行的青年时期（1857-1861）、艺术探索印象派的中年时期（1865-1886）、现实主义写意的中晚年时期（1888-1915）。核心思想在于：德加虽常被归入印象派，却始终坚守严格的素描形体，以记忆与观察相结合的方式捕捉运动中的瞬间，尤其以芭蕾舞女、赛马、浴女等题材著称，将光色实验服务于坚实的造型结构。首先，“古典主义的素描”源自德加早年师从安格尔画派的经历，书中强调他“功夫很深的素描行家”身份，这与印象派", "keywords": ["印象派", "年时期", "西方绘", "方绘画"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/西方绘画大师经典佳作：德加_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/运动捕捉.md"}, {"id": "误诊.md", "label": "误诊", "title": "误诊", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "本书的核心主题是：艺术欣赏不应被抽象术语和既定知识束缚，而应回归作品本身，通过仔细观察发现画作中的细节、线索和“伪装”，从而揭开画作的真实含义。问题意识源于作者自身经历——传统艺术史学习让人疲惫，阅读了大量逸闻八卦、笔触技法后，仍无法理解一幅画带给人的最初感动。作者质疑：为什么人们面对画作时常常“看不懂”。作者对《拿破仑加冕》的解读非常精彩：不仅指认了母亲和红衣主教被“PS”上画，还揭示了拿破仑通过位置布局（十字架>拿破仑>教皇）实现“君权神授O2O”的巧思——这种洞察力让人拍案。同时，本书对《拿破仑加冕》的“修图”分析，可以关联到视觉修辞学——大卫通过构图、位置、尺寸来“说服”观众拿破仑的权", "keywords": ["拿破仑", "艺术史", "核心主", "心主题"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/被误诊的艺术史_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/误诊.md"}, {"id": "符号象征.md", "label": "符号象征", "title": "符号象征", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "本书的核心主题是：艺术欣赏不应被抽象术语和既定知识束缚，而应回归作品本身，通过仔细观察发现画作中的细节、线索和“伪装”，从而揭开画作的真实含义。问题意识源于作者自身经历——传统艺术史学习让人疲惫，阅读了大量逸闻八卦、笔触技法后，仍无法理解一幅画带给人的最初感动。作者质疑：为什么人们面对画作时常常“看不懂”。作者对《拿破仑加冕》的解读非常精彩：不仅指认了母亲和红衣主教被“PS”上画，还揭示了拿破仑通过位置布局（十字架>拿破仑>教皇）实现“君权神授O2O”的巧思——这种洞察力让人拍案。同时，本书对《拿破仑加冕》的“修图”分析，可以关联到视觉修辞学——大卫通过构图、位置、尺寸来“说服”观众拿破仑的权", "keywords": ["拿破仑", "艺术史", "核心主", "心主题"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/被误诊的艺术史_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/符号象征.md"}, {"id": "人物命运伏笔.md", "label": "人物命运伏笔", "title": "人物命运伏笔", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "核心主题：通过解读卢浮宫17幅经典画作背后的历史故事、画家意图与人物命运，揭示艺术作品中隐藏的权力运作、人性复杂性与时代精神，引导读者从“看画”走向“读画”。适合人群：对西方艺术史感兴趣的入门读者；希望提升艺术鉴赏力的爱好者；喜欢从历史、政治、人性角度解读名画的读者。书中多次揭示，名画并非纯粹的艺术表达，而是权力者塑造自身形象、巩固统治的媒介。最典型的例子是《拿破仑加冕礼》：大卫受拿破仑委托，刻意美化皇帝形象——删去拿破仑自己加冕的争议细节，改为为皇后授冠；虚构拿破仑母亲出席；将教皇画成被动祝福者。例如《拿破仑加冕礼》中每个关键人物：拿破仑仅做10年皇帝后被流放；约瑟芬因无子被离婚；教皇庇护七", "keywords": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/初见卢浮宫"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/人物命运伏笔.md"}, {"id": "德加.md", "label": "德加", "title": "德加", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "《西方绘画大师经典佳作：德加》以高清细节图版呈现法国印象派大师爱德加·德加（1834-1917）逾百幅代表性作品，系统梳理其从青年时期至晚年的艺术生涯。全书按四章展开：德加生平概述、特立独行的青年时期（1857-1861）、艺术探索印象派的中年时期（1865-1886）、现实主义写意的中晚年时期（1888-1915）。核心思想在于：德加虽常被归入印象派，却始终坚守严格的素描形体，以记忆与观察相结合的方式捕捉运动中的瞬间，尤其以芭蕾舞女、赛马、浴女等题材著称，将光色实验服务于坚实的造型结构。首先，“古典主义的素描”源自德加早年师从安格尔画派的经历，书中强调他“功夫很深的素描行家”身份，这与印象派", "keywords": ["印象派", "年时期", "西方绘", "方绘画"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/西方绘画大师经典佳作：德加_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/德加.md"}, {"id": "视觉论证.md", "label": "视觉论证", "title": "视觉论证", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "核心主题：通过解读卢浮宫17幅经典画作背后的历史故事、画家意图与人物命运，揭示艺术作品中隐藏的权力运作、人性复杂性与时代精神，引导读者从“看画”走向“读画”。适合人群：对西方艺术史感兴趣的入门读者；希望提升艺术鉴赏力的爱好者；喜欢从历史、政治、人性角度解读名画的读者。书中多次揭示，名画并非纯粹的艺术表达，而是权力者塑造自身形象、巩固统治的媒介。最典型的例子是《拿破仑加冕礼》：大卫受拿破仑委托，刻意美化皇帝形象——删去拿破仑自己加冕的争议细节，改为为皇后授冠；虚构拿破仑母亲出席；将教皇画成被动祝福者。例如《拿破仑加冕礼》中每个关键人物：拿破仑仅做10年皇帝后被流放；约瑟芬因无子被离婚；教皇庇护七", "keywords": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/初见卢浮宫"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/视觉论证.md"}, {"id": "自由赏画.md", "label": "自由赏画", "title": "自由赏画", "type": "book", "degree": 2, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "作者：髙畑勋（吉卜力工作室创始人之一，动画电影导演）。核心主题：通过一位资深动画人的个人视角，以随笔形式分享对31幅东西方名画的赏画心得，强调“随性欣赏、以自我感受为先”的赏画态度，并探讨日本绘画与中国、西洋绘画的差异与渊源。适合人群：对艺术感兴趣但非专业的普通读者；动画、美术爱好者；希望打破“艺术高冷”印象、学习如何自由赏画的人；对日本文化与中国绘画关系感兴趣的研究者。他主张像看电影一样去欣赏画作：先凭直觉喜欢，再自由发表感想，甚至可以“跑题”去联想其他事物。作者通过对比中国宋代绘画与日本绘画，指出日本美术一以贯之的倾向是重视“观美”（装饰性与抒情性），而非“真”（对客观事物的逼真再现与空间", "keywords": ["日本绘画", "一幅画"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/一幅画开启的世界"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/自由赏画.md"}, {"id": "古典素描.md", "label": "古典素描", "title": "古典素描", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "《西方绘画大师经典佳作：德加》以高清细节图版呈现法国印象派大师爱德加·德加（1834-1917）逾百幅代表性作品，系统梳理其从青年时期至晚年的艺术生涯。全书按四章展开：德加生平概述、特立独行的青年时期（1857-1861）、艺术探索印象派的中年时期（1865-1886）、现实主义写意的中晚年时期（1888-1915）。核心思想在于：德加虽常被归入印象派，却始终坚守严格的素描形体，以记忆与观察相结合的方式捕捉运动中的瞬间，尤其以芭蕾舞女、赛马、浴女等题材著称，将光色实验服务于坚实的造型结构。首先，“古典主义的素描”源自德加早年师从安格尔画派的经历，书中强调他“功夫很深的素描行家”身份，这与印象派", "keywords": ["印象派", "年时期", "西方绘", "方绘画"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/西方绘画大师经典佳作：德加_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/古典素描.md"}, {"id": "时代精神.md", "label": "时代精神", "title": "时代精神", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "核心主题：通过解读卢浮宫17幅经典画作背后的历史故事、画家意图与人物命运，揭示艺术作品中隐藏的权力运作、人性复杂性与时代精神，引导读者从“看画”走向“读画”。适合人群：对西方艺术史感兴趣的入门读者；希望提升艺术鉴赏力的爱好者；喜欢从历史、政治、人性角度解读名画的读者。书中多次揭示，名画并非纯粹的艺术表达，而是权力者塑造自身形象、巩固统治的媒介。最典型的例子是《拿破仑加冕礼》：大卫受拿破仑委托，刻意美化皇帝形象——删去拿破仑自己加冕的争议细节，改为为皇后授冠；虚构拿破仑母亲出席；将教皇画成被动祝福者。例如《拿破仑加冕礼》中每个关键人物：拿破仑仅做10年皇帝后被流放；约瑟芬因无子被离婚；教皇庇护七", "keywords": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/初见卢浮宫"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/时代精神.md"}, {"id": "梵高.md", "label": "梵高", "title": "梵高", "type": "book", "degree": 2, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "【核心经典文本与思想主旨，主要篇章结构与内容概要，1-2段】。本书《西方绘画大师经典佳作：梵高》以图文并茂的形式系统梳理了文森特·梵·高短暂而辉煌的艺术生涯。全书共八章，按时间顺序依次呈现梵·高从海牙与德伦斯时期、纽南时期、安特卫普时期、巴黎时期、阿尔时期、圣·雷米时期直至奥维时期的创作历程。印象主义将光与色彩的科学观念引入绘画，对传统绘画观念形成革新；梵·高作为代表人物，其作品中的“笔触”与“色彩”成为关键术语。本书核心观点之一：梵·高是印象主义的代表人物及创始人之一，其艺术革新在于将光与色彩科学引入绘画", "keywords": ["印象主义", "西方绘"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/西方绘画大师经典佳作：梵高_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/梵高.md"}, {"id": "笔触技法.md", "label": "笔触技法", "title": "笔触技法", "type": "book", "degree": 6, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "本书以高清细节图版集中呈现印象派大师克洛德·莫奈跨越六十余年的艺术生涯，系统梳理其从早期写实探索到印象派巅峰、再到晚年“后花园世界”的创作脉络。全书按时间分五章：生平概述、青年初露锋芒（1860-1869）、迷恋印象派的中年（1870-1882）、艺术升华的中晚年（1883-1903）及晚年睡莲系列（1904-1926），收录逾百幅代表作，强调莫奈对光线、色彩与笔触的极致追求。其核心思想在于“不关心造型与阴影，只以色彩与自然光线为唯一真实”，通过瞬时印象的捕捉，将绘画从再现对象转向表现视觉感知本身，开创了西方现代艺术的新纪元。莫奈艺术的精髓在于“印象”（impression）——即以快速笔触记", "keywords": ["与中国艺术思想的互证", "关键概念与术语解释", "作品细节与技法辨析", "认同与质疑", "印象派", "高清细节"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/西方绘画大师经典佳作：莫奈_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/笔触技法.md"}, {"id": "巴洛克艺术.md", "label": "巴洛克艺术", "title": "巴洛克艺术", "type": "book", "degree": 2, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "作者：弗朗切斯卡·卡丝特丽雅·马尔凯蒂。核心主题：本书是“伟大的博物馆”系列中的一卷，旨在系统性地介绍罗马博尔盖塞美术馆的建筑历史、核心馆藏的来源与艺术价值，为读者提供一份兼具深度与可读性的参观指南和艺术鉴赏手册。适合人群：计划前往罗马旅游的艺术爱好者、学习西方艺术史的学生、对巴洛克艺术和文艺复兴大师（如贝尼尼、卡拉瓦乔、拉斐尔）感兴趣的读者，以及希望足不出户便能“云游”世界著名博物馆的读者。本书详细介绍了博尔盖塞美术馆的建筑历史。美术馆收藏了贝尼尼青年时期（20岁左右）创作的四组惊世骇俗的雕塑群像：《埃涅阿斯与安喀塞斯》、《普鲁托和普洛塞尔皮娜》、《阿波罗与达芙妮》和《大卫》", "keywords": ["博尔盖塞", "巴洛克"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/罗马博尔盖塞美术馆"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/巴洛克艺术.md"}, {"id": "艺术与权力.md", "label": "艺术与权力", "title": "艺术与权力", "type": "book", "degree": 2, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "作者：弗朗切斯卡·卡丝特丽雅·马尔凯蒂。核心主题：本书是“伟大的博物馆”系列中的一卷，旨在系统性地介绍罗马博尔盖塞美术馆的建筑历史、核心馆藏的来源与艺术价值，为读者提供一份兼具深度与可读性的参观指南和艺术鉴赏手册。适合人群：计划前往罗马旅游的艺术爱好者、学习西方艺术史的学生、对巴洛克艺术和文艺复兴大师（如贝尼尼、卡拉瓦乔、拉斐尔）感兴趣的读者，以及希望足不出户便能“云游”世界著名博物馆的读者。本书详细介绍了博尔盖塞美术馆的建筑历史。美术馆收藏了贝尼尼青年时期（20岁左右）创作的四组惊世骇俗的雕塑群像：《埃涅阿斯与安喀塞斯》、《普鲁托和普洛塞尔皮娜》、《阿波罗与达芙妮》和《大卫》", "keywords": ["博尔盖塞", "美术馆"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/罗马博尔盖塞美术馆"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/艺术与权力.md"}, {"id": "几何化结构.md", "label": "几何化结构", "title": "几何化结构", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "《西方绘画大师经典佳作：塞尚》是一部系统介绍印象派巨匠保罗·塞尚生平与艺术创作的图文著作。全书以时间为纵轴，将塞尚的艺术生涯划分为四个时期：潜心学艺的酝酿时期（1839-1870）、艺术风格探索时期（1871-1880）、闻名遐迩的成熟时期（1881-1890）、献身艺术的奋斗时期（1891-1906）。每一章均以代表性作品赏析为核心，辅以高清局部细节图，共计收录超过100幅画作，包括《圣维克多山》《玩纸牌的人》《大浴女》等经典之作。全书核心思想在于：塞尚作为“现代绘画之父”，其艺术实践突破了传统透视与色彩观念，将几何形体。本书作为“西方绘画大师经典佳作”系列之一，继承了中国改革开放以来系统引", "keywords": ["西方绘", "方绘画", "绘画大", "画大师"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/西方绘画大师经典佳作：塞尚_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/几何化结构.md"}, {"id": "命运伏笔.md", "label": "命运伏笔", "title": "命运伏笔", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "核心主题：通过解读卢浮宫17幅经典画作背后的历史故事、画家意图与人物命运，揭示艺术作品中隐藏的权力运作、人性复杂性与时代精神，引导读者从“看画”走向“读画”。适合人群：对西方艺术史感兴趣的入门读者；希望提升艺术鉴赏力的爱好者；喜欢从历史、政治、人性角度解读名画的读者。书中多次揭示，名画并非纯粹的艺术表达，而是权力者塑造自身形象、巩固统治的媒介。最典型的例子是《拿破仑加冕礼》：大卫受拿破仑委托，刻意美化皇帝形象——删去拿破仑自己加冕的争议细节，改为为皇后授冠；虚构拿破仑母亲出席；将教皇画成被动祝福者。例如《拿破仑加冕礼》中每个关键人物：拿破仑仅做10年皇帝后被流放；约瑟芬因无子被离婚；教皇庇护七", "keywords": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/初见卢浮宫"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/命运伏笔.md"}, {"id": "观察.md", "label": "观察", "title": "观察", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "本书的核心主题是：艺术欣赏不应被抽象术语和既定知识束缚，而应回归作品本身，通过仔细观察发现画作中的细节、线索和“伪装”，从而揭开画作的真实含义。问题意识源于作者自身经历——传统艺术史学习让人疲惫，阅读了大量逸闻八卦、笔触技法后，仍无法理解一幅画带给人的最初感动。作者质疑：为什么人们面对画作时常常“看不懂”。作者对《拿破仑加冕》的解读非常精彩：不仅指认了母亲和红衣主教被“PS”上画，还揭示了拿破仑通过位置布局（十字架>拿破仑>教皇）实现“君权神授O2O”的巧思——这种洞察力让人拍案。同时，本书对《拿破仑加冕》的“修图”分析，可以关联到视觉修辞学——大卫通过构图、位置、尺寸来“说服”观众拿破仑的权", "keywords": ["拿破仑", "艺术史", "核心主", "心主题"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/被误诊的艺术史_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/观察.md"}, {"id": "后印象主义.md", "label": "后印象主义", "title": "后印象主义", "type": "book", "degree": 2, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "【核心经典文本与思想主旨，主要篇章结构与内容概要，1-2段】。本书《西方绘画大师经典佳作：梵高》以图文并茂的形式系统梳理了文森特·梵·高短暂而辉煌的艺术生涯。全书共八章，按时间顺序依次呈现梵·高从海牙与德伦斯时期、纽南时期、安特卫普时期、巴黎时期、阿尔时期、圣·雷米时期直至奥维时期的创作历程。每章包含大量高清画作及其局部细节，辅以信件摘录与作品说明，旨在揭示梵·高如何从早期沉郁的写实风格逐渐转向明亮炽烈的后印象主义，最终成为现代艺术的重要奠基人。印象主义将光与色彩的科学观念引入绘画，对传统绘画观念形成革新；梵·高作为代表人物，其作品中的“笔触”与“色彩”成为关键术语", "keywords": ["印象主义", "后印象"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/西方绘画大师经典佳作：梵高_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/后印象主义.md"}, {"id": "修图.md", "label": "修图", "title": "修图", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "本书的核心主题是：艺术欣赏不应被抽象术语和既定知识束缚，而应回归作品本身，通过仔细观察发现画作中的细节、线索和“伪装”，从而揭开画作的真实含义。问题意识源于作者自身经历——传统艺术史学习让人疲惫，阅读了大量逸闻八卦、笔触技法后，仍无法理解一幅画带给人的最初感动。作者质疑：为什么人们面对画作时常常“看不懂”。作者对《拿破仑加冕》的解读非常精彩：不仅指认了母亲和红衣主教被“PS”上画，还揭示了拿破仑通过位置布局（十字架>拿破仑>教皇）实现“君权神授O2O”的巧思——这种洞察力让人拍案。同时，本书对《拿破仑加冕》的“修图”分析，可以关联到视觉修辞学——大卫通过构图、位置、尺寸来“说服”观众拿破仑的权", "keywords": ["拿破仑", "艺术史", "核心主", "心主题"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/被误诊的艺术史_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/修图.md"}, {"id": "选择性文化吸收.md", "label": "选择性文化吸收", "title": "选择性文化吸收", "type": "book", "degree": 2, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "作者：髙畑勋（吉卜力工作室创始人之一，动画电影导演）。核心主题：通过一位资深动画人的个人视角，以随笔形式分享对31幅东西方名画的赏画心得，强调“随性欣赏、以自我感受为先”的赏画态度，并探讨日本绘画与中国、西洋绘画的差异与渊源。适合人群：对艺术感兴趣但非专业的普通读者；动画、美术爱好者；希望打破“艺术高冷”印象、学习如何自由赏画的人；对日本文化与中国绘画关系感兴趣的研究者。他主张像看电影一样去欣赏画作：先凭直觉喜欢，再自由发表感想，甚至可以“跑题”去联想其他事物。作者通过对比中国宋代绘画与日本绘画，指出日本美术一以贯之的倾向是重视“观美”（装饰性与抒情性），而非“真”（对客观事物的逼真再现与空间", "keywords": ["日本绘画", "一幅画"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/一幅画开启的世界"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/选择性文化吸收.md"}, {"id": "博尔盖塞美术馆.md", "label": "博尔盖塞美术馆", "title": "博尔盖塞美术馆", "type": "book", "degree": 2, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "作者：弗朗切斯卡·卡丝特丽雅·马尔凯蒂。核心主题：本书是“伟大的博物馆”系列中的一卷，旨在系统性地介绍罗马博尔盖塞美术馆的建筑历史、核心馆藏的来源与艺术价值，为读者提供一份兼具深度与可读性的参观指南和艺术鉴赏手册。适合人群：计划前往罗马旅游的艺术爱好者、学习西方艺术史的学生、对巴洛克艺术和文艺复兴大师（如贝尼尼、卡拉瓦乔、拉斐尔）感兴趣的读者，以及希望足不出户便能“云游”世界著名博物馆的读者。本书详细介绍了博尔盖塞美术馆的建筑历史。美术馆收藏了贝尼尼青年时期（20岁左右）创作的四组惊世骇俗的雕塑群像：《埃涅阿斯与安喀塞斯》、《普鲁托和普洛塞尔皮娜》、《阿波罗与达芙妮》和《大卫》", "keywords": ["博尔盖塞", "美术馆"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/罗马博尔盖塞美术馆"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/博尔盖塞美术馆.md"}, {"id": "时代精神变迁.md", "label": "时代精神变迁", "title": "时代精神变迁", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "核心主题：通过解读卢浮宫17幅经典画作背后的历史故事、画家意图与人物命运，揭示艺术作品中隐藏的权力运作、人性复杂性与时代精神，引导读者从“看画”走向“读画”。适合人群：对西方艺术史感兴趣的入门读者；希望提升艺术鉴赏力的爱好者；喜欢从历史、政治、人性角度解读名画的读者。书中多次揭示，名画并非纯粹的艺术表达，而是权力者塑造自身形象、巩固统治的媒介。最典型的例子是《拿破仑加冕礼》：大卫受拿破仑委托，刻意美化皇帝形象——删去拿破仑自己加冕的争议细节，改为为皇后授冠；虚构拿破仑母亲出席；将教皇画成被动祝福者。例如《拿破仑加冕礼》中每个关键人物：拿破仑仅做10年皇帝后被流放；约瑟芬因无子被离婚；教皇庇护七", "keywords": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/初见卢浮宫"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/时代精神变迁.md"}, {"id": "贝尼尼雕塑.md", "label": "贝尼尼雕塑", "title": "贝尼尼雕塑", "type": "book", "degree": 2, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "作者：弗朗切斯卡·卡丝特丽雅·马尔凯蒂。核心主题：本书是“伟大的博物馆”系列中的一卷，旨在系统性地介绍罗马博尔盖塞美术馆的建筑历史、核心馆藏的来源与艺术价值，为读者提供一份兼具深度与可读性的参观指南和艺术鉴赏手册。适合人群：计划前往罗马旅游的艺术爱好者、学习西方艺术史的学生、对巴洛克艺术和文艺复兴大师（如贝尼尼、卡拉瓦乔、拉斐尔）感兴趣的读者，以及希望足不出户便能“云游”世界著名博物馆的读者。本书详细介绍了博尔盖塞美术馆的建筑历史。美术馆收藏了贝尼尼青年时期（20岁左右）创作的四组惊世骇俗的雕塑群像：《埃涅阿斯与安喀塞斯》、《普鲁托和普洛塞尔皮娜》、《阿波罗与达芙妮》和《大卫》", "keywords": ["博尔盖塞", "美术馆"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/罗马博尔盖塞美术馆"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/贝尼尼雕塑.md"}, {"id": "印象派.md", "label": "印象派", "title": "印象派", "type": "book", "degree": 4, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "《西方绘画大师经典佳作：德加》以高清细节图版呈现法国印象派大师爱德加·德加（1834-1917）逾百幅代表性作品，系统梳理其从青年时期至晚年的艺术生涯。全书按四章展开：德加生平概述、特立独行的青年时期（1857-1861）、艺术探索印象派的中年时期（1865-1886）、现实主义写意的中晚年时期（1888-1915）。核心思想在于：德加虽常被归入印象派，却始终坚守严格的素描形体，以记忆与观察相结合的方式捕捉运动中的瞬间，尤其以芭蕾舞女、赛马、浴女等题材著称，将光色实验服务于坚实的造型结构。首先，“古典主义的素描”源自德加早年师从安格尔画派的经历，书中强调他“功夫很深的素描行家”身份，这与印象派", "keywords": ["印象派", "年时期", "西方绘", "方绘画"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/西方绘画大师经典佳作：德加_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/印象派.md"}, {"id": "莫奈.md", "label": "莫奈", "title": "莫奈", "type": "book", "degree": 6, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "本书以高清细节图版集中呈现印象派大师克洛德·莫奈跨越六十余年的艺术生涯，系统梳理其从早期写实探索到印象派巅峰、再到晚年“后花园世界”的创作脉络。全书按时间分五章：生平概述、青年初露锋芒（1860-1869）、迷恋印象派的中年（1870-1882）、艺术升华的中晚年（1883-1903）及晚年睡莲系列（1904-1926），收录逾百幅代表作，强调莫奈对光线、色彩与笔触的极致追求。其核心思想在于“不关心造型与阴影，只以色彩与自然光线为唯一真实”，通过瞬时印象的捕捉，将绘画从再现对象转向表现视觉感知本身，开创了西方现代艺术的新纪元。莫奈艺术的精髓在于“印象”（impression）——即以快速笔触记", "keywords": ["与中国艺术思想的互证", "关键概念与术语解释", "作品细节与技法辨析", "认同与质疑", "印象派", "高清细节"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/西方绘画大师经典佳作：莫奈_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/莫奈.md"}, {"id": "艺术生涯分期.md", "label": "艺术生涯分期", "title": "艺术生涯分期", "type": "book", "degree": 2, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "【核心经典文本与思想主旨，主要篇章结构与内容概要，1-2段】。本书《西方绘画大师经典佳作：梵高》以图文并茂的形式系统梳理了文森特·梵·高短暂而辉煌的艺术生涯。全书共八章，按时间顺序依次呈现梵·高从海牙与德伦斯时期、纽南时期、安特卫普时期、巴黎时期、阿尔时期、圣·雷米时期直至奥维时期的创作历程。印象主义将光与色彩的科学观念引入绘画，对传统绘画观念形成革新；梵·高作为代表人物，其作品中的“笔触”与“色彩”成为关键术语。本书核心观点之一：梵·高是印象主义的代表人物及创始人之一，其艺术革新在于将光与色彩科学引入绘画", "keywords": ["印象主义", "西方绘"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/西方绘画大师经典佳作：梵高_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/艺术生涯分期.md"}, {"id": "光线与色彩.md", "label": "光线与色彩", "title": "光线与色彩", "type": "book", "degree": 6, "cluster": "艺术鉴赏", "domain": "文学", "sub_domain": "艺术鉴赏", "summary": "本书以高清细节图版集中呈现印象派大师克洛德·莫奈跨越六十余年的艺术生涯，系统梳理其从早期写实探索到印象派巅峰、再到晚年“后花园世界”的创作脉络。全书按时间分五章：生平概述、青年初露锋芒（1860-1869）、迷恋印象派的中年（1870-1882）、艺术升华的中晚年（1883-1903）及晚年睡莲系列（1904-1926），收录逾百幅代表作，强调莫奈对光线、色彩与笔触的极致追求。其核心思想在于“不关心造型与阴影，只以色彩与自然光线为唯一真实”，通过瞬时印象的捕捉，将绘画从再现对象转向表现视觉感知本身，开创了西方现代艺术的新纪元。莫奈艺术的精髓在于“印象”（impression）——即以快速笔触记", "keywords": ["与中国艺术思想的互证", "关键概念与术语解释", "作品细节与技法辨析", "认同与质疑", "印象派", "高清细节"], "tags": ["domain/文学", "sub_domain/艺术鉴赏", "type/concept", "source/西方绘画大师经典佳作：莫奈_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/艺术鉴赏/光线与色彩.md"}];
+var LINKS = [{"source": "形式分析.md", "target": "静物画技法革新.md", "value": 4, "shared": ["方绘画", "西方绘", "画大师", "绘画大"]}, {"source": "形式分析.md", "target": "系列化创作.md", "value": 4, "shared": ["方绘画", "西方绘", "画大师", "绘画大"]}, {"source": "形式分析.md", "target": "素描.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "形式分析.md", "target": "现代绘画之父.md", "value": 4, "shared": ["方绘画", "西方绘", "画大师", "绘画大"]}, {"source": "形式分析.md", "target": "运动捕捉.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "形式分析.md", "target": "德加.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "形式分析.md", "target": "古典素描.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "形式分析.md", "target": "几何化结构.md", "value": 4, "shared": ["方绘画", "西方绘", "画大师", "绘画大"]}, {"source": "形式分析.md", "target": "印象派.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "艺术与政治悖论.md", "target": "自由赏画.md", "value": 2, "shared": ["日本绘画", "一幅画"]}, {"source": "艺术与政治悖论.md", "target": "选择性文化吸收.md", "value": 2, "shared": ["日本绘画", "一幅画"]}, {"source": "艺术史重构.md", "target": "艺术史选择性遗忘.md", "value": 4, "shared": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"]}, {"source": "艺术史重构.md", "target": "人物命运伏笔.md", "value": 4, "shared": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"]}, {"source": "艺术史重构.md", "target": "视觉论证.md", "value": 4, "shared": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"]}, {"source": "艺术史重构.md", "target": "时代精神.md", "value": 4, "shared": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"]}, {"source": "艺术史重构.md", "target": "命运伏笔.md", "value": 4, "shared": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"]}, {"source": "艺术史重构.md", "target": "时代精神变迁.md", "value": 4, "shared": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"]}, {"source": "系列组画.md", "target": "笔触技法.md", "value": 5, "shared": ["与中国艺术思想的互证", "认同与质疑", "作品细节与技法辨析", "关键概念与术语解释", "印象派"]}, {"source": "系列组画.md", "target": "莫奈.md", "value": 5, "shared": ["与中国艺术思想的互证", "认同与质疑", "作品细节与技法辨析", "关键概念与术语解释", "印象派"]}, {"source": "系列组画.md", "target": "光线与色彩.md", "value": 5, "shared": ["与中国艺术思想的互证", "认同与质疑", "作品细节与技法辨析", "关键概念与术语解释", "印象派"]}, {"source": "静物画技法革新.md", "target": "系列化创作.md", "value": 4, "shared": ["方绘画", "西方绘", "画大师", "绘画大"]}, {"source": "静物画技法革新.md", "target": "素描.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "静物画技法革新.md", "target": "现代绘画之父.md", "value": 4, "shared": ["方绘画", "西方绘", "画大师", "绘画大"]}, {"source": "静物画技法革新.md", "target": "运动捕捉.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "静物画技法革新.md", "target": "德加.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "静物画技法革新.md", "target": "古典素描.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "静物画技法革新.md", "target": "几何化结构.md", "value": 4, "shared": ["方绘画", "西方绘", "画大师", "绘画大"]}, {"source": "静物画技法革新.md", "target": "印象派.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "艺术收藏与权力.md", "target": "艺术与权力.md", "value": 2, "shared": ["博尔盖塞", "美术馆"]}, {"source": "艺术收藏与权力.md", "target": "博尔盖塞美术馆.md", "value": 2, "shared": ["博尔盖塞", "美术馆"]}, {"source": "艺术收藏与权力.md", "target": "贝尼尼雕塑.md", "value": 2, "shared": ["博尔盖塞", "美术馆"]}, {"source": "系列化创作.md", "target": "素描.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "系列化创作.md", "target": "现代绘画之父.md", "value": 4, "shared": ["方绘画", "西方绘", "画大师", "绘画大"]}, {"source": "系列化创作.md", "target": "运动捕捉.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "系列化创作.md", "target": "德加.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "系列化创作.md", "target": "古典素描.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "系列化创作.md", "target": "几何化结构.md", "value": 4, "shared": ["方绘画", "西方绘", "画大师", "绘画大"]}, {"source": "系列化创作.md", "target": "印象派.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "素描.md", "target": "现代绘画之父.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "素描.md", "target": "运动捕捉.md", "value": 4, "shared": ["方绘画", "西方绘", "年时期", "印象派"]}, {"source": "素描.md", "target": "德加.md", "value": 4, "shared": ["方绘画", "西方绘", "年时期", "印象派"]}, {"source": "素描.md", "target": "古典素描.md", "value": 4, "shared": ["方绘画", "西方绘", "年时期", "印象派"]}, {"source": "素描.md", "target": "几何化结构.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "素描.md", "target": "印象派.md", "value": 4, "shared": ["方绘画", "西方绘", "年时期", "印象派"]}, {"source": "现代绘画之父.md", "target": "运动捕捉.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "现代绘画之父.md", "target": "德加.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "现代绘画之父.md", "target": "古典素描.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "现代绘画之父.md", "target": "几何化结构.md", "value": 4, "shared": ["方绘画", "西方绘", "画大师", "绘画大"]}, {"source": "现代绘画之父.md", "target": "印象派.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "伪装.md", "target": "误诊.md", "value": 4, "shared": ["拿破仑", "心主题", "艺术史", "核心主"]}, {"source": "伪装.md", "target": "符号象征.md", "value": 4, "shared": ["拿破仑", "心主题", "艺术史", "核心主"]}, {"source": "伪装.md", "target": "观察.md", "value": 4, "shared": ["拿破仑", "心主题", "艺术史", "核心主"]}, {"source": "伪装.md", "target": "修图.md", "value": 4, "shared": ["拿破仑", "心主题", "艺术史", "核心主"]}, {"source": "中西艺术比较.md", "target": "绘画技法分析.md", "value": 2, "shared": ["西方绘", "印象主义"]}, {"source": "中西艺术比较.md", "target": "梵高.md", "value": 2, "shared": ["西方绘", "印象主义"]}, {"source": "中西艺术比较.md", "target": "艺术生涯分期.md", "value": 2, "shared": ["西方绘", "印象主义"]}, {"source": "艺术史选择性遗忘.md", "target": "人物命运伏笔.md", "value": 4, "shared": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"]}, {"source": "艺术史选择性遗忘.md", "target": "视觉论证.md", "value": 4, "shared": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"]}, {"source": "艺术史选择性遗忘.md", "target": "时代精神.md", "value": 4, "shared": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"]}, {"source": "艺术史选择性遗忘.md", "target": "命运伏笔.md", "value": 4, "shared": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"]}, {"source": "艺术史选择性遗忘.md", "target": "时代精神变迁.md", "value": 4, "shared": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"]}, {"source": "绘画技法分析.md", "target": "梵高.md", "value": 2, "shared": ["西方绘", "印象主义"]}, {"source": "绘画技法分析.md", "target": "艺术生涯分期.md", "value": 2, "shared": ["西方绘", "印象主义"]}, {"source": "运动捕捉.md", "target": "德加.md", "value": 4, "shared": ["方绘画", "西方绘", "年时期", "印象派"]}, {"source": "运动捕捉.md", "target": "古典素描.md", "value": 4, "shared": ["方绘画", "西方绘", "年时期", "印象派"]}, {"source": "运动捕捉.md", "target": "几何化结构.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "运动捕捉.md", "target": "印象派.md", "value": 4, "shared": ["方绘画", "西方绘", "年时期", "印象派"]}, {"source": "误诊.md", "target": "符号象征.md", "value": 4, "shared": ["拿破仑", "心主题", "艺术史", "核心主"]}, {"source": "误诊.md", "target": "观察.md", "value": 4, "shared": ["拿破仑", "心主题", "艺术史", "核心主"]}, {"source": "误诊.md", "target": "修图.md", "value": 4, "shared": ["拿破仑", "心主题", "艺术史", "核心主"]}, {"source": "符号象征.md", "target": "观察.md", "value": 4, "shared": ["拿破仑", "心主题", "艺术史", "核心主"]}, {"source": "符号象征.md", "target": "修图.md", "value": 4, "shared": ["拿破仑", "心主题", "艺术史", "核心主"]}, {"source": "人物命运伏笔.md", "target": "视觉论证.md", "value": 4, "shared": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"]}, {"source": "人物命运伏笔.md", "target": "时代精神.md", "value": 4, "shared": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"]}, {"source": "人物命运伏笔.md", "target": "命运伏笔.md", "value": 4, "shared": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"]}, {"source": "人物命运伏笔.md", "target": "时代精神变迁.md", "value": 4, "shared": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"]}, {"source": "德加.md", "target": "古典素描.md", "value": 4, "shared": ["方绘画", "西方绘", "年时期", "印象派"]}, {"source": "德加.md", "target": "几何化结构.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "德加.md", "target": "印象派.md", "value": 4, "shared": ["方绘画", "西方绘", "年时期", "印象派"]}, {"source": "视觉论证.md", "target": "时代精神.md", "value": 4, "shared": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"]}, {"source": "视觉论证.md", "target": "命运伏笔.md", "value": 4, "shared": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"]}, {"source": "视觉论证.md", "target": "时代精神变迁.md", "value": 4, "shared": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"]}, {"source": "自由赏画.md", "target": "选择性文化吸收.md", "value": 2, "shared": ["日本绘画", "一幅画"]}, {"source": "古典素描.md", "target": "几何化结构.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "古典素描.md", "target": "印象派.md", "value": 4, "shared": ["方绘画", "西方绘", "年时期", "印象派"]}, {"source": "时代精神.md", "target": "命运伏笔.md", "value": 4, "shared": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"]}, {"source": "时代精神.md", "target": "时代精神变迁.md", "value": 4, "shared": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"]}, {"source": "梵高.md", "target": "艺术生涯分期.md", "value": 2, "shared": ["西方绘", "印象主义"]}, {"source": "笔触技法.md", "target": "莫奈.md", "value": 6, "shared": ["与中国艺术思想的互证", "认同与质疑", "作品细节与技法辨析", "高清细节", "关键概念与术语解释"]}, {"source": "笔触技法.md", "target": "光线与色彩.md", "value": 6, "shared": ["与中国艺术思想的互证", "认同与质疑", "作品细节与技法辨析", "高清细节", "关键概念与术语解释"]}, {"source": "艺术与权力.md", "target": "博尔盖塞美术馆.md", "value": 2, "shared": ["博尔盖塞", "美术馆"]}, {"source": "艺术与权力.md", "target": "贝尼尼雕塑.md", "value": 2, "shared": ["博尔盖塞", "美术馆"]}, {"source": "几何化结构.md", "target": "印象派.md", "value": 2, "shared": ["方绘画", "西方绘"]}, {"source": "命运伏笔.md", "target": "时代精神变迁.md", "value": 4, "shared": ["拿破仑", "加冕礼", "卢浮宫", "破仑加"]}, {"source": "观察.md", "target": "修图.md", "value": 4, "shared": ["拿破仑", "心主题", "艺术史", "核心主"]}, {"source": "博尔盖塞美术馆.md", "target": "贝尼尼雕塑.md", "value": 2, "shared": ["博尔盖塞", "美术馆"]}, {"source": "莫奈.md", "target": "光线与色彩.md", "value": 6, "shared": ["与中国艺术思想的互证", "认同与质疑", "作品细节与技法辨析", "高清细节", "关键概念与术语解释"]}];
+var CLUSTER_COLORS = {"艺术鉴赏": "#8b5cf6"};
+var SEARCH_DATA = [{"id": "日本绘画特质.md", "label": "日本绘画特质"}, {"id": "记忆与写生.md", "label": "记忆与写生"}, {"id": "权力与宣传.md", "label": "权力与宣传"}, {"id": "塞尚.md", "label": "塞尚"}, {"id": "卡拉瓦乔画作.md", "label": "卡拉瓦乔画作"}, {"id": "形式分析.md", "label": "形式分析"}, {"id": "艺术与政治悖论.md", "label": "艺术与政治悖论"}, {"id": "艺术史重构.md", "label": "艺术史重构"}, {"id": "系列组画.md", "label": "系列组画"}, {"id": "静物画技法革新.md", "label": "静物画技法革新"}, {"id": "艺术收藏与权力.md", "label": "艺术收藏与权力"}, {"id": "系列化创作.md", "label": "系列化创作"}, {"id": "素描.md", "label": "素描"}, {"id": "现代绘画之父.md", "label": "现代绘画之父"}, {"id": "伪装.md", "label": "伪装"}, {"id": "中西艺术比较.md", "label": "中西艺术比较"}, {"id": "艺术史选择性遗忘.md", "label": "艺术史选择性遗忘"}, {"id": "绘画技法分析.md", "label": "绘画技法分析"}, {"id": "运动捕捉.md", "label": "运动捕捉"}, {"id": "误诊.md", "label": "误诊"}, {"id": "符号象征.md", "label": "符号象征"}, {"id": "人物命运伏笔.md", "label": "人物命运伏笔"}, {"id": "德加.md", "label": "德加"}, {"id": "视觉论证.md", "label": "视觉论证"}, {"id": "自由赏画.md", "label": "自由赏画"}, {"id": "古典素描.md", "label": "古典素描"}, {"id": "时代精神.md", "label": "时代精神"}, {"id": "梵高.md", "label": "梵高"}, {"id": "笔触技法.md", "label": "笔触技法"}, {"id": "巴洛克艺术.md", "label": "巴洛克艺术"}, {"id": "艺术与权力.md", "label": "艺术与权力"}, {"id": "几何化结构.md", "label": "几何化结构"}, {"id": "命运伏笔.md", "label": "命运伏笔"}, {"id": "观察.md", "label": "观察"}, {"id": "后印象主义.md", "label": "后印象主义"}, {"id": "修图.md", "label": "修图"}, {"id": "选择性文化吸收.md", "label": "选择性文化吸收"}, {"id": "博尔盖塞美术馆.md", "label": "博尔盖塞美术馆"}, {"id": "时代精神变迁.md", "label": "时代精神变迁"}, {"id": "贝尼尼雕塑.md", "label": "贝尼尼雕塑"}, {"id": "印象派.md", "label": "印象派"}, {"id": "莫奈.md", "label": "莫奈"}, {"id": "艺术生涯分期.md", "label": "艺术生涯分期"}, {"id": "光线与色彩.md", "label": "光线与色彩"}];
+var CONCEPT_SEARCH = [];
+
+
+/* ---- 搜索 ---- */
+var searchBox = document.getElementById("search-box");
+var searchResults = document.getElementById("search-results");
+
+searchBox.addEventListener("input", function(){
+  var q = this.value.trim().toLowerCase();
+  if(!q) { searchResults.style.display="none"; return; }
+  var combined = SEARCH_DATA.concat(CONCEPT_SEARCH.map(function(c){ return {id:c,label:c,type:"concept"}; }));
+  var matches = combined.filter(function(d){ return d.label.toLowerCase().indexOf(q)>-1; }).slice(0,12);
+  if(!matches.length) { searchResults.style.display="none"; return; }
+  searchResults.innerHTML = matches.map(function(d){
+    return '<div class="sri" data-id="'+d.id+'">'+d.label+'</div>';
+  }).join("");
+  searchResults.style.display="block";
+});
+
+searchResults.addEventListener("click", function(e){
+  var el = e.target.closest(".sri");
+  if(!el) return;
+  highlightNode(el.getAttribute("data-id"));
+  searchResults.style.display="none";
+  searchBox.value="";
+});
+
+function highlightNode(id){
+  svg.selectAll(".node").classed("highlight", function(d){ return d.id===id; });
+  svg.selectAll(".link").classed("highlight", function(d){
+    return d.source.id===id || d.target.id===id;
+  });
+  var nd = nodeMap.get(id);
+  if(!nd) return;
+  var t = d3.zoomTransform(svg.node());
+  var x = -nd.x*t.k + width/2;
+  var y = -nd.y*t.k + height/2;
+  svg.transition().duration(600).call(zoom.transform, d3.zoomIdentity.translate(x,y).scale(t.k));
+}
+
+/* ---- 详情面板 ---- */
+function showDetail(d){
+  var panel = document.getElementById("detail-panel");
+  var title = document.getElementById("detail-title");
+  var body  = document.getElementById("detail-body");
+
+  title.textContent = (d.title || d.label || d.id || "").replace(/\.md$/, "");
+
+  var html = "";
+
+  /* 元信息 */
+  html += '<div class="section"><div class="meta-row"><span class="meta-label">类型</span><span>' + (d.type==="concept" ? "💡 概念" : "📖 笔记") + '</span></div>';
+  if(d.domain)   html += '<div class="meta-row"><span class="meta-label">领域</span><span>' + d.domain + '</span></div>';
+  if(d.cluster) html += '<div class="meta-row"><span class="meta-label">聚类</span><span>' + d.cluster + '</span></div>';
+  if(d.degree !== undefined) html += '<div class="meta-row"><span class="meta-label">连通度</span><span>' + d.degree + '</span></div>';
+  html += '</div>';
+
+  /* 摘要 */
+  if(d.summary){
+    html += '<div class="section"><div class="section-title">📝 摘要</div><div class="summary">' + escapeHtml(d.summary.slice(0,500)) + (d.summary.length>500 ? "..." : "") + '</div></div>';
+  }
+
+  /* 关键词 */
+  if(d.keywords && d.keywords.length){
+    html += '<div class="section"><div class="section-title">🔑 关键词</div>';
+    d.keywords.forEach(function(kw){ html += '<span class="keyword">' + escapeHtml(kw) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 标签 */
+  if(d.tags && d.tags.length){
+    html += '<div class="section"><div class="section-title">🏷️ 标签</div>';
+    d.tags.forEach(function(tg){ html += '<span class="tag">' + escapeHtml(tg) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 打开原文件：用 Obsidian URI 协议，避免浏览器 file:// 限制 */
+  if(d.path){
+    var obsidianUrl = "obsidian://open?path=" + encodeURIComponent(d.path);
+    html += '<div class="section"><a class="open-link" href="' + obsidianUrl + '">📂 在 Obsidian 中打开</a></div>';
+  }
+
+  body.innerHTML = html;
+  panel.classList.add("open");
+}
+
+function closeDetail(){
+  document.getElementById("detail-panel").classList.remove("open");
+}
+
+function escapeHtml(s){
+  if(!s) return "";
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ---- D3 力导向图 ---- */
+var width  = window.innerWidth;
+var height = window.innerHeight - 48;
+var svg = d3.select("#graph").append("svg").attr("width",width).attr("height",height);
+var g = svg.append("g");
+var zoom = d3.zoom().scaleExtent([0.05,5]).on("zoom", function(e){ g.attr("transform", e.transform); });
+svg.call(zoom);
+
+var simulation = d3.forceSimulation(NODES)
+  .force("link",    d3.forceLink(LINKS).id(function(d){ return d.id; }).distance(90))
+  .force("charge",  d3.forceManyBody().strength(-220))
+  .force("center",  d3.forceCenter(width/2, height/2))
+  .force("collision", d3.forceCollide(30))
+  .force("x",       d3.forceX(width/2).strength(0.06))
+  .force("y",       d3.forceY(height/2).strength(0.06));
+
+var link = g.append("g").attr("class","links").selectAll("line")
+  .data(LINKS).join("line")
+  .attr("class", function(d){ return "link" + ((d.type==="book-book") ? " link-book" : ""); });
+
+var node = g.append("g").attr("class","nodes").selectAll("g")
+  .data(NODES).join("g")
+  .attr("class","node")
+  .attr("data-id", function(d){ return d.id; })
+  .call(d3.drag()
+    .on("start", function(event,d){ if(!event.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+    .on("drag",  function(event,d){ d.fx=event.x; d.fy=event.y; })
+    .on("end",   function(event,d){ if(!event.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+node.append("circle")
+  .attr("r", function(d){ return d.type==="book" ? 5+Math.sqrt(d.degree||1)*1.5 : 7; })
+  .attr("fill", function(d){ return d.type==="book" ? (CLUSTER_COLORS[d.cluster]||"#94a3b8") : "#8b5cf6"; })
+  .attr("stroke", function(d){ return d.type==="book" ? "#0f172a" : "#d97706"; })
+  .on("mouseover", function(event,d){
+    var html = d.type==="book"
+      ? "<strong>📖 "+d.label+"</strong><br>连通度:"+d.degree+"<br>聚类:"+(d.cluster||"未分类")
+      : "<strong>💡 "+d.concept+"</strong><br>关联:"+d.book_count+" 篇";
+    d3.select("#tooltip").html(html).style("opacity",1)
+      .style("left",(event.pageX+12)+"px").style("top",(event.pageY-8)+"px");
+  })
+  .on("mouseout", function(){ d3.select("#tooltip").style("opacity",0); })
+  .on("click", function(event,d){
+    event.stopPropagation();
+    showDetail(d);
+  });
+
+node.append("text").attr("dx",11).attr("dy","0.35em").text(function(d){ return d.label; });
+
+var nodeMap = new Map();
+simulation.on("tick", function(){
+  link
+    .attr("x1", function(d){ return d.source.x; })
+    .attr("y1", function(d){ return d.source.y; })
+    .attr("x2", function(d){ return d.target.x; })
+    .attr("y2", function(d){ return d.target.y; });
+  node.attr("transform", function(d){
+    nodeMap.set(d.id, d);
+    return "translate("+d.x+","+d.y+")";
+  });
+});
+
+/* ---- 图例 ---- */
+var legendItems = d3.select("#legend").append("div").style("font-weight","bold").style("margin-bottom","8px").text("🎨 聚类").node().parentNode;
+Object.entries(CLUSTER_COLORS).forEach(function(entry){
+  var li = d3.select(legendItems).append("div").attr("class","li");
+  li.append("span").attr("class","ld").style("background",entry[1]);
+  li.append("span").text(entry[0]);
+});
+
+/* ---- 按钮 ---- */
+var conceptVisible = true;
+d3.select("#btn-toggle-concept").on("click", function(){
+  conceptVisible = !conceptVisible;
+  svg.selectAll(".node").filter(function(d){ return d.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  svg.selectAll(".link").filter(function(d){ return d.source.type==="concept"||d.target.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  d3.select(this).text(conceptVisible?"隐藏概念":"显示概念").classed("active",!conceptVisible);
+});
+d3.select("#btn-reset").on("click", function(){
+  closeDetail();
+  svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+});
+
+svg.on("click", function(){ searchResults.style.display="none"; });
+document.addEventListener("click", function(e){
+  if(!document.getElementById("detail-panel").contains(e.target) && !e.target.closest(".node")){
+    closeDetail();
+  }
+});
+
+/* 更新统计 */
+d3.select("#node-count").text(NODES.length);
+d3.select("#link-count").text(LINKS.length);
+</script>
+</body>
+</html>

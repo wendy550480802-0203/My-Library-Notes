@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>哲学 - 人生哲学 - 知识图谱</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#0f172a; color:#e2e8f0; overflow:hidden; }
+
+/* 侧边栏 */
+#sidebar { position:fixed; left:0; top:0; width:220px; height:100vh; background:#1e293b; border-right:1px solid #334155; overflow-y:auto; z-index:50; transition:transform 0.3s; font-size:12px; }
+#sidebar.collapsed { transform:translateX(-220px); }
+#sidebar h2 { font-size:13px; padding:12px 14px 8px; color:#94a3b8; border-bottom:1px solid #334155; }
+#sidebar .domain-header { padding:7px 14px; cursor:pointer; font-weight:600; border-bottom:1px solid #1a2332; transition:background 0.15s; user-select:none; }
+#sidebar .domain-header:hover { background:#334155; }
+#sidebar .domain-pages { display:none; }
+#sidebar .domain-pages a { display:block; padding:5px 14px 5px 24px; color:#cbd5e1; text-decoration:none; border-bottom:1px solid #1a2332; transition:background 0.15s; font-size:11px; }
+#sidebar .domain-pages a:hover { background:#334155; color:#fff; }
+#sidebar .domain-pages a.active { font-weight:600; }
+#sidebar a.active { background:#14b8a6; color:#0f172a; }
+#sidebar-toggle { position:fixed; left:8px; top:56px; z-index:60; background:#334155; border:1px solid #475569; color:#e2e8f0; border-radius:6px; padding:4px 7px; cursor:pointer; font-size:13px; transition:left 0.3s; }
+#sidebar:not(.collapsed) ~ #sidebar-toggle { left:228px; }
+
+/* 右侧详情面板 */
+#detail-panel { position:fixed; top:0; right:-420px; width:400px; height:100vh; background:#1e293b; border-left:1px solid #334155; z-index:55; transition:right 0.3s; display:flex; flex-direction:column; }
+#detail-panel.open { right:0; }
+#detail-header { padding:14px 16px; border-bottom:1px solid #334155; display:flex; align-items:flex-start; gap:10px; }
+#detail-header h2 { flex:1; font-size:14px; line-height:1.4; margin:0; word-break:break-all; }
+#detail-close { background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer; padding:0 4px; line-height:1; }
+#detail-close:hover { color:#fff; }
+#detail-body { flex:1; overflow-y:auto; padding:16px; font-size:13px; line-height:1.7; }
+#detail-body .section { margin-bottom:16px; }
+#detail-body .section-title { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+#detail-body .tag { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#334155; border-radius:4px; font-size:11px; color:#cbd5e1; }
+#detail-body .keyword { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#14b8a622; border:1px solid #14b8a666; border-radius:4px; font-size:11px; color:#e2e8f0; }
+#detail-body .summary { color:#cbd5e1; white-space:pre-wrap; }
+#detail-body .open-link { display:inline-block; margin-top:12px; padding:6px 14px; background:#14b8a6; color:#0f172a; border-radius:6px; text-decoration:none; font-size:12px; font-weight:600; }
+#detail-body .open-link:hover { opacity:0.85; }
+#detail-body .meta-row { display:flex; gap:12px; margin-bottom:8px; font-size:12px; }
+#detail-body .meta-label { color:#94a3b8; min-width:60px; }
+#detail-body .connected-list { list-style:none; padding:0; }
+#detail-body .connected-list li { padding:4px 0; border-bottom:1px solid #1a2332; font-size:12px; cursor:pointer; }
+#detail-body .connected-list li:hover { color:#14b8a6; }
+
+#header { padding:10px 20px 10px 50px; background:#1e293b; border-bottom:1px solid #334155; display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-left:200px; transition:margin-left 0.3s; }
+#sidebar.collapsed ~ #header { margin-left:0; }
+#header h1 { margin:0; font-size:17px; color:#14b8a6; white-space:nowrap; }
+#search-wrap { position:relative; }
+#search-box { width:220px; padding:5px 10px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#e2e8f0; font-size:13px; }
+#search-results { position:absolute; top:32px; left:0; width:260px; max-height:300px; overflow-y:auto; background:#1e293b; border:1px solid #475569; border-radius:6px; display:none; z-index:100; }
+.sri { padding:7px 10px; cursor:pointer; font-size:12px; border-bottom:1px solid #334155; }
+.sri:hover { background:#334155; }
+.stats { font-size:12px; color:#94a3b8; white-space:nowrap; }
+.ctrls { display:flex; gap:6px; margin-left:auto; }
+.btn { padding:5px 12px; border-radius:6px; border:1px solid #475569; background:#334155; color:#e2e8f0; cursor:pointer; font-size:12px; }
+.btn:hover { background:#475569; }
+.btn.active { background:#14b8a6; color:#0f172a; border-color:#14b8a6; }
+#legend { position:absolute; top:52px; left:220px; background:#1e293b; border:1px solid #475569; border-radius:8px; padding:10px 14px; font-size:12px; z-index:10; }
+.li { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+.ld { width:10px; height:10px; border-radius:50%; }
+#tooltip { position:absolute; padding:8px 12px; background:#1e293b; border:1px solid #475569; border-radius:8px; font-size:12px; pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:100; box-shadow:0 4px 20px rgba(0,0,0,0.5); max-width:320px; }
+#graph { width:calc(100vw - 200px); height:calc(100vh - 48px); margin-left:200px; transition:width 0.3s, margin-left 0.3s; }
+#sidebar.collapsed ~ #graph { margin-left:0; width:100vw; }
+#detail-panel.open ~ #graph { width:calc(100vw - 200px - 400px); }
+.link { stroke:#475569; stroke-opacity:0.3; }
+.link-book { stroke-opacity:0.12; }
+.node circle { cursor:pointer; stroke-width:1.5; }
+.node text { fill:#e2e8f0; font-size:10px; pointer-events:none; }
+.highlight circle { stroke:#fff !important; stroke-width:2.5px; }
+.highlight text { fill:#fff; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>📚 藏书阁 · 知识图谱</h2>
+  <div class="domain-header" data-target="IT" style="color:#67e8f9; border-left:3px solid #67e8f9;">IT ▾</div>
+  <div class="domain-pages" id="IT">
+    <a href="IT.json" style="border-left:3px solid #67e8f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(225篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="个人成长" style="color:#fb923c; border-left:3px solid #fb923c;">个人成长 ▾</div>
+  <div class="domain-pages" id="个人成长">
+    <a href="个人成长.json" style="border-left:3px solid #fb923c; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(461篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="产品" style="color:#a855f7; border-left:3px solid #a855f7;">产品 ▾</div>
+  <div class="domain-pages" id="产品">
+    <a href="产品_(其他).json" style="border-left:3px solid #a855f7; padding-left:18px;">(其他) <span style="font-size:10px;color:#64748b;">(553篇)</span></a>
+    <a href="产品_产品思维.json" style="border-left:3px solid #a855f7; padding-left:18px;">产品思维 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="产品_小程序生态.json" style="border-left:3px solid #a855f7; padding-left:18px;">小程序生态 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="产品_用户增长.json" style="border-left:3px solid #a855f7; padding-left:18px;">用户增长 <span style="font-size:10px;color:#64748b;">(49篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="会计" style="color:#86efac; border-left:3px solid #86efac;">会计 ▾</div>
+  <div class="domain-pages" id="会计">
+    <a href="会计.json" style="border-left:3px solid #86efac; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(67篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="健康" style="color:#34d399; border-left:3px solid #34d399;">健康 ▾</div>
+  <div class="domain-pages" id="健康">
+    <a href="健康.json" style="border-left:3px solid #34d399; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(284篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="写作" style="color:#c084fc; border-left:3px solid #c084fc;">写作 ▾</div>
+  <div class="domain-pages" id="写作">
+    <a href="写作.json" style="border-left:3px solid #c084fc; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(238篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="历史" style="color:#06b6d4; border-left:3px solid #06b6d4;">历史 ▾</div>
+  <div class="domain-pages" id="历史">
+    <a href="历史_(其他)_part1.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part2.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part3.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part4.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part5.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(541篇)</span></a>
+    <a href="历史_世界史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">世界史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="历史_中国历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国历史 <span style="font-size:10px;color:#64748b;">(96篇)</span></a>
+    <a href="历史_中国古代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国古代文学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="历史_中国现代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国现代文学 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="历史_中国近代史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国近代史 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="历史_人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">人物传记 <span style="font-size:10px;color:#64748b;">(143篇)</span></a>
+    <a href="历史_军事历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">军事历史 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="历史_历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史 <span style="font-size:10px;color:#64748b;">(538篇)</span></a>
+    <a href="历史_历史与政治.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史与政治 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史人物传记 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="历史_历史学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史学 <span style="font-size:10px;color:#64748b;">(189篇)</span></a>
+    <a href="历史_历史小说.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史小说 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史研究.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史研究 <span style="font-size:10px;color:#64748b;">(162篇)</span></a>
+    <a href="历史_思想史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">思想史 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="历史_文学与历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">文学与历史 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="历史_科技史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">科技史 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="历史_艺术史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">艺术史 <span style="font-size:10px;color:#64748b;">(83篇)</span></a>
+    <a href="历史_西方哲学史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">西方哲学史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="哲学" style="color:#14b8a6; border-left:3px solid #14b8a6;">哲学 ▾</div>
+  <div class="domain-pages" id="哲学">
+    <a href="哲学_(其他)_part1.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="哲学_(其他)_part2.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(272篇)</span></a>
+    <a href="哲学_中国哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">中国哲学 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="哲学_人生哲学.json" class="active" style="border-left:3px solid #14b8a6; padding-left:18px;">人生哲学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="哲学_哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">哲学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+    <a href="哲学_政治哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">政治哲学 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="哲学_生活哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">生活哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+    <a href="哲学_社会哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">社会哲学 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="哲学_科学哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">科学哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="商业" style="color:#10b981; border-left:3px solid #10b981;">商业 ▾</div>
+  <div class="domain-pages" id="商业">
+    <a href="商业_(其他)_part1.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（1/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part2.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（2/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part3.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（3/3） <span style="font-size:10px;color:#64748b;">(391篇)</span></a>
+    <a href="商业_企业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">企业管理 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="商业_健康管理.json" style="border-left:3px solid #10b981; padding-left:18px;">健康管理 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="商业_创业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">创业管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业战略.json" style="border-left:3px solid #10b981; padding-left:18px;">商业战略 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">商业管理 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="商业_投资理财.json" style="border-left:3px solid #10b981; padding-left:18px;">投资理财 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_知识管理.json" style="border-left:3px solid #10b981; padding-left:18px;">知识管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_管理.json" style="border-left:3px solid #10b981; padding-left:18px;">管理 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_组织管理.json" style="border-left:3px solid #10b981; padding-left:18px;">组织管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_经济学.json" style="border-left:3px solid #10b981; padding-left:18px;">经济学 <span style="font-size:10px;color:#64748b;">(74篇)</span></a>
+    <a href="商业_金融投资.json" style="border-left:3px solid #10b981; padding-left:18px;">金融投资 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="商业_领导力.json" style="border-left:3px solid #10b981; padding-left:18px;">领导力 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="图书馆学" style="color:#5eead4; border-left:3px solid #5eead4;">图书馆学 ▾</div>
+  <div class="domain-pages" id="图书馆学">
+    <a href="图书馆学.json" style="border-left:3px solid #5eead4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(23篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="宗教" style="color:#c4b5fd; border-left:3px solid #c4b5fd;">宗教 ▾</div>
+  <div class="domain-pages" id="宗教">
+    <a href="宗教.json" style="border-left:3px solid #c4b5fd; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(19篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="心理学" style="color:#f59e0b; border-left:3px solid #f59e0b;">心理学 ▾</div>
+  <div class="domain-pages" id="心理学">
+    <a href="心理学_(其他)_part1.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（1/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part2.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（2/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part3.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（3/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part4.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（4/4） <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="心理学_个人成长与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">个人成长与心理学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理健康.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理健康 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理学 <span style="font-size:10px;color:#64748b;">(239篇)</span></a>
+    <a href="心理学_教育心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">教育心理学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="心理学_文学与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">文学与心理学 <span style="font-size:10px;color:#64748b;">(119篇)</span></a>
+    <a href="心理学_沟通技巧.json" style="border-left:3px solid #f59e0b; padding-left:18px;">沟通技巧 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="心理学_社会心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">社会心理学 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+    <a href="心理学_认知心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知心理学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="心理学_认知科学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知科学 <span style="font-size:10px;color:#64748b;">(39篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="房地产" style="color:#6ee7b7; border-left:3px solid #6ee7b7;">房地产 ▾</div>
+  <div class="domain-pages" id="房地产">
+    <a href="房地产.json" style="border-left:3px solid #6ee7b7; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(12篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="政治" style="color:#fbbf24; border-left:3px solid #fbbf24;">政治 ▾</div>
+  <div class="domain-pages" id="政治">
+    <a href="政治.json" style="border-left:3px solid #fbbf24; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(253篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="教育" style="color:#ec4899; border-left:3px solid #ec4899;">教育 ▾</div>
+  <div class="domain-pages" id="教育">
+    <a href="教育_(其他)_part1.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="教育_(其他)_part2.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(382篇)</span></a>
+    <a href="教育_个人成长.json" style="border-left:3px solid #ec4899; padding-left:18px;">个人成长 <span style="font-size:10px;color:#64748b;">(250篇)</span></a>
+    <a href="教育_儿童教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">儿童教育 <span style="font-size:10px;color:#64748b;">(62篇)</span></a>
+    <a href="教育_家庭教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">家庭教育 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="教育_教育理念.json" style="border-left:3px solid #ec4899; padding-left:18px;">教育理念 <span style="font-size:10px;color:#64748b;">(68篇)</span></a>
+    <a href="教育_财商教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">财商教育 <span style="font-size:10px;color:#64748b;">(48篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="文学" style="color:#8b5cf6; border-left:3px solid #8b5cf6;">文学 ▾</div>
+  <div class="domain-pages" id="文学">
+    <a href="文学_(其他)_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_中国古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">中国古典文学 <span style="font-size:10px;color:#64748b;">(112篇)</span></a>
+    <a href="文学_儿童文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">儿童文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">古典文学 <span style="font-size:10px;color:#64748b;">(92篇)</span></a>
+    <a href="文学_奇幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">奇幻文学 <span style="font-size:10px;color:#64748b;">(51篇)</span></a>
+    <a href="文学_女性主义文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">女性主义文学 <span style="font-size:10px;color:#64748b;">(38篇)</span></a>
+    <a href="文学_悬疑小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">悬疑小说分析 <span style="font-size:10px;color:#64748b;">(52篇)</span></a>
+    <a href="文学_推理小说.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="文学_推理小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说分析 <span style="font-size:10px;color:#64748b;">(126篇)</span></a>
+    <a href="文学_推理文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理文学 <span style="font-size:10px;color:#64748b;">(35篇)</span></a>
+    <a href="文学_文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学 <span style="font-size:10px;color:#64748b;">(223篇)</span></a>
+    <a href="文学_文学与个人成长.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与个人成长 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="文学_文学与人生哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与人生哲学 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="文学_文学与哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与哲学 <span style="font-size:10px;color:#64748b;">(303篇)</span></a>
+    <a href="文学_文学与社会学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与社会学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="文学_文学分析_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（1/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（2/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（3/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（4/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（5/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part6.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（6/6） <span style="font-size:10px;color:#64748b;">(254篇)</span></a>
+    <a href="文学_文学批评.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学批评 <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="文学_文学理论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学理论 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_文学研究.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学研究 <span style="font-size:10px;color:#64748b;">(84篇)</span></a>
+    <a href="文学_文学经典.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学经典 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="文学_文学解读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学解读 <span style="font-size:10px;color:#64748b;">(40篇)</span></a>
+    <a href="文学_文学评论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学评论 <span style="font-size:10px;color:#64748b;">(482篇)</span></a>
+    <a href="文学_文学赏析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学赏析 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="文学_文学鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学鉴赏 <span style="font-size:10px;color:#64748b;">(82篇)</span></a>
+    <a href="文学_文学阅读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学阅读 <span style="font-size:10px;color:#64748b;">(78篇)</span></a>
+    <a href="文学_旅行文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">旅行文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_日本文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">日本文学 <span style="font-size:10px;color:#64748b;">(98篇)</span></a>
+    <a href="文学_武侠文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">武侠文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_科幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学 <span style="font-size:10px;color:#64748b;">(175篇)</span></a>
+    <a href="文学_科幻文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学分析 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="文学_网络文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">网络文学分析 <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_艺术鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">艺术鉴赏 <span style="font-size:10px;color:#64748b;">(44篇)</span></a>
+    <a href="文学_非虚构文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">非虚构文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="时尚生活" style="color:#f9a8d4; border-left:3px solid #f9a8d4;">时尚生活 ▾</div>
+  <div class="domain-pages" id="时尚生活">
+    <a href="时尚生活.json" style="border-left:3px solid #f9a8d4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(71篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="未知" style="color:#94a3b8; border-left:3px solid #94a3b8;">未知 ▾</div>
+  <div class="domain-pages" id="未知">
+    <a href="未知.json" style="border-left:3px solid #94a3b8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(16篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="法学" style="color:#fcd34d; border-left:3px solid #fcd34d;">法学 ▾</div>
+  <div class="domain-pages" id="法学">
+    <a href="法学.json" style="border-left:3px solid #fcd34d; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="社会学" style="color:#6366f1; border-left:3px solid #6366f1;">社会学 ▾</div>
+  <div class="domain-pages" id="社会学">
+    <a href="社会学_(其他)_part1.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="社会学_(其他)_part2.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(484篇)</span></a>
+    <a href="社会学_文化研究.json" style="border-left:3px solid #6366f1; padding-left:18px;">文化研究 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="社会学_社会学.json" style="border-left:3px solid #6366f1; padding-left:18px;">社会学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="科学" style="color:#f97316; border-left:3px solid #f97316;">科学 ▾</div>
+  <div class="domain-pages" id="科学">
+    <a href="科学_(其他)_part1.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="科学_(其他)_part2.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(116篇)</span></a>
+    <a href="科学_医学人文.json" style="border-left:3px solid #f97316; padding-left:18px;">医学人文 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="科学_神经科学.json" style="border-left:3px solid #f97316; padding-left:18px;">神经科学 <span style="font-size:10px;color:#64748b;">(56篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="编程" style="color:#818cf8; border-left:3px solid #818cf8;">编程 ▾</div>
+  <div class="domain-pages" id="编程">
+    <a href="编程.json" style="border-left:3px solid #818cf8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(151篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="艺术" style="color:#e879f9; border-left:3px solid #e879f9;">艺术 ▾</div>
+  <div class="domain-pages" id="艺术">
+    <a href="艺术.json" style="border-left:3px solid #e879f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(365篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="英语" style="color:#f472b6; border-left:3px solid #f472b6;">英语 ▾</div>
+  <div class="domain-pages" id="英语">
+    <a href="英语.json" style="border-left:3px solid #f472b6; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(209篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="语言文学" style="color:#d8b4fe; border-left:3px solid #d8b4fe;">语言文学 ▾</div>
+  <div class="domain-pages" id="语言文学">
+    <a href="语言文学.json" style="border-left:3px solid #d8b4fe; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="金融" style="color:#a3e635; border-left:3px solid #a3e635;">金融 ▾</div>
+  <div class="domain-pages" id="金融">
+    <a href="金融.json" style="border-left:3px solid #a3e635; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(208篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="雅思" style="color:#22d3ee; border-left:3px solid #22d3ee;">雅思 ▾</div>
+  <div class="domain-pages" id="雅思">
+    <a href="雅思.json" style="border-left:3px solid #22d3ee; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(511篇)</span></a>
+  </div>
+
+    <script>
+    document.querySelectorAll('.domain-header').forEach(function(h){
+      h.addEventListener('click', function(){
+        var t = document.getElementById(this.dataset.target);
+        t.style.display = t.style.display==='none' ? 'block' : 'none';
+        this.innerHTML = this.innerHTML.replace(/[▾▸]/, t.style.display==='none'?'▸':'▾');
+      });
+    });
+    </script>
+    
+</div>
+<button id="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">☰</button>
+
+<div id="header">
+  <h1>📚 哲学 · 人生哲学</h1>
+  <div id="search-wrap">
+    <input id="search-box" type="text" placeholder="🔍 搜索书名/概念...">
+    <div id="search-results"></div>
+  </div>
+  <div class="stats">
+    <span id="node-count">0</span> 节点 ·
+    <span id="link-count">0</span> 连接
+  </div>
+  <div class="ctrls">
+    <button class="btn" id="btn-toggle-concept">隐藏概念</button>
+    <button class="btn" id="btn-reset">重置视图</button>
+  </div>
+</div>
+
+<div id="graph"></div>
+<div id="tooltip"></div>
+
+<!-- 右侧详情面板 -->
+<div id="detail-panel">
+  <div id="detail-header">
+    <h2 id="detail-title"></h2>
+    <button id="detail-close" onclick="closeDetail()">✕</button>
+  </div>
+  <div id="detail-body"></div>
+</div>
+
+<script>
+var NODES = [{"id": "进化而非革命.md", "label": "进化而非革命", "title": "进化而非革命", "type": "book", "degree": 8, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "完整标题：阿兰·德波顿的生活哲学课（套装共5册）之《理想的工作》。作者：阿兰·德波顿（Alain de Botton）及其创办的“人生学校”（The School of Life）。主题领域：人生哲学、职业规划、自我认知、社会心理学。对立：“使命的迷思” vs. “进化，而非革命”（前者追求一次性完美答案，后者主张渐进式调整）；“完美主义陷阱” vs. “足够好的工作”（前者追求绝对理想，后者接受现实限制）。它既提供了“为什么我们会这样”的深刻洞察（如“使命的迷思”），也提供了“那我们该怎么办”的可行路径（如“进化，而非革命”）", "keywords": ["相关笔记", "核心概念相互支撑", "对立与互补的概念", "最有力的论点", "使命的迷思", "历史比较法", "完整标题", "理想工作"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/阿兰·德波顿的生活哲学课（套装共5册）_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/进化而非革命.md"}, {"id": "志气与欲望.md", "label": "志气与欲望", "title": "志气与欲望", "type": "book", "degree": 7, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "核心主题：通过个人经历与哲学思辨，探讨人生态度的三种境界（逐求、厌离、郑重），并阐明道德的本质是生命的和谐与人生的艺术，引导读者在反省中实现人格的自觉与向上。适合人群：处于人生迷茫期、寻求生命意义与道德真谛的青年；对儒家思想、人生哲学感兴趣的读者；希望提升自我认知和生活实践力的所有成年人。要点1：三种人生态度——逐求、厌离、郑重。梁漱溟提出的“逐求→厌离→郑重”路径，与心理学中的“认知-情感-行为”模型及存在主义哲学有深刻共鸣。厌离（认知与情感层面）：对应存在主义对生命荒诞、无意义的觉察，是产生“存在焦虑”的阶段", "keywords": ["相关笔记", "逐求", "厌离", "郑重", "做法", "自觉即人性", "人生态"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/深思与省悟"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/志气与欲望.md"}, {"id": "幸福哲学.md", "label": "幸福哲学", "title": "幸福哲学", "type": "book", "degree": 2, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "本书的核心处世智慧在于：人生的幸福根本取决于“人是什么”（即内在个性），而非“人有什么”（外在财富）或“人在他人眼中是什么”（社会评价）。叔本华开宗明义地指出，决定人类命运的根本差别在于三项内容：第一是人的个性（健康、力量、气质、道德品格、智力和教养）；第二是人的财产和占有物；第三是人在他人眼中的形象（荣誉、地位、名声）。其中，第一项具有压倒性的决定性作用——幸福的首要本质要素是人格本身，外在因素对人幸福的影响远不如内在因素重要。叔本华认为，人生幸福不是通过追逐外部资源获得的，而是通过优化自身的内在机制（认知、情感、欲望模式）来实现的。叔本华引用了亚里士多德的三分法并加以改造，强调人的健康、气", "keywords": ["相关笔记", "叔本华"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/人生的智慧：如何才能幸福度过一生_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/幸福哲学.md"}, {"id": "自觉力.md", "label": "自觉力", "title": "自觉力", "type": "book", "degree": 7, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "核心主题：通过个人经历与哲学思辨，探讨人生态度的三种境界（逐求、厌离、郑重），并阐明道德的本质是生命的和谐与人生的艺术，引导读者在反省中实现人格的自觉与向上。适合人群：处于人生迷茫期、寻求生命意义与道德真谛的青年；对儒家思想、人生哲学感兴趣的读者；希望提升自我认知和生活实践力的所有成年人。要点1：三种人生态度——逐求、厌离、郑重。梁漱溟提出的“逐求→厌离→郑重”路径，与心理学中的“认知-情感-行为”模型及存在主义哲学有深刻共鸣。厌离（认知与情感层面）：对应存在主义对生命荒诞、无意义的觉察，是产生“存在焦虑”的阶段", "keywords": ["相关笔记", "逐求", "厌离", "郑重", "做法", "自觉即人性", "人生态"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/深思与省悟"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/自觉力.md"}, {"id": "幸福本质.md", "label": "幸福本质", "title": "幸福本质", "type": "book", "degree": 2, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "本书的核心处世智慧在于：人生的幸福根本取决于“人是什么”（即内在个性），而非“人有什么”（外在财富）或“人在他人眼中是什么”（社会评价）。叔本华开宗明义地指出，决定人类命运的根本差别在于三项内容：第一是人的个性（健康、力量、气质、道德品格、智力和教养）；第二是人的财产和占有物；第三是人在他人眼中的形象（荣誉、地位、名声）。其中，第一项具有压倒性的决定性作用——幸福的首要本质要素是人格本身，外在因素对人幸福的影响远不如内在因素重要。叔本华认为，人生幸福不是通过追逐外部资源获得的，而是通过优化自身的内在机制（认知、情感、欲望模式）来实现的。叔本华引用了亚里士多德的三分法并加以改造，强调人的健康、气", "keywords": ["相关笔记", "叔本华"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/人生的智慧：如何才能幸福度过一生_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/幸福本质.md"}, {"id": "世态炎凉的洞明.md", "label": "世态炎凉的洞明", "title": "世态炎凉的洞明", "type": "book", "degree": 4, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "核心主题：以一位九十多岁老人的毕生阅历，探讨人生的本质、意义与价值，强调“不完满才是人生”的平凡真理，并倡导以责任感、宽容与智慧面对命运的无常与世态的炎凉。适合人群：处于人生迷茫期或中年危机的读者；对人生哲学、传统文化感兴趣的学者与爱好者；希望从智者经验中获得处世智慧与心灵慰藉的普通人。要点1：人生本质——“不完满”与“被动性”。季羡林指出，人生本质上是“不完满”的，且人的诞生、成长与死亡都是被动的。针对“人生意义”这一哲学难题，季羡林提出务实而深刻的见解：人生的意义不在于个人享乐或功成名就，而在于对人类发展的“承上启下、承前启后的责任感”", "keywords": ["季羡林", "不完满", "世态炎", "态炎凉"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/阅世心语"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/世态炎凉的洞明.md"}, {"id": "反思性回顾.md", "label": "反思性回顾", "title": "反思性回顾", "type": "book", "degree": 8, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "完整标题：人生没有后悔药：死前必须知道的五个秘密。作者：约翰·B.伊佐 (John B. Izzo)。主题领域：人生哲学、积极心理学、灵性成长、个人发展、叙事研究。睿智长者 (Wise Elders)：指那些被他人（尤其是年轻人）认为已经找到人生意义和幸福的年长者（通常超过60岁）。“反思性回顾” 是“睿智长者”之所以能提供智慧的关键认知过程，它将“年长”这一事实转化为“智慧”的源泉", "keywords": ["核心概念如何相互支撑", "方法论的创新", "价值的重申", "完整标题", "社会实践", "对立", "睿智长者", "反思性"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/人生没有后悔药_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/反思性回顾.md"}, {"id": "道德与良知.md", "label": "道德与良知", "title": "道德与良知", "type": "book", "degree": 2, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：（西）巴勃罗•卡萨尔斯 （美）艾伯特•E.卡恩。核心主题：一位伟大音乐家的人生哲学：艺术与人性密不可分，通过一生对音乐、自然和良知的坚守，诠释了如何将个人意志、精神思想与生命价值融为一体。适合人群：所有对音乐、艺术、人生哲学、个人成长感兴趣的人；正在寻找生命意义、面对人生困境或思考如何坚持信念的人；以及所有希望从一位世纪伟人的经历中汲取智慧和力量的读者。卡萨尔斯的一生是其信念的明证，即“艺术与人性价值密不可分”。卡萨尔斯每日弹奏巴赫、观察大海的行为，完美诠释了心理学家米哈里·契克森米哈赖提出的“心流”状态", "keywords": ["卡萨尔斯", "弹奏巴"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/白鸟之歌"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/道德与良知.md"}, {"id": "责任感.md", "label": "责任感", "title": "责任感", "type": "book", "degree": 2, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "核心主题：本书探讨了人生的不完满本质、意义与价值，以及如何通过理解“真糊涂”与“假糊涂”、培养责任感和容忍等美德，来获得内心的平静与智慧，从而过好这一生。适合人群：对人生意义感到困惑的年轻人；在生活、工作中感到焦虑和浮躁的成年人；希望从智者处获得人生智慧与慰藉的中老年人；对东方哲学和人生思考感兴趣的读者。作者开宗明义地指出，一个百分之百完满的人生是不存在的。要点2：人生的意义与价值在于责任感。但他强调，如果人生真有意义与价值，其核心就在于对人类发展的“承上启下、承前启后的责任感”", "keywords": ["相关笔记", "责任感"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/过好这一生"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/责任感.md"}, {"id": "知行鸿沟.md", "label": "知行鸿沟", "title": "知行鸿沟", "type": "book", "degree": 3, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "本书的核心处世智慧在于：人生的幸福根本取决于“人是什么”（即内在个性），而非“人有什么”（外在财富）或“人在他人眼中是什么”（社会评价）。叔本华开宗明义地指出，决定人类命运的根本差别在于三项内容：第一是人的个性（健康、力量、气质、道德品格、智力和教养）；第二是人的财产和占有物；第三是人在他人眼中的形象（荣誉、地位、名声）。其中，第一项具有压倒性的决定性作用——幸福的首要本质要素是人格本身，外在因素对人幸福的影响远不如内在因素重要。叔本华认为，人生幸福不是通过追逐外部资源获得的，而是通过优化自身的内在机制（认知、情感、欲望模式）来实现的。叔本华引用了亚里士多德的三分法并加以改造，强调人的健康、气", "keywords": ["叔本华", "斯多葛", "人是什么"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/人生的智慧：如何才能幸福度过一生_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/知行鸿沟.md"}, {"id": "完美的一天.md", "label": "完美的一天", "title": "完美的一天", "type": "book", "degree": 2, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：米奇·阿尔博姆 (Mitch Albom)。核心主题：一位身患绝症的社会学教授莫里·施瓦茨，在生命最后十四个星期里，为他的学生米奇讲授关于人生意义的最后一门课。课程的核心在于探讨如何面对死亡、爱、家庭、衰老、金钱、恐惧等人生终极问题，并最终得出“与生活讲和”和“学会施爱于人并接受爱”的智慧。适合人群：所有对人生意义感到困惑的人；在快节奏、物质化的社会中感到迷失，渴望寻找内心平静的人；正处于人生低谷或面临重大变故的人；希望提升生命质量和人际关系质量的读者；教师、学生以及所有对临终关怀与生命教育感兴趣的人。莫里教授认为，人类文化灌输给我们一种错误观念，即试图逃避衰老和死亡", "keywords": ["莫里教授", "相约星"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/相约星期二"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/完美的一天.md"}, {"id": "容忍与界限.md", "label": "容忍与界限", "title": "容忍与界限", "type": "book", "degree": 4, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "核心主题：本书探讨了人生的不完满本质、意义与价值，以及如何通过理解“真糊涂”与“假糊涂”、培养责任感和容忍等美德，来获得内心的平静与智慧，从而过好这一生。适合人群：对人生意义感到困惑的年轻人；在生活、工作中感到焦虑和浮躁的成年人；希望从智者处获得人生智慧与慰藉的中老年人；对东方哲学和人生思考感兴趣的读者。作者开宗明义地指出，一个百分之百完满的人生是不存在的。但他强调，如果人生真有意义与价值，其核心就在于对人类发展的“承上启下、承前启后的责任感”。“假糊涂”则是在洞悉世事真相（如官场黑暗、社会不公）后，为了生存或坚守原则而被迫装糊涂，这种状态是痛苦的、艰难的，才是真正的“难得”", "keywords": ["责任感", "假糊涂", "好这一", "这一生"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/过好这一生"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/容忍与界限.md"}, {"id": "成功与失败的本质.md", "label": "成功与失败的本质", "title": "成功与失败的本质", "type": "book", "degree": 7, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "核心主题：通过个人经历与哲学思辨，探讨人生态度的三种境界（逐求、厌离、郑重），并阐明道德的本质是生命的和谐与人生的艺术，引导读者在反省中实现人格的自觉与向上。适合人群：处于人生迷茫期、寻求生命意义与道德真谛的青年；对儒家思想、人生哲学感兴趣的读者；希望提升自我认知和生活实践力的所有成年人。要点1：三种人生态度——逐求、厌离、郑重。梁漱溟将人生态度分为三种，并认为这是理解人生哲学的钥匙。郑重（整合层面）：对应维克多·弗兰克尔在《活出生命的意义》中提出的“意义疗法”——在承受苦难、经历厌离后，人仍有选择自己态度的自由，从而“自觉地尽力量去生活”", "keywords": ["逐求", "厌离", "郑重", "做法", "自觉即人性", "人生态度", "思与省"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/深思与省悟"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/成功与失败的本质.md"}, {"id": "生存与学习.md", "label": "生存与学习", "title": "生存与学习", "type": "book", "degree": 8, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：未知（根据内容推断，作者为一位年近七旬、有新疆生活经历、经历“文革”的作家，文风与王蒙先生高度相似，但样本未明确署名）。主题领域：人生哲学、个人成长、生活智慧、文学随笔。“明朗的航行”：作者提出的核心人生境界。生存与学习作为基石与阶梯：“生存”是“学习”的前提和基础，提供了稳固的地面；而“学习”则是“生存”的升华与超越，为生存赋予了更高价值，并提供了应对生存困境（如逆境）的武器。“乐观主义”与“不烦恼”的关联：“不可救药的乐观主义”并非盲目乐观，而是基于对生存现实的清醒认知（苦难不可避免）、对学习力量的坚定信仰（可转化苦难）、以及对个体责任的主动承担（选择革命与承受其后果）", "keywords": ["人欲与天理的辩证", "逆境与学习的互补", "论证中的潜在漏洞", "最有力的论点", "独特的贡献", "完整标题", "论证方法", "比喻论证"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/不烦恼：我的人生哲学_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/生存与学习.md"}, {"id": "艺术与人性.md", "label": "艺术与人性", "title": "艺术与人性", "type": "book", "degree": 2, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：（西）巴勃罗•卡萨尔斯 （美）艾伯特•E.卡恩。核心主题：一位伟大音乐家的人生哲学：艺术与人性密不可分，通过一生对音乐、自然和良知的坚守，诠释了如何将个人意志、精神思想与生命价值融为一体。适合人群：所有对音乐、艺术、人生哲学、个人成长感兴趣的人；正在寻找生命意义、面对人生困境或思考如何坚持信念的人；以及所有希望从一位世纪伟人的经历中汲取智慧和力量的读者。卡萨尔斯的一生是其信念的明证，即“艺术与人性价值密不可分”。卡萨尔斯每日弹奏巴赫、观察大海的行为，完美诠释了心理学家米哈里·契克森米哈赖提出的“心流”状态", "keywords": ["卡萨尔斯", "术与人"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/白鸟之歌"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/艺术与人性.md"}, {"id": "存在主义.md", "label": "存在主义", "title": "存在主义", "type": "book", "degree": 2, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：米奇·阿尔博姆 (Mitch Albom)。核心主题：一位身患绝症的社会学教授莫里·施瓦茨，在生命最后十四个星期里，为他的学生米奇讲授关于人生意义的最后一门课。课程的核心在于探讨如何面对死亡、爱、家庭、衰老、金钱、恐惧等人生终极问题，并最终得出“与生活讲和”和“学会施爱于人并接受爱”的智慧。莫里教授认为，人类文化灌输给我们一种错误观念，即试图逃避衰老和死亡。莫里教授的课程，是一次极其生动的“存在主义心理学”现场教学", "keywords": ["莫里教授", "存在主"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/相约星期二"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/存在主义.md"}, {"id": "人生之旅.md", "label": "人生之旅", "title": "人生之旅", "type": "book", "degree": 8, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "完整标题：人生没有后悔药：死前必须知道的五个秘密。作者：约翰·B.伊佐 (John B. Izzo)。主题领域：人生哲学、积极心理学、灵性成长、个人发展、叙事研究。睿智长者 (Wise Elders)：指那些被他人（尤其是年轻人）认为已经找到人生意义和幸福的年长者（通常超过60岁）。“反思性回顾” 是“睿智长者”之所以能提供智慧的关键认知过程，它将“年长”这一事实转化为“智慧”的源泉", "keywords": ["核心概念如何相互支撑", "方法论的创新", "价值的重申", "完整标题", "社会实践", "对立", "睿智长者", "人生没"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/人生没有后悔药_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/人生之旅.md"}, {"id": "自我认知.md", "label": "自我认知", "title": "自我认知", "type": "book", "degree": 8, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "完整标题：阿兰·德波顿的生活哲学课（套装共5册）之《理想的工作》。作者：阿兰·德波顿（Alain de Botton）及其创办的“人生学校”（The School of Life）。主题领域：人生哲学、职业规划、自我认知、社会心理学。对立：“使命的迷思” vs. “进化，而非革命”（前者追求一次性完美答案，后者主张渐进式调整）；“完美主义陷阱” vs. “足够好的工作”（前者追求绝对理想，后者接受现实限制）。它既提供了“为什么我们会这样”的深刻洞察（如“使命的迷思”），也提供了“那我们该怎么办”的可行路径（如“进化，而非革命”）", "keywords": ["核心概念相互支撑", "对立与互补的概念", "最有力的论点", "使命的迷思", "历史比较法", "完整标题", "理想工作", "论证方法"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/阿兰·德波顿的生活哲学课（套装共5册）_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/自我认知.md"}, {"id": "爱与被爱.md", "label": "爱与被爱", "title": "爱与被爱", "type": "book", "degree": 2, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：米奇·阿尔博姆 (Mitch Albom)。核心主题：一位身患绝症的社会学教授莫里·施瓦茨，在生命最后十四个星期里，为他的学生米奇讲授关于人生意义的最后一门课。课程的核心在于探讨如何面对死亡、爱、家庭、衰老、金钱、恐惧等人生终极问题，并最终得出“与生活讲和”和“学会施爱于人并接受爱”的智慧。适合人群：所有对人生意义感到困惑的人；在快节奏、物质化的社会中感到迷失，渴望寻找内心平静的人；正处于人生低谷或面临重大变故的人；希望提升生命质量和人际关系质量的读者；教师、学生以及所有对临终关怀与生命教育感兴趣的人。莫里教授认为，人类文化灌输给我们一种错误观念，即试图逃避衰老和死亡", "keywords": ["莫里教授", "相约星"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/相约星期二"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/爱与被爱.md"}, {"id": "人欲与天理.md", "label": "人欲与天理", "title": "人欲与天理", "type": "book", "degree": 8, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：未知（根据内容推断，作者为一位年近七旬、有新疆生活经历、经历“文革”的作家，文风与王蒙先生高度相似，但样本未明确署名）。主题领域：人生哲学、个人成长、生活智慧、文学随笔。“明朗的航行”：作者提出的核心人生境界。“乐观主义”与“不烦恼”的关联：“不可救药的乐观主义”并非盲目乐观，而是基于对生存现实的清醒认知（苦难不可避免）、对学习力量的坚定信仰（可转化苦难）、以及对个体责任的主动承担（选择革命与承受其后果）。独特的贡献：本书最独特的贡献在于将宏大的“人生哲学”落脚于最日常、最具体的“生存”和“学习”上", "keywords": ["人欲与天理的辩证", "逆境与学习的互补", "论证中的潜在漏洞", "最有力的论点", "独特的贡献", "完整标题", "论证方法", "比喻论证"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/不烦恼：我的人生哲学_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/人欲与天理.md"}, {"id": "内在个性.md", "label": "内在个性", "title": "内在个性", "type": "book", "degree": 3, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "本书的核心处世智慧在于：人生的幸福根本取决于“人是什么”（即内在个性），而非“人有什么”（外在财富）或“人在他人眼中是什么”（社会评价）。叔本华开宗明义地指出，决定人类命运的根本差别在于三项内容：第一是人的个性（健康、力量、气质、道德品格、智力和教养）；第二是人的财产和占有物；第三是人在他人眼中的形象（荣誉、地位、名声）。其中，第一项具有压倒性的决定性作用——幸福的首要本质要素是人格本身，外在因素对人幸福的影响远不如内在因素重要。叔本华认为，人生幸福不是通过追逐外部资源获得的，而是通过优化自身的内在机制（认知、情感、欲望模式）来实现的。叔本华引用了亚里士多德的三分法并加以改造，强调人的健康、气", "keywords": ["叔本华", "斯多葛", "内在个性"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/人生的智慧：如何才能幸福度过一生_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/内在个性.md"}, {"id": "存在主义心理学.md", "label": "存在主义心理学", "title": "存在主义心理学", "type": "book", "degree": 2, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：米奇·阿尔博姆 (Mitch Albom)。核心主题：一位身患绝症的社会学教授莫里·施瓦茨，在生命最后十四个星期里，为他的学生米奇讲授关于人生意义的最后一门课。课程的核心在于探讨如何面对死亡、爱、家庭、衰老、金钱、恐惧等人生终极问题，并最终得出“与生活讲和”和“学会施爱于人并接受爱”的智慧。莫里教授的课程，是一次极其生动的“存在主义心理学”现场教学。存在主义心理学关注死亡、自由、孤独、无意义等终极关怀", "keywords": ["莫里教授", "存在主"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/相约星期二"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/存在主义心理学.md"}, {"id": "祸福相依.md", "label": "祸福相依", "title": "祸福相依", "type": "book", "degree": 4, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "核心主题：以一位九十多岁老人的毕生阅历，探讨人生的本质、意义与价值，强调“不完满才是人生”的平凡真理，并倡导以责任感、宽容与智慧面对命运的无常与世态的炎凉。适合人群：处于人生迷茫期或中年危机的读者；对人生哲学、传统文化感兴趣的学者与爱好者；希望从智者经验中获得处世智慧与心灵慰藉的普通人。要点1：人生本质——“不完满”与“被动性”。季羡林指出，人生本质上是“不完满”的，且人的诞生、成长与死亡都是被动的。针对“人生意义”这一哲学难题，季羡林提出务实而深刻的见解：人生的意义不在于个人享乐或功成名就，而在于对人类发展的“承上启下、承前启后的责任感”", "keywords": ["季羡林", "不完满", "阅世心", "世心语"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/阅世心语"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/祸福相依.md"}, {"id": "痛苦本质.md", "label": "痛苦本质", "title": "痛苦本质", "type": "book", "degree": 4, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "本书的核心处世智慧在于：人生的幸福根本取决于“人是什么”（即内在个性），而非“人有什么”（外在财富）或“人在他人眼中是什么”（社会评价）。叔本华开宗明义地指出，决定人类命运的根本差别在于三项内容：第一是人的个性（健康、力量、气质、道德品格、智力和教养）；第二是人的财产和占有物；第三是人在他人眼中的形象（荣誉、地位、名声）。其中，第一项具有压倒性的决定性作用——幸福的首要本质要素是人格本身，外在因素对人幸福的影响远不如内在因素重要。叔本华认为，人生幸福不是通过追逐外部资源获得的，而是通过优化自身的内在机制（认知、情感、欲望模式）来实现的。叔本华引用了亚里士多德的三分法并加以改造，强调人的健康、气", "keywords": ["叔本华", "斯多葛", "痛苦本", "苦本质"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/人生的智慧：如何才能幸福度过一生_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/痛苦本质.md"}, {"id": "老年智慧.md", "label": "老年智慧", "title": "老年智慧", "type": "book", "degree": 4, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "核心主题：以一位九十多岁老人的毕生阅历，探讨人生的本质、意义与价值，强调“不完满才是人生”的平凡真理，并倡导以责任感、宽容与智慧面对命运的无常与世态的炎凉。适合人群：处于人生迷茫期或中年危机的读者；对人生哲学、传统文化感兴趣的学者与爱好者；希望从智者经验中获得处世智慧与心灵慰藉的普通人。要点1：人生本质——“不完满”与“被动性”。季羡林指出，人生本质上是“不完满”的，且人的诞生、成长与死亡都是被动的。针对“人生意义”这一哲学难题，季羡林提出务实而深刻的见解：人生的意义不在于个人享乐或功成名就，而在于对人类发展的“承上启下、承前启后的责任感”", "keywords": ["季羡林", "不完满", "阅世心", "世心语"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/阅世心语"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/老年智慧.md"}, {"id": "世态炎凉.md", "label": "世态炎凉", "title": "世态炎凉", "type": "book", "degree": 4, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "核心主题：以一位九十多岁老人的毕生阅历，探讨人生的本质、意义与价值，强调“不完满才是人生”的平凡真理，并倡导以责任感、宽容与智慧面对命运的无常与世态的炎凉。适合人群：处于人生迷茫期或中年危机的读者；对人生哲学、传统文化感兴趣的学者与爱好者；希望从智者经验中获得处世智慧与心灵慰藉的普通人。要点1：人生本质——“不完满”与“被动性”。季羡林指出，人生本质上是“不完满”的，且人的诞生、成长与死亡都是被动的。针对“人生意义”这一哲学难题，季羡林提出务实而深刻的见解：人生的意义不在于个人享乐或功成名就，而在于对人类发展的“承上启下、承前启后的责任感”", "keywords": ["季羡林", "不完满", "世态炎", "态炎凉"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/阅世心语"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/世态炎凉.md"}, {"id": "与生活讲和.md", "label": "与生活讲和", "title": "与生活讲和", "type": "book", "degree": 2, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：米奇·阿尔博姆 (Mitch Albom)。核心主题：一位身患绝症的社会学教授莫里·施瓦茨，在生命最后十四个星期里，为他的学生米奇讲授关于人生意义的最后一门课。课程的核心在于探讨如何面对死亡、爱、家庭、衰老、金钱、恐惧等人生终极问题，并最终得出“与生活讲和”和“学会施爱于人并接受爱”的智慧。适合人群：所有对人生意义感到困惑的人；在快节奏、物质化的社会中感到迷失，渴望寻找内心平静的人；正处于人生低谷或面临重大变故的人；希望提升生命质量和人际关系质量的读者；教师、学生以及所有对临终关怀与生命教育感兴趣的人。莫里教授认为，人类文化灌输给我们一种错误观念，即试图逃避衰老和死亡", "keywords": ["莫里教授", "相约星"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/相约星期二"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/与生活讲和.md"}, {"id": "睿智长者.md", "label": "睿智长者", "title": "睿智长者", "type": "book", "degree": 8, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "完整标题：人生没有后悔药：死前必须知道的五个秘密。作者：约翰·B.伊佐 (John B. Izzo)。主题领域：人生哲学、积极心理学、灵性成长、个人发展、叙事研究。睿智长者 (Wise Elders)：指那些被他人（尤其是年轻人）认为已经找到人生意义和幸福的年长者（通常超过60岁）。“反思性回顾” 是“睿智长者”之所以能提供智慧的关键认知过程，它将“年长”这一事实转化为“智慧”的源泉", "keywords": ["核心概念如何相互支撑", "方法论的创新", "价值的重申", "完整标题", "社会实践", "睿智长者", "对立", "人生没"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/人生没有后悔药_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/睿智长者.md"}, {"id": "三种人生态度.md", "label": "三种人生态度", "title": "三种人生态度", "type": "book", "degree": 7, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "核心主题：通过个人经历与哲学思辨，探讨人生态度的三种境界（逐求、厌离、郑重），并阐明道德的本质是生命的和谐与人生的艺术，引导读者在反省中实现人格的自觉与向上。适合人群：处于人生迷茫期、寻求生命意义与道德真谛的青年；对儒家思想、人生哲学感兴趣的读者；希望提升自我认知和生活实践力的所有成年人。要点1：三种人生态度——逐求、厌离、郑重。梁漱溟将人生态度分为三种，并认为这是理解人生哲学的钥匙。梁漱溟提出的“逐求→厌离→郑重”路径，与心理学中的“认知-情感-行为”模型及存在主义哲学有深刻共鸣", "keywords": ["逐求", "厌离", "郑重", "做法", "自觉即人性", "人生态度", "思与省"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/深思与省悟"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/三种人生态度.md"}, {"id": "幸福源于心态.md", "label": "幸福源于心态", "title": "幸福源于心态", "type": "book", "degree": 2, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：延参法师, ePUBw.COM。核心主题：探讨如何在平凡生活中发现幸福、修炼心态、珍惜当下，以幽默与豁达应对人生起伏，强调生命的尊严与责任。适合人群：对生活感到迷茫或焦虑的年轻人；希望提升心理韧性和幸福感的普通读者；关注人生智慧与心灵成长的爱好者。人生短暂（“人生就像一杯水，洒在地上转瞬间就和泥土化为一体”），作者强调应主动表达爱意、抓住机会，避免因拖延或沉默留下悔恨。通过感恩，能将负面经历转化为成长养分，从而“在逆境里学会坚强，在顺境里享受快乐”", "keywords": ["寻常那些", "那些往"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/寻常那些往来"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/幸福源于心态.md"}, {"id": "幽默智慧.md", "label": "幽默智慧", "title": "幽默智慧", "type": "book", "degree": 2, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：延参法师, ePUBw.COM。核心主题：探讨如何在平凡生活中发现幸福、修炼心态、珍惜当下，以幽默与豁达应对人生起伏，强调生命的尊严与责任。适合人群：对生活感到迷茫或焦虑的年轻人；希望提升心理韧性和幸福感的普通读者；关注人生智慧与心灵成长的爱好者。人生短暂（“人生就像一杯水，洒在地上转瞬间就和泥土化为一体”），作者强调应主动表达爱意、抓住机会，避免因拖延或沉默留下悔恨。通过感恩，能将负面经历转化为成长养分，从而“在逆境里学会坚强，在顺境里享受快乐”", "keywords": ["寻常那些", "那些往"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/寻常那些往来"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/幽默智慧.md"}, {"id": "足够好的工作.md", "label": "足够好的工作", "title": "足够好的工作", "type": "book", "degree": 8, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "完整标题：阿兰·德波顿的生活哲学课（套装共5册）之《理想的工作》。作者：阿兰·德波顿（Alain de Botton）及其创办的“人生学校”（The School of Life）。主题领域：人生哲学、职业规划、自我认知、社会心理学。对立：“使命的迷思” vs. “进化，而非革命”（前者追求一次性完美答案，后者主张渐进式调整）；“完美主义陷阱” vs. “足够好的工作”（前者追求绝对理想，后者接受现实限制）。它既提供了“为什么我们会这样”的深刻洞察（如“使命的迷思”），也提供了“那我们该怎么办”的可行路径（如“进化，而非革命”）", "keywords": ["核心概念相互支撑", "对立与互补的概念", "最有力的论点", "使命的迷思", "历史比较法", "完整标题", "理想工作", "论证方法"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/阿兰·德波顿的生活哲学课（套装共5册）_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/足够好的工作.md"}, {"id": "祸福相依的辩证观.md", "label": "祸福相依的辩证观", "title": "祸福相依的辩证观", "type": "book", "degree": 4, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "核心主题：以一位九十多岁老人的毕生阅历，探讨人生的本质、意义与价值，强调“不完满才是人生”的平凡真理，并倡导以责任感、宽容与智慧面对命运的无常与世态的炎凉。适合人群：处于人生迷茫期或中年危机的读者；对人生哲学、传统文化感兴趣的学者与爱好者；希望从智者经验中获得处世智慧与心灵慰藉的普通人。要点1：人生本质——“不完满”与“被动性”。季羡林指出，人生本质上是“不完满”的，且人的诞生、成长与死亡都是被动的。针对“人生意义”这一哲学难题，季羡林提出务实而深刻的见解：人生的意义不在于个人享乐或功成名就，而在于对人类发展的“承上启下、承前启后的责任感”", "keywords": ["季羡林", "不完满", "阅世心", "世心语"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/阅世心语"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/祸福相依的辩证观.md"}, {"id": "生命责任.md", "label": "生命责任", "title": "生命责任", "type": "book", "degree": 2, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：延参法师, ePUBw.COM。核心主题：探讨如何在平凡生活中发现幸福、修炼心态、珍惜当下，以幽默与豁达应对人生起伏，强调生命的尊严与责任。适合人群：对生活感到迷茫或焦虑的年轻人；希望提升心理韧性和幸福感的普通读者；关注人生智慧与心灵成长的爱好者。人生短暂（“人生就像一杯水，洒在地上转瞬间就和泥土化为一体”），作者强调应主动表达爱意、抓住机会，避免因拖延或沉默留下悔恨。通过感恩，能将负面经历转化为成长养分，从而“在逆境里学会坚强，在顺境里享受快乐”", "keywords": ["寻常那些", "那些往"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/寻常那些往来"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/生命责任.md"}, {"id": "工作与专注.md", "label": "工作与专注", "title": "工作与专注", "type": "book", "degree": 2, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：（西）巴勃罗•卡萨尔斯 （美）艾伯特•E.卡恩。核心主题：一位伟大音乐家的人生哲学：艺术与人性密不可分，通过一生对音乐、自然和良知的坚守，诠释了如何将个人意志、精神思想与生命价值融为一体。适合人群：所有对音乐、艺术、人生哲学、个人成长感兴趣的人；正在寻找生命意义、面对人生困境或思考如何坚持信念的人；以及所有希望从一位世纪伟人的经历中汲取智慧和力量的读者。” 他每日以相同方式开启新的一天（弹奏巴赫），但这并非机械性例行公事，而是每日不。卡萨尔斯每日弹奏巴赫、观察大海的行为，完美诠释了心理学家米哈里·契克森米哈赖提出的“心流”状态", "keywords": ["卡萨尔斯", "弹奏巴"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/白鸟之歌"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/工作与专注.md"}, {"id": "明朗的航行.md", "label": "明朗的航行", "title": "明朗的航行", "type": "book", "degree": 8, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：未知（根据内容推断，作者为一位年近七旬、有新疆生活经历、经历“文革”的作家，文风与王蒙先生高度相似，但样本未明确署名）。主题领域：人生哲学、个人成长、生活智慧、文学随笔。“明朗的航行”：作者提出的核心人生境界。这为“明朗的航行”提供了内在动力。“乐观主义”与“不烦恼”的关联：“不可救药的乐观主义”并非盲目乐观，而是基于对生存现实的清醒认知（苦难不可避免）、对学习力量的坚定信仰（可转化苦难）、以及对个体责任的主动承担（选择革命与承受其后果）", "keywords": ["人欲与天理的辩证", "逆境与学习的互补", "论证中的潜在漏洞", "最有力的论点", "独特的贡献", "完整标题", "论证方法", "比喻论证"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/不烦恼：我的人生哲学_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/明朗的航行.md"}, {"id": "使命的迷思.md", "label": "使命的迷思", "title": "使命的迷思", "type": "book", "degree": 8, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "完整标题：阿兰·德波顿的生活哲学课（套装共5册）之《理想的工作》。作者：阿兰·德波顿（Alain de Botton）及其创办的“人生学校”（The School of Life）。主题领域：人生哲学、职业规划、自我认知、社会心理学。对立：“使命的迷思” vs. “进化，而非革命”（前者追求一次性完美答案，后者主张渐进式调整）；“完美主义陷阱” vs. “足够好的工作”（前者追求绝对理想，后者接受现实限制）。它既提供了“为什么我们会这样”的深刻洞察（如“使命的迷思”），也提供了“那我们该怎么办”的可行路径（如“进化，而非革命”）", "keywords": ["核心概念相互支撑", "对立与互补的概念", "最有力的论点", "使命的迷思", "历史比较法", "完整标题", "理想工作", "使命的迷思"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/阿兰·德波顿的生活哲学课（套装共5册）_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/使命的迷思.md"}, {"id": "感恩.md", "label": "感恩", "title": "感恩", "type": "book", "degree": 2, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：延参法师, ePUBw.COM。核心主题：探讨如何在平凡生活中发现幸福、修炼心态、珍惜当下，以幽默与豁达应对人生起伏，强调生命的尊严与责任。适合人群：对生活感到迷茫或焦虑的年轻人；希望提升心理韧性和幸福感的普通读者；关注人生智慧与心灵成长的爱好者。人生短暂（“人生就像一杯水，洒在地上转瞬间就和泥土化为一体”），作者强调应主动表达爱意、抓住机会，避免因拖延或沉默留下悔恨。通过感恩，能将负面经历转化为成长养分，从而“在逆境里学会坚强，在顺境里享受快乐”", "keywords": ["寻常那些", "那些往"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/寻常那些往来"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/感恩.md"}, {"id": "道德.md", "label": "道德", "title": "道德", "type": "book", "degree": 4, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "核心主题：本书探讨了人生的不完满本质、意义与价值，以及如何通过理解“真糊涂”与“假糊涂”、培养责任感和容忍等美德，来获得内心的平静与智慧，从而过好这一生。适合人群：对人生意义感到困惑的年轻人；在生活、工作中感到焦虑和浮躁的成年人；希望从智者处获得人生智慧与慰藉的中老年人；对东方哲学和人生思考感兴趣的读者。作者开宗明义地指出，一个百分之百完满的人生是不存在的。但他强调，如果人生真有意义与价值，其核心就在于对人类发展的“承上启下、承前启后的责任感”。“假糊涂”则是在洞悉世事真相（如官场黑暗、社会不公）后，为了生存或坚守原则而被迫装糊涂，这种状态是痛苦的、艰难的，才是真正的“难得”", "keywords": ["责任感", "假糊涂", "好这一", "这一生"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/过好这一生"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/道德.md"}, {"id": "极致与审慎.md", "label": "极致与审慎", "title": "极致与审慎", "type": "book", "degree": 2, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：（西）巴勃罗•卡萨尔斯 （美）艾伯特•E.卡恩。核心主题：一位伟大音乐家的人生哲学：艺术与人性密不可分，通过一生对音乐、自然和良知的坚守，诠释了如何将个人意志、精神思想与生命价值融为一体。适合人群：所有对音乐、艺术、人生哲学、个人成长感兴趣的人；正在寻找生命意义、面对人生困境或思考如何坚持信念的人；以及所有希望从一位世纪伟人的经历中汲取智慧和力量的读者。卡萨尔斯的一生是其信念的明证，即“艺术与人性价值密不可分”。卡萨尔斯每日弹奏巴赫、观察大海的行为，完美诠释了心理学家米哈里·契克森米哈赖提出的“心流”状态", "keywords": ["卡萨尔斯", "弹奏巴"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/白鸟之歌"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/极致与审慎.md"}, {"id": "不完满才是人生.md", "label": "不完满才是人生", "title": "不完满才是人生", "type": "book", "degree": 4, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "核心主题：本书探讨了人生的不完满本质、意义与价值，以及如何通过理解“真糊涂”与“假糊涂”、培养责任感和容忍等美德，来获得内心的平静与智慧，从而过好这一生。适合人群：对人生意义感到困惑的年轻人；在生活、工作中感到焦虑和浮躁的成年人；希望从智者处获得人生智慧与慰藉的中老年人；对东方哲学和人生思考感兴趣的读者。作者开宗明义地指出，一个百分之百完满的人生是不存在的。“假糊涂”则是在洞悉世事真相（如官场黑暗、社会不公）后，为了生存或坚守原则而被迫装糊涂，这种状态是痛苦的、艰难的，才是真正的“难得”。可以默念季老的话：“不完满才是人生”", "keywords": ["责任感", "不完满", "假糊涂", "真糊涂"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/过好这一生"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/不完满才是人生.md"}, {"id": "简单与敬畏.md", "label": "简单与敬畏", "title": "简单与敬畏", "type": "book", "degree": 2, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：（西）巴勃罗•卡萨尔斯 （美）艾伯特•E.卡恩。核心主题：一位伟大音乐家的人生哲学：艺术与人性密不可分，通过一生对音乐、自然和良知的坚守，诠释了如何将个人意志、精神思想与生命价值融为一体。适合人群：所有对音乐、艺术、人生哲学、个人成长感兴趣的人；正在寻找生命意义、面对人生困境或思考如何坚持信念的人；以及所有希望从一位世纪伟人的经历中汲取智慧和力量的读者。卡萨尔斯的一生是其信念的明证，即“艺术与人性价值密不可分”。卡萨尔斯每日弹奏巴赫、观察大海的行为，完美诠释了心理学家米哈里·契克森米哈赖提出的“心流”状态", "keywords": ["卡萨尔斯", "弹奏巴"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/白鸟之歌"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/简单与敬畏.md"}, {"id": "生命意义.md", "label": "生命意义", "title": "生命意义", "type": "book", "degree": 2, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：米奇·阿尔博姆 (Mitch Albom)。核心主题：一位身患绝症的社会学教授莫里·施瓦茨，在生命最后十四个星期里，为他的学生米奇讲授关于人生意义的最后一门课。课程的核心在于探讨如何面对死亡、爱、家庭、衰老、金钱、恐惧等人生终极问题，并最终得出“与生活讲和”和“学会施爱于人并接受爱”的智慧。适合人群：所有对人生意义感到困惑的人；在快节奏、物质化的社会中感到迷失，渴望寻找内心平静的人；正处于人生低谷或面临重大变故的人；希望提升生命质量和人际关系质量的读者；教师、学生以及所有对临终关怀与生命教育感兴趣的人。莫里教授认为，人类文化灌输给我们一种错误观念，即试图逃避衰老和死亡", "keywords": ["莫里教授", "相约星"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/相约星期二"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/生命意义.md"}, {"id": "人生意义.md", "label": "人生意义", "title": "人生意义", "type": "book", "degree": 8, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "完整标题：人生没有后悔药：死前必须知道的五个秘密。作者：约翰·B.伊佐 (John B. Izzo)。主题领域：人生哲学、积极心理学、灵性成长、个人发展、叙事研究。睿智长者 (Wise Elders)：指那些被他人（尤其是年轻人）认为已经找到人生意义和幸福的年长者（通常超过60岁）。“反思性回顾” 是“睿智长者”之所以能提供智慧的关键认知过程，它将“年长”这一事实转化为“智慧”的源泉", "keywords": ["核心概念如何相互支撑", "方法论的创新", "价值的重申", "完整标题", "社会实践", "对立", "睿智长者", "人生意"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/人生没有后悔药_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/人生意义.md"}, {"id": "假糊涂.md", "label": "假糊涂", "title": "假糊涂", "type": "book", "degree": 4, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "核心主题：本书探讨了人生的不完满本质、意义与价值，以及如何通过理解“真糊涂”与“假糊涂”、培养责任感和容忍等美德，来获得内心的平静与智慧，从而过好这一生。适合人群：对人生意义感到困惑的年轻人；在生活、工作中感到焦虑和浮躁的成年人；希望从智者处获得人生智慧与慰藉的中老年人；对东方哲学和人生思考感兴趣的读者。作者开宗明义地指出，一个百分之百完满的人生是不存在的。但他强调，如果人生真有意义与价值，其核心就在于对人类发展的“承上启下、承前启后的责任感”。“假糊涂”则是在洞悉世事真相（如官场黑暗、社会不公）后，为了生存或坚守原则而被迫装糊涂，这种状态是痛苦的、艰难的，才是真正的“难得”", "keywords": ["责任感", "假糊涂", "好这一", "这一生"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/过好这一生"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/假糊涂.md"}, {"id": "逆境中的学习.md", "label": "逆境中的学习", "title": "逆境中的学习", "type": "book", "degree": 8, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：未知（根据内容推断，作者为一位年近七旬、有新疆生活经历、经历“文革”的作家，文风与王蒙先生高度相似，但样本未明确署名）。主题领域：人生哲学、个人成长、生活智慧、文学随笔。“明朗的航行”：作者提出的核心人生境界。“乐观主义”与“不烦恼”的关联：“不可救药的乐观主义”并非盲目乐观，而是基于对生存现实的清醒认知（苦难不可避免）、对学习力量的坚定信仰（可转化苦难）、以及对个体责任的主动承担（选择革命与承受其后果）。应对挫折：当遭遇失业、失恋、疾病等个人逆境时，可将“逆境中的学习”理念付诸实践", "keywords": ["人欲与天理的辩证", "逆境与学习的互补", "论证中的潜在漏洞", "最有力的论点", "独特的贡献", "完整标题", "论证方法", "比喻论证"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/不烦恼：我的人生哲学_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/逆境中的学习.md"}, {"id": "施爱于人并接受爱.md", "label": "施爱于人并接受爱", "title": "施爱于人并接受爱", "type": "book", "degree": 2, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：米奇·阿尔博姆 (Mitch Albom)。核心主题：一位身患绝症的社会学教授莫里·施瓦茨，在生命最后十四个星期里，为他的学生米奇讲授关于人生意义的最后一门课。课程的核心在于探讨如何面对死亡、爱、家庭、衰老、金钱、恐惧等人生终极问题，并最终得出“与生活讲和”和“学会施爱于人并接受爱”的智慧。莫里教授认为，人类文化灌输给我们一种错误观念，即试图逃避衰老和死亡。要点2：人生最重要的是学会如何施爱于人，并去接受爱", "keywords": ["莫里教授", "施爱于"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/相约星期二"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/施爱于人并接受爱.md"}, {"id": "不可救药的乐观主义.md", "label": "不可救药的乐观主义", "title": "不可救药的乐观主义", "type": "book", "degree": 8, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：未知（根据内容推断，作者为一位年近七旬、有新疆生活经历、经历“文革”的作家，文风与王蒙先生高度相似，但样本未明确署名）。主题领域：人生哲学、个人成长、生活智慧、文学随笔。“明朗的航行”：作者提出的核心人生境界。“乐观主义”与“不烦恼”的关联：“不可救药的乐观主义”并非盲目乐观，而是基于对生存现实的清醒认知（苦难不可避免）、对学习力量的坚定信仰（可转化苦难）、以及对个体责任的主动承担（选择革命与承受其后果）。独特的贡献：本书最独特的贡献在于将宏大的“人生哲学”落脚于最日常、最具体的“生存”和“学习”上", "keywords": ["人欲与天理的辩证", "逆境与学习的互补", "论证中的潜在漏洞", "最有力的论点", "独特的贡献", "完整标题", "论证方法", "比喻论证"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/不烦恼：我的人生哲学_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/不可救药的乐观主义.md"}, {"id": "理想工作.md", "label": "理想工作", "title": "理想工作", "type": "book", "degree": 8, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "完整标题：阿兰·德波顿的生活哲学课（套装共5册）之《理想的工作》。作者：阿兰·德波顿（Alain de Botton）及其创办的“人生学校”（The School of Life）。主题领域：人生哲学、职业规划、自我认知、社会心理学。对立：“使命的迷思” vs. “进化，而非革命”（前者追求一次性完美答案，后者主张渐进式调整）；“完美主义陷阱” vs. “足够好的工作”（前者追求绝对理想，后者接受现实限制）。它既提供了“为什么我们会这样”的深刻洞察（如“使命的迷思”），也提供了“那我们该怎么办”的可行路径（如“进化，而非革命”）", "keywords": ["核心概念相互支撑", "对立与互补的概念", "最有力的论点", "使命的迷思", "历史比较法", "完整标题", "理想工作", "论证方法"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/阿兰·德波顿的生活哲学课（套装共5册）_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/理想工作.md"}, {"id": "智慧.md", "label": "智慧", "title": "智慧", "type": "book", "degree": 8, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "完整标题：人生没有后悔药：死前必须知道的五个秘密。作者：约翰·B.伊佐 (John B. Izzo)。主题领域：人生哲学、积极心理学、灵性成长、个人发展、叙事研究。睿智长者 (Wise Elders)：指那些被他人（尤其是年轻人）认为已经找到人生意义和幸福的年长者（通常超过60岁）。“反思性回顾” 是“睿智长者”之所以能提供智慧的关键认知过程，它将“年长”这一事实转化为“智慧”的源泉", "keywords": ["核心概念如何相互支撑", "方法论的创新", "价值的重申", "完整标题", "社会实践", "对立", "睿智长者", "人生没"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/人生没有后悔药_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/智慧.md"}, {"id": "承前启后的责任感.md", "label": "承前启后的责任感", "title": "承前启后的责任感", "type": "book", "degree": 4, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "核心主题：以一位九十多岁老人的毕生阅历，探讨人生的本质、意义与价值，强调“不完满才是人生”的平凡真理，并倡导以责任感、宽容与智慧面对命运的无常与世态的炎凉。适合人群：处于人生迷茫期或中年危机的读者；对人生哲学、传统文化感兴趣的学者与爱好者；希望从智者经验中获得处世智慧与心灵慰藉的普通人。要点1：人生本质——“不完满”与“被动性”。针对“人生意义”这一哲学难题，季羡林提出务实而深刻的见解：人生的意义不在于个人享乐或功成名就，而在于对人类发展的“承上启下、承前启后的责任感”。参照季羡林“承前启后”的责任观，定期（如每季度）问自己三个问题：①我当前的工作/学习为下一代留下了什么", "keywords": ["季羡林", "不完满", "责任感", "承前启"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/阅世心语"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/承前启后的责任感.md"}, {"id": "道德即生命和谐.md", "label": "道德即生命和谐", "title": "道德即生命和谐", "type": "book", "degree": 7, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "核心主题：通过个人经历与哲学思辨，探讨人生态度的三种境界（逐求、厌离、郑重），并阐明道德的本质是生命的和谐与人生的艺术，引导读者在反省中实现人格的自觉与向上。适合人群：处于人生迷茫期、寻求生命意义与道德真谛的青年；对儒家思想、人生哲学感兴趣的读者；希望提升自我认知和生活实践力的所有成年人。要点1：三种人生态度——逐求、厌离、郑重。梁漱溟将人生态度分为三种，并认为这是理解人生哲学的钥匙。梁漱溟提出的“逐求→厌离→郑重”路径，与心理学中的“认知-情感-行为”模型及存在主义哲学有深刻共鸣", "keywords": ["逐求", "厌离", "郑重", "做法", "自觉即人性", "人生态度", "思与省"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/深思与省悟"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/道德即生命和谐.md"}, {"id": "容忍.md", "label": "容忍", "title": "容忍", "type": "book", "degree": 4, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "核心主题：本书探讨了人生的不完满本质、意义与价值，以及如何通过理解“真糊涂”与“假糊涂”、培养责任感和容忍等美德，来获得内心的平静与智慧，从而过好这一生。适合人群：对人生意义感到困惑的年轻人；在生活、工作中感到焦虑和浮躁的成年人；希望从智者处获得人生智慧与慰藉的中老年人；对东方哲学和人生思考感兴趣的读者。作者开宗明义地指出，一个百分之百完满的人生是不存在的。但他强调，如果人生真有意义与价值，其核心就在于对人类发展的“承上启下、承前启后的责任感”。“假糊涂”则是在洞悉世事真相（如官场黑暗、社会不公）后，为了生存或坚守原则而被迫装糊涂，这种状态是痛苦的、艰难的，才是真正的“难得”", "keywords": ["责任感", "假糊涂", "好这一", "这一生"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/过好这一生"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/容忍.md"}, {"id": "老年智慧与豁达.md", "label": "老年智慧与豁达", "title": "老年智慧与豁达", "type": "book", "degree": 4, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "核心主题：以一位九十多岁老人的毕生阅历，探讨人生的本质、意义与价值，强调“不完满才是人生”的平凡真理，并倡导以责任感、宽容与智慧面对命运的无常与世态的炎凉。适合人群：处于人生迷茫期或中年危机的读者；对人生哲学、传统文化感兴趣的学者与爱好者；希望从智者经验中获得处世智慧与心灵慰藉的普通人。要点1：人生本质——“不完满”与“被动性”。季羡林指出，人生本质上是“不完满”的，且人的诞生、成长与死亡都是被动的。针对“人生意义”这一哲学难题，季羡林提出务实而深刻的见解：人生的意义不在于个人享乐或功成名就，而在于对人类发展的“承上启下、承前启后的责任感”", "keywords": ["季羡林", "不完满", "阅世心", "世心语"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/阅世心语"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/老年智慧与豁达.md"}, {"id": "冒充者综合征.md", "label": "冒充者综合征", "title": "冒充者综合征", "type": "book", "degree": 8, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "完整标题：阿兰·德波顿的生活哲学课（套装共5册）之《理想的工作》。作者：阿兰·德波顿（Alain de Botton）及其创办的“人生学校”（The School of Life）。主题领域：人生哲学、职业规划、自我认知、社会心理学。同时，大量运用心理学概念（如“冒充者综合征”、“完美主义”）来剖析现代职场人的内心困境。社会实践：教育机构可以将本书内容融入职业生涯规划课程，帮助学生理解“热爱工作”的复杂性，并教授他们如何识别“完美主义陷阱”和“冒充者综合征”，培养更健康的职业观", "keywords": ["核心概念相互支撑", "对立与互补的概念", "最有力的论点", "使命的迷思", "历史比较法", "完整标题", "理想工作", "论证方法"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/阿兰·德波顿的生活哲学课（套装共5册）_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/冒充者综合征.md"}, {"id": "向内求.md", "label": "向内求", "title": "向内求", "type": "book", "degree": 4, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "本书的核心处世智慧在于：人生的幸福根本取决于“人是什么”（即内在个性），而非“人有什么”（外在财富）或“人在他人眼中是什么”（社会评价）。叔本华开宗明义地指出，决定人类命运的根本差别在于三项内容：第一是人的个性（健康、力量、气质、道德品格、智力和教养）；第二是人的财产和占有物；第三是人在他人眼中的形象（荣誉、地位、名声）。其中，第一项具有压倒性的决定性作用——幸福的首要本质要素是人格本身，外在因素对人幸福的影响远不如内在因素重要。叔本华认为，人生幸福不是通过追逐外部资源获得的，而是通过优化自身的内在机制（认知、情感、欲望模式）来实现的。叔本华引用了亚里士多德的三分法并加以改造，强调人的健康、气", "keywords": ["叔本华", "斯多葛", "向内求", "人是什"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/人生的智慧：如何才能幸福度过一生_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/向内求.md"}, {"id": "消费主义批判.md", "label": "消费主义批判", "title": "消费主义批判", "type": "book", "degree": 2, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：米奇·阿尔博姆 (Mitch Albom)。核心主题：一位身患绝症的社会学教授莫里·施瓦茨，在生命最后十四个星期里，为他的学生米奇讲授关于人生意义的最后一门课。课程的核心在于探讨如何面对死亡、爱、家庭、衰老、金钱、恐惧等人生终极问题，并最终得出“与生活讲和”和“学会施爱于人并接受爱”的智慧。莫里教授认为，人类文化灌输给我们一种错误观念，即试图逃避衰老和死亡。莫里教授对“越多越好”文化的批判，与当代社会学对消费主义的反思高度一致", "keywords": ["莫里教授", "消费主"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/相约星期二"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/消费主义批判.md"}, {"id": "死前必须知道的秘密.md", "label": "死前必须知道的秘密", "title": "死前必须知道的秘密", "type": "book", "degree": 8, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "完整标题：人生没有后悔药：死前必须知道的五个秘密。作者：约翰·B.伊佐 (John B. Izzo)。主题领域：人生哲学、积极心理学、灵性成长、个人发展、叙事研究。睿智长者 (Wise Elders)：指那些被他人（尤其是年轻人）认为已经找到人生意义和幸福的年长者（通常超过60岁）。“反思性回顾” 是“睿智长者”之所以能提供智慧的关键认知过程，它将“年长”这一事实转化为“智慧”的源泉", "keywords": ["核心概念如何相互支撑", "方法论的创新", "价值的重申", "完整标题", "社会实践", "对立", "睿智长者", "人生没"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/人生没有后悔药_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/死前必须知道的秘密.md"}, {"id": "痛苦普遍性.md", "label": "痛苦普遍性", "title": "痛苦普遍性", "type": "book", "degree": 3, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "本书的核心处世智慧在于：人生的幸福根本取决于“人是什么”（即内在个性），而非“人有什么”（外在财富）或“人在他人眼中是什么”（社会评价）。叔本华开宗明义地指出，决定人类命运的根本差别在于三项内容：第一是人的个性（健康、力量、气质、道德品格、智力和教养）；第二是人的财产和占有物；第三是人在他人眼中的形象（荣誉、地位、名声）。其中，第一项具有压倒性的决定性作用——幸福的首要本质要素是人格本身，外在因素对人幸福的影响远不如内在因素重要。叔本华认为，人生幸福不是通过追逐外部资源获得的，而是通过优化自身的内在机制（认知、情感、欲望模式）来实现的。叔本华引用了亚里士多德的三分法并加以改造，强调人的健康、气", "keywords": ["叔本华", "斯多葛", "人是什么"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/人生的智慧：如何才能幸福度过一生_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/痛苦普遍性.md"}, {"id": "珍惜当下.md", "label": "珍惜当下", "title": "珍惜当下", "type": "book", "degree": 2, "cluster": "人生哲学", "domain": "哲学", "sub_domain": "人生哲学", "summary": "作者：延参法师, ePUBw.COM。核心主题：探讨如何在平凡生活中发现幸福、修炼心态、珍惜当下，以幽默与豁达应对人生起伏，强调生命的尊严与责任。适合人群：对生活感到迷茫或焦虑的年轻人；希望提升心理韧性和幸福感的普通读者；关注人生智慧与心灵成长的爱好者。人生短暂（“人生就像一杯水，洒在地上转瞬间就和泥土化为一体”），作者强调应主动表达爱意、抓住机会，避免因拖延或沉默留下悔恨。通过感恩，能将负面经历转化为成长养分，从而“在逆境里学会坚强，在顺境里享受快乐”", "keywords": ["寻常那些", "那些往"], "tags": ["domain/哲学", "sub_domain/人生哲学", "type/concept", "source/寻常那些往来"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/哲学/人生哲学/珍惜当下.md"}];
+var LINKS = [{"source": "进化而非革命.md", "target": "生存与学习.md", "value": 2, "shared": ["最有力的论点", "完整标题"]}, {"source": "进化而非革命.md", "target": "自我认知.md", "value": 7, "shared": ["核心概念相互支撑", "使命的迷思", "最有力的论点", "理想工作", "对立与互补的概念"]}, {"source": "进化而非革命.md", "target": "人欲与天理.md", "value": 2, "shared": ["最有力的论点", "完整标题"]}, {"source": "进化而非革命.md", "target": "足够好的工作.md", "value": 7, "shared": ["核心概念相互支撑", "使命的迷思", "最有力的论点", "理想工作", "对立与互补的概念"]}, {"source": "进化而非革命.md", "target": "明朗的航行.md", "value": 2, "shared": ["最有力的论点", "完整标题"]}, {"source": "进化而非革命.md", "target": "使命的迷思.md", "value": 7, "shared": ["核心概念相互支撑", "使命的迷思", "最有力的论点", "理想工作", "对立与互补的概念"]}, {"source": "进化而非革命.md", "target": "逆境中的学习.md", "value": 2, "shared": ["最有力的论点", "完整标题"]}, {"source": "进化而非革命.md", "target": "不可救药的乐观主义.md", "value": 2, "shared": ["最有力的论点", "完整标题"]}, {"source": "进化而非革命.md", "target": "理想工作.md", "value": 7, "shared": ["核心概念相互支撑", "使命的迷思", "最有力的论点", "理想工作", "对立与互补的概念"]}, {"source": "进化而非革命.md", "target": "冒充者综合征.md", "value": 7, "shared": ["核心概念相互支撑", "使命的迷思", "最有力的论点", "理想工作", "对立与互补的概念"]}, {"source": "志气与欲望.md", "target": "自觉力.md", "value": 7, "shared": ["人生态", "相关笔记", "郑重", "逐求", "厌离"]}, {"source": "志气与欲望.md", "target": "成功与失败的本质.md", "value": 5, "shared": ["郑重", "逐求", "厌离", "做法", "自觉即人性"]}, {"source": "志气与欲望.md", "target": "三种人生态度.md", "value": 5, "shared": ["郑重", "逐求", "厌离", "做法", "自觉即人性"]}, {"source": "志气与欲望.md", "target": "道德即生命和谐.md", "value": 5, "shared": ["郑重", "逐求", "厌离", "做法", "自觉即人性"]}, {"source": "幸福哲学.md", "target": "幸福本质.md", "value": 2, "shared": ["相关笔记", "叔本华"]}, {"source": "自觉力.md", "target": "成功与失败的本质.md", "value": 5, "shared": ["郑重", "逐求", "厌离", "做法", "自觉即人性"]}, {"source": "自觉力.md", "target": "三种人生态度.md", "value": 5, "shared": ["郑重", "逐求", "厌离", "做法", "自觉即人性"]}, {"source": "自觉力.md", "target": "道德即生命和谐.md", "value": 5, "shared": ["郑重", "逐求", "厌离", "做法", "自觉即人性"]}, {"source": "世态炎凉的洞明.md", "target": "祸福相依.md", "value": 2, "shared": ["不完满", "季羡林"]}, {"source": "世态炎凉的洞明.md", "target": "老年智慧.md", "value": 2, "shared": ["不完满", "季羡林"]}, {"source": "世态炎凉的洞明.md", "target": "世态炎凉.md", "value": 4, "shared": ["不完满", "季羡林", "世态炎", "态炎凉"]}, {"source": "世态炎凉的洞明.md", "target": "祸福相依的辩证观.md", "value": 2, "shared": ["不完满", "季羡林"]}, {"source": "世态炎凉的洞明.md", "target": "承前启后的责任感.md", "value": 2, "shared": ["不完满", "季羡林"]}, {"source": "世态炎凉的洞明.md", "target": "老年智慧与豁达.md", "value": 2, "shared": ["不完满", "季羡林"]}, {"source": "反思性回顾.md", "target": "人生之旅.md", "value": 7, "shared": ["睿智长者", "核心概念如何相互支撑", "方法论的创新", "社会实践", "价值的重申"]}, {"source": "反思性回顾.md", "target": "睿智长者.md", "value": 7, "shared": ["睿智长者", "核心概念如何相互支撑", "方法论的创新", "社会实践", "价值的重申"]}, {"source": "反思性回顾.md", "target": "人生意义.md", "value": 7, "shared": ["睿智长者", "核心概念如何相互支撑", "方法论的创新", "社会实践", "价值的重申"]}, {"source": "反思性回顾.md", "target": "智慧.md", "value": 7, "shared": ["睿智长者", "核心概念如何相互支撑", "方法论的创新", "社会实践", "价值的重申"]}, {"source": "反思性回顾.md", "target": "死前必须知道的秘密.md", "value": 7, "shared": ["睿智长者", "核心概念如何相互支撑", "方法论的创新", "社会实践", "价值的重申"]}, {"source": "道德与良知.md", "target": "工作与专注.md", "value": 2, "shared": ["弹奏巴", "卡萨尔斯"]}, {"source": "道德与良知.md", "target": "极致与审慎.md", "value": 2, "shared": ["弹奏巴", "卡萨尔斯"]}, {"source": "道德与良知.md", "target": "简单与敬畏.md", "value": 2, "shared": ["弹奏巴", "卡萨尔斯"]}, {"source": "知行鸿沟.md", "target": "内在个性.md", "value": 2, "shared": ["斯多葛", "叔本华"]}, {"source": "知行鸿沟.md", "target": "痛苦本质.md", "value": 2, "shared": ["斯多葛", "叔本华"]}, {"source": "知行鸿沟.md", "target": "向内求.md", "value": 2, "shared": ["斯多葛", "叔本华"]}, {"source": "知行鸿沟.md", "target": "痛苦普遍性.md", "value": 3, "shared": ["斯多葛", "人是什么", "叔本华"]}, {"source": "完美的一天.md", "target": "爱与被爱.md", "value": 2, "shared": ["莫里教授", "相约星"]}, {"source": "完美的一天.md", "target": "与生活讲和.md", "value": 2, "shared": ["莫里教授", "相约星"]}, {"source": "完美的一天.md", "target": "生命意义.md", "value": 2, "shared": ["莫里教授", "相约星"]}, {"source": "容忍与界限.md", "target": "道德.md", "value": 4, "shared": ["责任感", "假糊涂", "好这一", "这一生"]}, {"source": "容忍与界限.md", "target": "不完满才是人生.md", "value": 2, "shared": ["责任感", "假糊涂"]}, {"source": "容忍与界限.md", "target": "假糊涂.md", "value": 4, "shared": ["责任感", "假糊涂", "好这一", "这一生"]}, {"source": "容忍与界限.md", "target": "容忍.md", "value": 4, "shared": ["责任感", "假糊涂", "好这一", "这一生"]}, {"source": "成功与失败的本质.md", "target": "三种人生态度.md", "value": 7, "shared": ["郑重", "人生态度", "厌离", "逐求", "做法"]}, {"source": "成功与失败的本质.md", "target": "道德即生命和谐.md", "value": 7, "shared": ["郑重", "人生态度", "厌离", "逐求", "做法"]}, {"source": "生存与学习.md", "target": "自我认知.md", "value": 3, "shared": ["最有力的论点", "论证方法", "完整标题"]}, {"source": "生存与学习.md", "target": "人欲与天理.md", "value": 8, "shared": ["论证方法", "独特的贡献", "论证中的潜在漏洞", "最有力的论点", "逆境与学习的互补"]}, {"source": "生存与学习.md", "target": "足够好的工作.md", "value": 3, "shared": ["最有力的论点", "论证方法", "完整标题"]}, {"source": "生存与学习.md", "target": "明朗的航行.md", "value": 8, "shared": ["论证方法", "独特的贡献", "论证中的潜在漏洞", "最有力的论点", "逆境与学习的互补"]}, {"source": "生存与学习.md", "target": "使命的迷思.md", "value": 2, "shared": ["最有力的论点", "完整标题"]}, {"source": "生存与学习.md", "target": "逆境中的学习.md", "value": 8, "shared": ["论证方法", "独特的贡献", "论证中的潜在漏洞", "最有力的论点", "逆境与学习的互补"]}, {"source": "生存与学习.md", "target": "不可救药的乐观主义.md", "value": 8, "shared": ["论证方法", "独特的贡献", "论证中的潜在漏洞", "最有力的论点", "逆境与学习的互补"]}, {"source": "生存与学习.md", "target": "理想工作.md", "value": 3, "shared": ["最有力的论点", "论证方法", "完整标题"]}, {"source": "生存与学习.md", "target": "冒充者综合征.md", "value": 3, "shared": ["最有力的论点", "论证方法", "完整标题"]}, {"source": "存在主义.md", "target": "存在主义心理学.md", "value": 2, "shared": ["存在主", "莫里教授"]}, {"source": "人生之旅.md", "target": "睿智长者.md", "value": 8, "shared": ["睿智长者", "人生没", "核心概念如何相互支撑", "方法论的创新", "社会实践"]}, {"source": "人生之旅.md", "target": "人生意义.md", "value": 7, "shared": ["睿智长者", "核心概念如何相互支撑", "方法论的创新", "社会实践", "价值的重申"]}, {"source": "人生之旅.md", "target": "智慧.md", "value": 8, "shared": ["睿智长者", "人生没", "核心概念如何相互支撑", "方法论的创新", "社会实践"]}, {"source": "人生之旅.md", "target": "死前必须知道的秘密.md", "value": 8, "shared": ["睿智长者", "人生没", "核心概念如何相互支撑", "方法论的创新", "社会实践"]}, {"source": "自我认知.md", "target": "人欲与天理.md", "value": 3, "shared": ["最有力的论点", "论证方法", "完整标题"]}, {"source": "自我认知.md", "target": "足够好的工作.md", "value": 8, "shared": ["核心概念相互支撑", "论证方法", "使命的迷思", "最有力的论点", "理想工作"]}, {"source": "自我认知.md", "target": "明朗的航行.md", "value": 3, "shared": ["最有力的论点", "论证方法", "完整标题"]}, {"source": "自我认知.md", "target": "使命的迷思.md", "value": 7, "shared": ["核心概念相互支撑", "使命的迷思", "最有力的论点", "理想工作", "对立与互补的概念"]}, {"source": "自我认知.md", "target": "逆境中的学习.md", "value": 3, "shared": ["最有力的论点", "论证方法", "完整标题"]}, {"source": "自我认知.md", "target": "不可救药的乐观主义.md", "value": 3, "shared": ["最有力的论点", "论证方法", "完整标题"]}, {"source": "自我认知.md", "target": "理想工作.md", "value": 8, "shared": ["核心概念相互支撑", "论证方法", "使命的迷思", "最有力的论点", "理想工作"]}, {"source": "自我认知.md", "target": "冒充者综合征.md", "value": 8, "shared": ["核心概念相互支撑", "论证方法", "使命的迷思", "最有力的论点", "理想工作"]}, {"source": "爱与被爱.md", "target": "与生活讲和.md", "value": 2, "shared": ["莫里教授", "相约星"]}, {"source": "爱与被爱.md", "target": "生命意义.md", "value": 2, "shared": ["莫里教授", "相约星"]}, {"source": "人欲与天理.md", "target": "足够好的工作.md", "value": 3, "shared": ["最有力的论点", "论证方法", "完整标题"]}, {"source": "人欲与天理.md", "target": "明朗的航行.md", "value": 8, "shared": ["论证方法", "独特的贡献", "论证中的潜在漏洞", "最有力的论点", "逆境与学习的互补"]}, {"source": "人欲与天理.md", "target": "使命的迷思.md", "value": 2, "shared": ["最有力的论点", "完整标题"]}, {"source": "人欲与天理.md", "target": "逆境中的学习.md", "value": 8, "shared": ["论证方法", "独特的贡献", "论证中的潜在漏洞", "最有力的论点", "逆境与学习的互补"]}, {"source": "人欲与天理.md", "target": "不可救药的乐观主义.md", "value": 8, "shared": ["论证方法", "独特的贡献", "论证中的潜在漏洞", "最有力的论点", "逆境与学习的互补"]}, {"source": "人欲与天理.md", "target": "理想工作.md", "value": 3, "shared": ["最有力的论点", "论证方法", "完整标题"]}, {"source": "人欲与天理.md", "target": "冒充者综合征.md", "value": 3, "shared": ["最有力的论点", "论证方法", "完整标题"]}, {"source": "内在个性.md", "target": "痛苦本质.md", "value": 2, "shared": ["斯多葛", "叔本华"]}, {"source": "内在个性.md", "target": "向内求.md", "value": 2, "shared": ["斯多葛", "叔本华"]}, {"source": "内在个性.md", "target": "痛苦普遍性.md", "value": 2, "shared": ["斯多葛", "叔本华"]}, {"source": "祸福相依.md", "target": "老年智慧.md", "value": 4, "shared": ["世心语", "不完满", "阅世心", "季羡林"]}, {"source": "祸福相依.md", "target": "世态炎凉.md", "value": 2, "shared": ["不完满", "季羡林"]}, {"source": "祸福相依.md", "target": "祸福相依的辩证观.md", "value": 4, "shared": ["世心语", "不完满", "阅世心", "季羡林"]}, {"source": "祸福相依.md", "target": "承前启后的责任感.md", "value": 2, "shared": ["不完满", "季羡林"]}, {"source": "祸福相依.md", "target": "老年智慧与豁达.md", "value": 4, "shared": ["世心语", "不完满", "阅世心", "季羡林"]}, {"source": "痛苦本质.md", "target": "向内求.md", "value": 2, "shared": ["斯多葛", "叔本华"]}, {"source": "痛苦本质.md", "target": "痛苦普遍性.md", "value": 2, "shared": ["斯多葛", "叔本华"]}, {"source": "老年智慧.md", "target": "世态炎凉.md", "value": 2, "shared": ["不完满", "季羡林"]}, {"source": "老年智慧.md", "target": "祸福相依的辩证观.md", "value": 4, "shared": ["世心语", "不完满", "阅世心", "季羡林"]}, {"source": "老年智慧.md", "target": "承前启后的责任感.md", "value": 2, "shared": ["不完满", "季羡林"]}, {"source": "老年智慧.md", "target": "老年智慧与豁达.md", "value": 4, "shared": ["世心语", "不完满", "阅世心", "季羡林"]}, {"source": "世态炎凉.md", "target": "祸福相依的辩证观.md", "value": 2, "shared": ["不完满", "季羡林"]}, {"source": "世态炎凉.md", "target": "承前启后的责任感.md", "value": 2, "shared": ["不完满", "季羡林"]}, {"source": "世态炎凉.md", "target": "老年智慧与豁达.md", "value": 2, "shared": ["不完满", "季羡林"]}, {"source": "与生活讲和.md", "target": "生命意义.md", "value": 2, "shared": ["莫里教授", "相约星"]}, {"source": "睿智长者.md", "target": "人生意义.md", "value": 7, "shared": ["睿智长者", "核心概念如何相互支撑", "方法论的创新", "社会实践", "价值的重申"]}, {"source": "睿智长者.md", "target": "智慧.md", "value": 8, "shared": ["睿智长者", "人生没", "核心概念如何相互支撑", "方法论的创新", "社会实践"]}, {"source": "睿智长者.md", "target": "死前必须知道的秘密.md", "value": 8, "shared": ["睿智长者", "人生没", "核心概念如何相互支撑", "方法论的创新", "社会实践"]}, {"source": "三种人生态度.md", "target": "道德即生命和谐.md", "value": 7, "shared": ["郑重", "人生态度", "厌离", "逐求", "做法"]}, {"source": "幸福源于心态.md", "target": "幽默智慧.md", "value": 2, "shared": ["那些往", "寻常那些"]}, {"source": "幸福源于心态.md", "target": "生命责任.md", "value": 2, "shared": ["那些往", "寻常那些"]}, {"source": "幸福源于心态.md", "target": "感恩.md", "value": 2, "shared": ["那些往", "寻常那些"]}, {"source": "幸福源于心态.md", "target": "珍惜当下.md", "value": 2, "shared": ["那些往", "寻常那些"]}, {"source": "幽默智慧.md", "target": "生命责任.md", "value": 2, "shared": ["那些往", "寻常那些"]}, {"source": "幽默智慧.md", "target": "感恩.md", "value": 2, "shared": ["那些往", "寻常那些"]}, {"source": "幽默智慧.md", "target": "珍惜当下.md", "value": 2, "shared": ["那些往", "寻常那些"]}, {"source": "足够好的工作.md", "target": "明朗的航行.md", "value": 3, "shared": ["最有力的论点", "论证方法", "完整标题"]}, {"source": "足够好的工作.md", "target": "使命的迷思.md", "value": 7, "shared": ["核心概念相互支撑", "使命的迷思", "最有力的论点", "理想工作", "对立与互补的概念"]}, {"source": "足够好的工作.md", "target": "逆境中的学习.md", "value": 3, "shared": ["最有力的论点", "论证方法", "完整标题"]}, {"source": "足够好的工作.md", "target": "不可救药的乐观主义.md", "value": 3, "shared": ["最有力的论点", "论证方法", "完整标题"]}, {"source": "足够好的工作.md", "target": "理想工作.md", "value": 8, "shared": ["核心概念相互支撑", "论证方法", "使命的迷思", "最有力的论点", "理想工作"]}, {"source": "足够好的工作.md", "target": "冒充者综合征.md", "value": 8, "shared": ["核心概念相互支撑", "论证方法", "使命的迷思", "最有力的论点", "理想工作"]}, {"source": "祸福相依的辩证观.md", "target": "承前启后的责任感.md", "value": 2, "shared": ["不完满", "季羡林"]}, {"source": "祸福相依的辩证观.md", "target": "老年智慧与豁达.md", "value": 4, "shared": ["世心语", "不完满", "阅世心", "季羡林"]}, {"source": "生命责任.md", "target": "感恩.md", "value": 2, "shared": ["那些往", "寻常那些"]}, {"source": "生命责任.md", "target": "珍惜当下.md", "value": 2, "shared": ["那些往", "寻常那些"]}, {"source": "工作与专注.md", "target": "极致与审慎.md", "value": 2, "shared": ["弹奏巴", "卡萨尔斯"]}, {"source": "工作与专注.md", "target": "简单与敬畏.md", "value": 2, "shared": ["弹奏巴", "卡萨尔斯"]}, {"source": "明朗的航行.md", "target": "使命的迷思.md", "value": 2, "shared": ["最有力的论点", "完整标题"]}, {"source": "明朗的航行.md", "target": "逆境中的学习.md", "value": 8, "shared": ["论证方法", "独特的贡献", "论证中的潜在漏洞", "最有力的论点", "逆境与学习的互补"]}, {"source": "明朗的航行.md", "target": "不可救药的乐观主义.md", "value": 8, "shared": ["论证方法", "独特的贡献", "论证中的潜在漏洞", "最有力的论点", "逆境与学习的互补"]}, {"source": "明朗的航行.md", "target": "理想工作.md", "value": 3, "shared": ["最有力的论点", "论证方法", "完整标题"]}, {"source": "明朗的航行.md", "target": "冒充者综合征.md", "value": 3, "shared": ["最有力的论点", "论证方法", "完整标题"]}, {"source": "使命的迷思.md", "target": "逆境中的学习.md", "value": 2, "shared": ["最有力的论点", "完整标题"]}, {"source": "使命的迷思.md", "target": "不可救药的乐观主义.md", "value": 2, "shared": ["最有力的论点", "完整标题"]}, {"source": "使命的迷思.md", "target": "理想工作.md", "value": 7, "shared": ["核心概念相互支撑", "使命的迷思", "最有力的论点", "理想工作", "对立与互补的概念"]}, {"source": "使命的迷思.md", "target": "冒充者综合征.md", "value": 7, "shared": ["核心概念相互支撑", "使命的迷思", "最有力的论点", "理想工作", "对立与互补的概念"]}, {"source": "感恩.md", "target": "珍惜当下.md", "value": 2, "shared": ["那些往", "寻常那些"]}, {"source": "道德.md", "target": "不完满才是人生.md", "value": 2, "shared": ["责任感", "假糊涂"]}, {"source": "道德.md", "target": "假糊涂.md", "value": 4, "shared": ["责任感", "假糊涂", "好这一", "这一生"]}, {"source": "道德.md", "target": "容忍.md", "value": 4, "shared": ["责任感", "假糊涂", "好这一", "这一生"]}, {"source": "极致与审慎.md", "target": "简单与敬畏.md", "value": 2, "shared": ["弹奏巴", "卡萨尔斯"]}, {"source": "不完满才是人生.md", "target": "假糊涂.md", "value": 2, "shared": ["责任感", "假糊涂"]}, {"source": "不完满才是人生.md", "target": "承前启后的责任感.md", "value": 2, "shared": ["不完满", "责任感"]}, {"source": "不完满才是人生.md", "target": "容忍.md", "value": 2, "shared": ["责任感", "假糊涂"]}, {"source": "人生意义.md", "target": "智慧.md", "value": 7, "shared": ["睿智长者", "核心概念如何相互支撑", "方法论的创新", "社会实践", "价值的重申"]}, {"source": "人生意义.md", "target": "死前必须知道的秘密.md", "value": 7, "shared": ["睿智长者", "核心概念如何相互支撑", "方法论的创新", "社会实践", "价值的重申"]}, {"source": "假糊涂.md", "target": "容忍.md", "value": 4, "shared": ["责任感", "假糊涂", "好这一", "这一生"]}, {"source": "逆境中的学习.md", "target": "不可救药的乐观主义.md", "value": 8, "shared": ["论证方法", "独特的贡献", "论证中的潜在漏洞", "最有力的论点", "逆境与学习的互补"]}, {"source": "逆境中的学习.md", "target": "理想工作.md", "value": 3, "shared": ["最有力的论点", "论证方法", "完整标题"]}, {"source": "逆境中的学习.md", "target": "冒充者综合征.md", "value": 3, "shared": ["最有力的论点", "论证方法", "完整标题"]}, {"source": "不可救药的乐观主义.md", "target": "理想工作.md", "value": 3, "shared": ["最有力的论点", "论证方法", "完整标题"]}, {"source": "不可救药的乐观主义.md", "target": "冒充者综合征.md", "value": 3, "shared": ["最有力的论点", "论证方法", "完整标题"]}, {"source": "理想工作.md", "target": "冒充者综合征.md", "value": 8, "shared": ["核心概念相互支撑", "论证方法", "使命的迷思", "最有力的论点", "理想工作"]}, {"source": "智慧.md", "target": "死前必须知道的秘密.md", "value": 8, "shared": ["睿智长者", "人生没", "核心概念如何相互支撑", "方法论的创新", "社会实践"]}, {"source": "承前启后的责任感.md", "target": "老年智慧与豁达.md", "value": 2, "shared": ["不完满", "季羡林"]}, {"source": "向内求.md", "target": "痛苦普遍性.md", "value": 2, "shared": ["斯多葛", "叔本华"]}];
+var CLUSTER_COLORS = {"人生哲学": "#14b8a6"};
+var SEARCH_DATA = [{"id": "进化而非革命.md", "label": "进化而非革命"}, {"id": "志气与欲望.md", "label": "志气与欲望"}, {"id": "幸福哲学.md", "label": "幸福哲学"}, {"id": "自觉力.md", "label": "自觉力"}, {"id": "幸福本质.md", "label": "幸福本质"}, {"id": "世态炎凉的洞明.md", "label": "世态炎凉的洞明"}, {"id": "反思性回顾.md", "label": "反思性回顾"}, {"id": "道德与良知.md", "label": "道德与良知"}, {"id": "责任感.md", "label": "责任感"}, {"id": "知行鸿沟.md", "label": "知行鸿沟"}, {"id": "完美的一天.md", "label": "完美的一天"}, {"id": "容忍与界限.md", "label": "容忍与界限"}, {"id": "成功与失败的本质.md", "label": "成功与失败的本质"}, {"id": "生存与学习.md", "label": "生存与学习"}, {"id": "艺术与人性.md", "label": "艺术与人性"}, {"id": "存在主义.md", "label": "存在主义"}, {"id": "人生之旅.md", "label": "人生之旅"}, {"id": "自我认知.md", "label": "自我认知"}, {"id": "爱与被爱.md", "label": "爱与被爱"}, {"id": "人欲与天理.md", "label": "人欲与天理"}, {"id": "内在个性.md", "label": "内在个性"}, {"id": "存在主义心理学.md", "label": "存在主义心理学"}, {"id": "祸福相依.md", "label": "祸福相依"}, {"id": "痛苦本质.md", "label": "痛苦本质"}, {"id": "老年智慧.md", "label": "老年智慧"}, {"id": "世态炎凉.md", "label": "世态炎凉"}, {"id": "与生活讲和.md", "label": "与生活讲和"}, {"id": "睿智长者.md", "label": "睿智长者"}, {"id": "三种人生态度.md", "label": "三种人生态度"}, {"id": "幸福源于心态.md", "label": "幸福源于心态"}, {"id": "幽默智慧.md", "label": "幽默智慧"}, {"id": "足够好的工作.md", "label": "足够好的工作"}, {"id": "祸福相依的辩证观.md", "label": "祸福相依的辩证观"}, {"id": "生命责任.md", "label": "生命责任"}, {"id": "工作与专注.md", "label": "工作与专注"}, {"id": "明朗的航行.md", "label": "明朗的航行"}, {"id": "使命的迷思.md", "label": "使命的迷思"}, {"id": "感恩.md", "label": "感恩"}, {"id": "道德.md", "label": "道德"}, {"id": "极致与审慎.md", "label": "极致与审慎"}, {"id": "不完满才是人生.md", "label": "不完满才是人生"}, {"id": "简单与敬畏.md", "label": "简单与敬畏"}, {"id": "生命意义.md", "label": "生命意义"}, {"id": "人生意义.md", "label": "人生意义"}, {"id": "假糊涂.md", "label": "假糊涂"}, {"id": "逆境中的学习.md", "label": "逆境中的学习"}, {"id": "施爱于人并接受爱.md", "label": "施爱于人并接受爱"}, {"id": "不可救药的乐观主义.md", "label": "不可救药的乐观主义"}, {"id": "理想工作.md", "label": "理想工作"}, {"id": "智慧.md", "label": "智慧"}, {"id": "承前启后的责任感.md", "label": "承前启后的责任感"}, {"id": "道德即生命和谐.md", "label": "道德即生命和谐"}, {"id": "容忍.md", "label": "容忍"}, {"id": "老年智慧与豁达.md", "label": "老年智慧与豁达"}, {"id": "冒充者综合征.md", "label": "冒充者综合征"}, {"id": "向内求.md", "label": "向内求"}, {"id": "消费主义批判.md", "label": "消费主义批判"}, {"id": "死前必须知道的秘密.md", "label": "死前必须知道的秘密"}, {"id": "痛苦普遍性.md", "label": "痛苦普遍性"}, {"id": "珍惜当下.md", "label": "珍惜当下"}];
+var CONCEPT_SEARCH = [];
+
+
+/* ---- 搜索 ---- */
+var searchBox = document.getElementById("search-box");
+var searchResults = document.getElementById("search-results");
+
+searchBox.addEventListener("input", function(){
+  var q = this.value.trim().toLowerCase();
+  if(!q) { searchResults.style.display="none"; return; }
+  var combined = SEARCH_DATA.concat(CONCEPT_SEARCH.map(function(c){ return {id:c,label:c,type:"concept"}; }));
+  var matches = combined.filter(function(d){ return d.label.toLowerCase().indexOf(q)>-1; }).slice(0,12);
+  if(!matches.length) { searchResults.style.display="none"; return; }
+  searchResults.innerHTML = matches.map(function(d){
+    return '<div class="sri" data-id="'+d.id+'">'+d.label+'</div>';
+  }).join("");
+  searchResults.style.display="block";
+});
+
+searchResults.addEventListener("click", function(e){
+  var el = e.target.closest(".sri");
+  if(!el) return;
+  highlightNode(el.getAttribute("data-id"));
+  searchResults.style.display="none";
+  searchBox.value="";
+});
+
+function highlightNode(id){
+  svg.selectAll(".node").classed("highlight", function(d){ return d.id===id; });
+  svg.selectAll(".link").classed("highlight", function(d){
+    return d.source.id===id || d.target.id===id;
+  });
+  var nd = nodeMap.get(id);
+  if(!nd) return;
+  var t = d3.zoomTransform(svg.node());
+  var x = -nd.x*t.k + width/2;
+  var y = -nd.y*t.k + height/2;
+  svg.transition().duration(600).call(zoom.transform, d3.zoomIdentity.translate(x,y).scale(t.k));
+}
+
+/* ---- 详情面板 ---- */
+function showDetail(d){
+  var panel = document.getElementById("detail-panel");
+  var title = document.getElementById("detail-title");
+  var body  = document.getElementById("detail-body");
+
+  title.textContent = (d.title || d.label || d.id || "").replace(/\.md$/, "");
+
+  var html = "";
+
+  /* 元信息 */
+  html += '<div class="section"><div class="meta-row"><span class="meta-label">类型</span><span>' + (d.type==="concept" ? "💡 概念" : "📖 笔记") + '</span></div>';
+  if(d.domain)   html += '<div class="meta-row"><span class="meta-label">领域</span><span>' + d.domain + '</span></div>';
+  if(d.cluster) html += '<div class="meta-row"><span class="meta-label">聚类</span><span>' + d.cluster + '</span></div>';
+  if(d.degree !== undefined) html += '<div class="meta-row"><span class="meta-label">连通度</span><span>' + d.degree + '</span></div>';
+  html += '</div>';
+
+  /* 摘要 */
+  if(d.summary){
+    html += '<div class="section"><div class="section-title">📝 摘要</div><div class="summary">' + escapeHtml(d.summary.slice(0,500)) + (d.summary.length>500 ? "..." : "") + '</div></div>';
+  }
+
+  /* 关键词 */
+  if(d.keywords && d.keywords.length){
+    html += '<div class="section"><div class="section-title">🔑 关键词</div>';
+    d.keywords.forEach(function(kw){ html += '<span class="keyword">' + escapeHtml(kw) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 标签 */
+  if(d.tags && d.tags.length){
+    html += '<div class="section"><div class="section-title">🏷️ 标签</div>';
+    d.tags.forEach(function(tg){ html += '<span class="tag">' + escapeHtml(tg) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 打开原文件：用 Obsidian URI 协议，避免浏览器 file:// 限制 */
+  if(d.path){
+    var obsidianUrl = "obsidian://open?path=" + encodeURIComponent(d.path);
+    html += '<div class="section"><a class="open-link" href="' + obsidianUrl + '">📂 在 Obsidian 中打开</a></div>';
+  }
+
+  body.innerHTML = html;
+  panel.classList.add("open");
+}
+
+function closeDetail(){
+  document.getElementById("detail-panel").classList.remove("open");
+}
+
+function escapeHtml(s){
+  if(!s) return "";
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ---- D3 力导向图 ---- */
+var width  = window.innerWidth;
+var height = window.innerHeight - 48;
+var svg = d3.select("#graph").append("svg").attr("width",width).attr("height",height);
+var g = svg.append("g");
+var zoom = d3.zoom().scaleExtent([0.05,5]).on("zoom", function(e){ g.attr("transform", e.transform); });
+svg.call(zoom);
+
+var simulation = d3.forceSimulation(NODES)
+  .force("link",    d3.forceLink(LINKS).id(function(d){ return d.id; }).distance(90))
+  .force("charge",  d3.forceManyBody().strength(-220))
+  .force("center",  d3.forceCenter(width/2, height/2))
+  .force("collision", d3.forceCollide(30))
+  .force("x",       d3.forceX(width/2).strength(0.06))
+  .force("y",       d3.forceY(height/2).strength(0.06));
+
+var link = g.append("g").attr("class","links").selectAll("line")
+  .data(LINKS).join("line")
+  .attr("class", function(d){ return "link" + ((d.type==="book-book") ? " link-book" : ""); });
+
+var node = g.append("g").attr("class","nodes").selectAll("g")
+  .data(NODES).join("g")
+  .attr("class","node")
+  .attr("data-id", function(d){ return d.id; })
+  .call(d3.drag()
+    .on("start", function(event,d){ if(!event.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+    .on("drag",  function(event,d){ d.fx=event.x; d.fy=event.y; })
+    .on("end",   function(event,d){ if(!event.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+node.append("circle")
+  .attr("r", function(d){ return d.type==="book" ? 5+Math.sqrt(d.degree||1)*1.5 : 7; })
+  .attr("fill", function(d){ return d.type==="book" ? (CLUSTER_COLORS[d.cluster]||"#94a3b8") : "#14b8a6"; })
+  .attr("stroke", function(d){ return d.type==="book" ? "#0f172a" : "#d97706"; })
+  .on("mouseover", function(event,d){
+    var html = d.type==="book"
+      ? "<strong>📖 "+d.label+"</strong><br>连通度:"+d.degree+"<br>聚类:"+(d.cluster||"未分类")
+      : "<strong>💡 "+d.concept+"</strong><br>关联:"+d.book_count+" 篇";
+    d3.select("#tooltip").html(html).style("opacity",1)
+      .style("left",(event.pageX+12)+"px").style("top",(event.pageY-8)+"px");
+  })
+  .on("mouseout", function(){ d3.select("#tooltip").style("opacity",0); })
+  .on("click", function(event,d){
+    event.stopPropagation();
+    showDetail(d);
+  });
+
+node.append("text").attr("dx",11).attr("dy","0.35em").text(function(d){ return d.label; });
+
+var nodeMap = new Map();
+simulation.on("tick", function(){
+  link
+    .attr("x1", function(d){ return d.source.x; })
+    .attr("y1", function(d){ return d.source.y; })
+    .attr("x2", function(d){ return d.target.x; })
+    .attr("y2", function(d){ return d.target.y; });
+  node.attr("transform", function(d){
+    nodeMap.set(d.id, d);
+    return "translate("+d.x+","+d.y+")";
+  });
+});
+
+/* ---- 图例 ---- */
+var legendItems = d3.select("#legend").append("div").style("font-weight","bold").style("margin-bottom","8px").text("🎨 聚类").node().parentNode;
+Object.entries(CLUSTER_COLORS).forEach(function(entry){
+  var li = d3.select(legendItems).append("div").attr("class","li");
+  li.append("span").attr("class","ld").style("background",entry[1]);
+  li.append("span").text(entry[0]);
+});
+
+/* ---- 按钮 ---- */
+var conceptVisible = true;
+d3.select("#btn-toggle-concept").on("click", function(){
+  conceptVisible = !conceptVisible;
+  svg.selectAll(".node").filter(function(d){ return d.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  svg.selectAll(".link").filter(function(d){ return d.source.type==="concept"||d.target.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  d3.select(this).text(conceptVisible?"隐藏概念":"显示概念").classed("active",!conceptVisible);
+});
+d3.select("#btn-reset").on("click", function(){
+  closeDetail();
+  svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+});
+
+svg.on("click", function(){ searchResults.style.display="none"; });
+document.addEventListener("click", function(e){
+  if(!document.getElementById("detail-panel").contains(e.target) && !e.target.closest(".node")){
+    closeDetail();
+  }
+});
+
+/* 更新统计 */
+d3.select("#node-count").text(NODES.length);
+d3.select("#link-count").text(LINKS.length);
+</script>
+</body>
+</html>

@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>商业 - 投资理财 - 知识图谱</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#0f172a; color:#e2e8f0; overflow:hidden; }
+
+/* 侧边栏 */
+#sidebar { position:fixed; left:0; top:0; width:220px; height:100vh; background:#1e293b; border-right:1px solid #334155; overflow-y:auto; z-index:50; transition:transform 0.3s; font-size:12px; }
+#sidebar.collapsed { transform:translateX(-220px); }
+#sidebar h2 { font-size:13px; padding:12px 14px 8px; color:#94a3b8; border-bottom:1px solid #334155; }
+#sidebar .domain-header { padding:7px 14px; cursor:pointer; font-weight:600; border-bottom:1px solid #1a2332; transition:background 0.15s; user-select:none; }
+#sidebar .domain-header:hover { background:#334155; }
+#sidebar .domain-pages { display:none; }
+#sidebar .domain-pages a { display:block; padding:5px 14px 5px 24px; color:#cbd5e1; text-decoration:none; border-bottom:1px solid #1a2332; transition:background 0.15s; font-size:11px; }
+#sidebar .domain-pages a:hover { background:#334155; color:#fff; }
+#sidebar .domain-pages a.active { font-weight:600; }
+#sidebar a.active { background:#10b981; color:#0f172a; }
+#sidebar-toggle { position:fixed; left:8px; top:56px; z-index:60; background:#334155; border:1px solid #475569; color:#e2e8f0; border-radius:6px; padding:4px 7px; cursor:pointer; font-size:13px; transition:left 0.3s; }
+#sidebar:not(.collapsed) ~ #sidebar-toggle { left:228px; }
+
+/* 右侧详情面板 */
+#detail-panel { position:fixed; top:0; right:-420px; width:400px; height:100vh; background:#1e293b; border-left:1px solid #334155; z-index:55; transition:right 0.3s; display:flex; flex-direction:column; }
+#detail-panel.open { right:0; }
+#detail-header { padding:14px 16px; border-bottom:1px solid #334155; display:flex; align-items:flex-start; gap:10px; }
+#detail-header h2 { flex:1; font-size:14px; line-height:1.4; margin:0; word-break:break-all; }
+#detail-close { background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer; padding:0 4px; line-height:1; }
+#detail-close:hover { color:#fff; }
+#detail-body { flex:1; overflow-y:auto; padding:16px; font-size:13px; line-height:1.7; }
+#detail-body .section { margin-bottom:16px; }
+#detail-body .section-title { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+#detail-body .tag { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#334155; border-radius:4px; font-size:11px; color:#cbd5e1; }
+#detail-body .keyword { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#10b98122; border:1px solid #10b98166; border-radius:4px; font-size:11px; color:#e2e8f0; }
+#detail-body .summary { color:#cbd5e1; white-space:pre-wrap; }
+#detail-body .open-link { display:inline-block; margin-top:12px; padding:6px 14px; background:#10b981; color:#0f172a; border-radius:6px; text-decoration:none; font-size:12px; font-weight:600; }
+#detail-body .open-link:hover { opacity:0.85; }
+#detail-body .meta-row { display:flex; gap:12px; margin-bottom:8px; font-size:12px; }
+#detail-body .meta-label { color:#94a3b8; min-width:60px; }
+#detail-body .connected-list { list-style:none; padding:0; }
+#detail-body .connected-list li { padding:4px 0; border-bottom:1px solid #1a2332; font-size:12px; cursor:pointer; }
+#detail-body .connected-list li:hover { color:#10b981; }
+
+#header { padding:10px 20px 10px 50px; background:#1e293b; border-bottom:1px solid #334155; display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-left:200px; transition:margin-left 0.3s; }
+#sidebar.collapsed ~ #header { margin-left:0; }
+#header h1 { margin:0; font-size:17px; color:#10b981; white-space:nowrap; }
+#search-wrap { position:relative; }
+#search-box { width:220px; padding:5px 10px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#e2e8f0; font-size:13px; }
+#search-results { position:absolute; top:32px; left:0; width:260px; max-height:300px; overflow-y:auto; background:#1e293b; border:1px solid #475569; border-radius:6px; display:none; z-index:100; }
+.sri { padding:7px 10px; cursor:pointer; font-size:12px; border-bottom:1px solid #334155; }
+.sri:hover { background:#334155; }
+.stats { font-size:12px; color:#94a3b8; white-space:nowrap; }
+.ctrls { display:flex; gap:6px; margin-left:auto; }
+.btn { padding:5px 12px; border-radius:6px; border:1px solid #475569; background:#334155; color:#e2e8f0; cursor:pointer; font-size:12px; }
+.btn:hover { background:#475569; }
+.btn.active { background:#10b981; color:#0f172a; border-color:#10b981; }
+#legend { position:absolute; top:52px; left:220px; background:#1e293b; border:1px solid #475569; border-radius:8px; padding:10px 14px; font-size:12px; z-index:10; }
+.li { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+.ld { width:10px; height:10px; border-radius:50%; }
+#tooltip { position:absolute; padding:8px 12px; background:#1e293b; border:1px solid #475569; border-radius:8px; font-size:12px; pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:100; box-shadow:0 4px 20px rgba(0,0,0,0.5); max-width:320px; }
+#graph { width:calc(100vw - 200px); height:calc(100vh - 48px); margin-left:200px; transition:width 0.3s, margin-left 0.3s; }
+#sidebar.collapsed ~ #graph { margin-left:0; width:100vw; }
+#detail-panel.open ~ #graph { width:calc(100vw - 200px - 400px); }
+.link { stroke:#475569; stroke-opacity:0.3; }
+.link-book { stroke-opacity:0.12; }
+.node circle { cursor:pointer; stroke-width:1.5; }
+.node text { fill:#e2e8f0; font-size:10px; pointer-events:none; }
+.highlight circle { stroke:#fff !important; stroke-width:2.5px; }
+.highlight text { fill:#fff; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>📚 藏书阁 · 知识图谱</h2>
+  <div class="domain-header" data-target="IT" style="color:#67e8f9; border-left:3px solid #67e8f9;">IT ▾</div>
+  <div class="domain-pages" id="IT">
+    <a href="IT.json" style="border-left:3px solid #67e8f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(225篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="个人成长" style="color:#fb923c; border-left:3px solid #fb923c;">个人成长 ▾</div>
+  <div class="domain-pages" id="个人成长">
+    <a href="个人成长.json" style="border-left:3px solid #fb923c; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(461篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="产品" style="color:#a855f7; border-left:3px solid #a855f7;">产品 ▾</div>
+  <div class="domain-pages" id="产品">
+    <a href="产品_(其他).json" style="border-left:3px solid #a855f7; padding-left:18px;">(其他) <span style="font-size:10px;color:#64748b;">(553篇)</span></a>
+    <a href="产品_产品思维.json" style="border-left:3px solid #a855f7; padding-left:18px;">产品思维 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="产品_小程序生态.json" style="border-left:3px solid #a855f7; padding-left:18px;">小程序生态 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="产品_用户增长.json" style="border-left:3px solid #a855f7; padding-left:18px;">用户增长 <span style="font-size:10px;color:#64748b;">(49篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="会计" style="color:#86efac; border-left:3px solid #86efac;">会计 ▾</div>
+  <div class="domain-pages" id="会计">
+    <a href="会计.json" style="border-left:3px solid #86efac; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(67篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="健康" style="color:#34d399; border-left:3px solid #34d399;">健康 ▾</div>
+  <div class="domain-pages" id="健康">
+    <a href="健康.json" style="border-left:3px solid #34d399; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(284篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="写作" style="color:#c084fc; border-left:3px solid #c084fc;">写作 ▾</div>
+  <div class="domain-pages" id="写作">
+    <a href="写作.json" style="border-left:3px solid #c084fc; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(238篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="历史" style="color:#06b6d4; border-left:3px solid #06b6d4;">历史 ▾</div>
+  <div class="domain-pages" id="历史">
+    <a href="历史_(其他)_part1.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part2.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part3.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part4.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part5.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(541篇)</span></a>
+    <a href="历史_世界史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">世界史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="历史_中国历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国历史 <span style="font-size:10px;color:#64748b;">(96篇)</span></a>
+    <a href="历史_中国古代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国古代文学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="历史_中国现代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国现代文学 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="历史_中国近代史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国近代史 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="历史_人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">人物传记 <span style="font-size:10px;color:#64748b;">(143篇)</span></a>
+    <a href="历史_军事历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">军事历史 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="历史_历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史 <span style="font-size:10px;color:#64748b;">(538篇)</span></a>
+    <a href="历史_历史与政治.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史与政治 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史人物传记 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="历史_历史学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史学 <span style="font-size:10px;color:#64748b;">(189篇)</span></a>
+    <a href="历史_历史小说.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史小说 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史研究.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史研究 <span style="font-size:10px;color:#64748b;">(162篇)</span></a>
+    <a href="历史_思想史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">思想史 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="历史_文学与历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">文学与历史 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="历史_科技史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">科技史 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="历史_艺术史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">艺术史 <span style="font-size:10px;color:#64748b;">(83篇)</span></a>
+    <a href="历史_西方哲学史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">西方哲学史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="哲学" style="color:#14b8a6; border-left:3px solid #14b8a6;">哲学 ▾</div>
+  <div class="domain-pages" id="哲学">
+    <a href="哲学_(其他)_part1.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="哲学_(其他)_part2.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(272篇)</span></a>
+    <a href="哲学_中国哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">中国哲学 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="哲学_人生哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">人生哲学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="哲学_哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">哲学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+    <a href="哲学_政治哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">政治哲学 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="哲学_生活哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">生活哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+    <a href="哲学_社会哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">社会哲学 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="哲学_科学哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">科学哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="商业" style="color:#10b981; border-left:3px solid #10b981;">商业 ▾</div>
+  <div class="domain-pages" id="商业">
+    <a href="商业_(其他)_part1.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（1/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part2.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（2/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part3.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（3/3） <span style="font-size:10px;color:#64748b;">(391篇)</span></a>
+    <a href="商业_企业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">企业管理 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="商业_健康管理.json" style="border-left:3px solid #10b981; padding-left:18px;">健康管理 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="商业_创业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">创业管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业战略.json" style="border-left:3px solid #10b981; padding-left:18px;">商业战略 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">商业管理 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="商业_投资理财.json" class="active" style="border-left:3px solid #10b981; padding-left:18px;">投资理财 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_知识管理.json" style="border-left:3px solid #10b981; padding-left:18px;">知识管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_管理.json" style="border-left:3px solid #10b981; padding-left:18px;">管理 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_组织管理.json" style="border-left:3px solid #10b981; padding-left:18px;">组织管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_经济学.json" style="border-left:3px solid #10b981; padding-left:18px;">经济学 <span style="font-size:10px;color:#64748b;">(74篇)</span></a>
+    <a href="商业_金融投资.json" style="border-left:3px solid #10b981; padding-left:18px;">金融投资 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="商业_领导力.json" style="border-left:3px solid #10b981; padding-left:18px;">领导力 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="图书馆学" style="color:#5eead4; border-left:3px solid #5eead4;">图书馆学 ▾</div>
+  <div class="domain-pages" id="图书馆学">
+    <a href="图书馆学.json" style="border-left:3px solid #5eead4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(23篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="宗教" style="color:#c4b5fd; border-left:3px solid #c4b5fd;">宗教 ▾</div>
+  <div class="domain-pages" id="宗教">
+    <a href="宗教.json" style="border-left:3px solid #c4b5fd; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(19篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="心理学" style="color:#f59e0b; border-left:3px solid #f59e0b;">心理学 ▾</div>
+  <div class="domain-pages" id="心理学">
+    <a href="心理学_(其他)_part1.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（1/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part2.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（2/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part3.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（3/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part4.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（4/4） <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="心理学_个人成长与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">个人成长与心理学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理健康.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理健康 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理学 <span style="font-size:10px;color:#64748b;">(239篇)</span></a>
+    <a href="心理学_教育心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">教育心理学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="心理学_文学与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">文学与心理学 <span style="font-size:10px;color:#64748b;">(119篇)</span></a>
+    <a href="心理学_沟通技巧.json" style="border-left:3px solid #f59e0b; padding-left:18px;">沟通技巧 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="心理学_社会心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">社会心理学 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+    <a href="心理学_认知心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知心理学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="心理学_认知科学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知科学 <span style="font-size:10px;color:#64748b;">(39篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="房地产" style="color:#6ee7b7; border-left:3px solid #6ee7b7;">房地产 ▾</div>
+  <div class="domain-pages" id="房地产">
+    <a href="房地产.json" style="border-left:3px solid #6ee7b7; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(12篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="政治" style="color:#fbbf24; border-left:3px solid #fbbf24;">政治 ▾</div>
+  <div class="domain-pages" id="政治">
+    <a href="政治.json" style="border-left:3px solid #fbbf24; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(253篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="教育" style="color:#ec4899; border-left:3px solid #ec4899;">教育 ▾</div>
+  <div class="domain-pages" id="教育">
+    <a href="教育_(其他)_part1.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="教育_(其他)_part2.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(382篇)</span></a>
+    <a href="教育_个人成长.json" style="border-left:3px solid #ec4899; padding-left:18px;">个人成长 <span style="font-size:10px;color:#64748b;">(250篇)</span></a>
+    <a href="教育_儿童教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">儿童教育 <span style="font-size:10px;color:#64748b;">(62篇)</span></a>
+    <a href="教育_家庭教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">家庭教育 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="教育_教育理念.json" style="border-left:3px solid #ec4899; padding-left:18px;">教育理念 <span style="font-size:10px;color:#64748b;">(68篇)</span></a>
+    <a href="教育_财商教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">财商教育 <span style="font-size:10px;color:#64748b;">(48篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="文学" style="color:#8b5cf6; border-left:3px solid #8b5cf6;">文学 ▾</div>
+  <div class="domain-pages" id="文学">
+    <a href="文学_(其他)_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_中国古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">中国古典文学 <span style="font-size:10px;color:#64748b;">(112篇)</span></a>
+    <a href="文学_儿童文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">儿童文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">古典文学 <span style="font-size:10px;color:#64748b;">(92篇)</span></a>
+    <a href="文学_奇幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">奇幻文学 <span style="font-size:10px;color:#64748b;">(51篇)</span></a>
+    <a href="文学_女性主义文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">女性主义文学 <span style="font-size:10px;color:#64748b;">(38篇)</span></a>
+    <a href="文学_悬疑小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">悬疑小说分析 <span style="font-size:10px;color:#64748b;">(52篇)</span></a>
+    <a href="文学_推理小说.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="文学_推理小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说分析 <span style="font-size:10px;color:#64748b;">(126篇)</span></a>
+    <a href="文学_推理文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理文学 <span style="font-size:10px;color:#64748b;">(35篇)</span></a>
+    <a href="文学_文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学 <span style="font-size:10px;color:#64748b;">(223篇)</span></a>
+    <a href="文学_文学与个人成长.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与个人成长 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="文学_文学与人生哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与人生哲学 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="文学_文学与哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与哲学 <span style="font-size:10px;color:#64748b;">(303篇)</span></a>
+    <a href="文学_文学与社会学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与社会学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="文学_文学分析_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（1/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（2/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（3/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（4/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（5/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part6.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（6/6） <span style="font-size:10px;color:#64748b;">(254篇)</span></a>
+    <a href="文学_文学批评.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学批评 <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="文学_文学理论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学理论 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_文学研究.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学研究 <span style="font-size:10px;color:#64748b;">(84篇)</span></a>
+    <a href="文学_文学经典.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学经典 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="文学_文学解读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学解读 <span style="font-size:10px;color:#64748b;">(40篇)</span></a>
+    <a href="文学_文学评论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学评论 <span style="font-size:10px;color:#64748b;">(482篇)</span></a>
+    <a href="文学_文学赏析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学赏析 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="文学_文学鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学鉴赏 <span style="font-size:10px;color:#64748b;">(82篇)</span></a>
+    <a href="文学_文学阅读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学阅读 <span style="font-size:10px;color:#64748b;">(78篇)</span></a>
+    <a href="文学_旅行文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">旅行文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_日本文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">日本文学 <span style="font-size:10px;color:#64748b;">(98篇)</span></a>
+    <a href="文学_武侠文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">武侠文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_科幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学 <span style="font-size:10px;color:#64748b;">(175篇)</span></a>
+    <a href="文学_科幻文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学分析 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="文学_网络文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">网络文学分析 <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_艺术鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">艺术鉴赏 <span style="font-size:10px;color:#64748b;">(44篇)</span></a>
+    <a href="文学_非虚构文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">非虚构文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="时尚生活" style="color:#f9a8d4; border-left:3px solid #f9a8d4;">时尚生活 ▾</div>
+  <div class="domain-pages" id="时尚生活">
+    <a href="时尚生活.json" style="border-left:3px solid #f9a8d4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(71篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="未知" style="color:#94a3b8; border-left:3px solid #94a3b8;">未知 ▾</div>
+  <div class="domain-pages" id="未知">
+    <a href="未知.json" style="border-left:3px solid #94a3b8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(16篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="法学" style="color:#fcd34d; border-left:3px solid #fcd34d;">法学 ▾</div>
+  <div class="domain-pages" id="法学">
+    <a href="法学.json" style="border-left:3px solid #fcd34d; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="社会学" style="color:#6366f1; border-left:3px solid #6366f1;">社会学 ▾</div>
+  <div class="domain-pages" id="社会学">
+    <a href="社会学_(其他)_part1.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="社会学_(其他)_part2.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(484篇)</span></a>
+    <a href="社会学_文化研究.json" style="border-left:3px solid #6366f1; padding-left:18px;">文化研究 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="社会学_社会学.json" style="border-left:3px solid #6366f1; padding-left:18px;">社会学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="科学" style="color:#f97316; border-left:3px solid #f97316;">科学 ▾</div>
+  <div class="domain-pages" id="科学">
+    <a href="科学_(其他)_part1.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="科学_(其他)_part2.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(116篇)</span></a>
+    <a href="科学_医学人文.json" style="border-left:3px solid #f97316; padding-left:18px;">医学人文 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="科学_神经科学.json" style="border-left:3px solid #f97316; padding-left:18px;">神经科学 <span style="font-size:10px;color:#64748b;">(56篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="编程" style="color:#818cf8; border-left:3px solid #818cf8;">编程 ▾</div>
+  <div class="domain-pages" id="编程">
+    <a href="编程.json" style="border-left:3px solid #818cf8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(151篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="艺术" style="color:#e879f9; border-left:3px solid #e879f9;">艺术 ▾</div>
+  <div class="domain-pages" id="艺术">
+    <a href="艺术.json" style="border-left:3px solid #e879f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(365篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="英语" style="color:#f472b6; border-left:3px solid #f472b6;">英语 ▾</div>
+  <div class="domain-pages" id="英语">
+    <a href="英语.json" style="border-left:3px solid #f472b6; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(209篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="语言文学" style="color:#d8b4fe; border-left:3px solid #d8b4fe;">语言文学 ▾</div>
+  <div class="domain-pages" id="语言文学">
+    <a href="语言文学.json" style="border-left:3px solid #d8b4fe; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="金融" style="color:#a3e635; border-left:3px solid #a3e635;">金融 ▾</div>
+  <div class="domain-pages" id="金融">
+    <a href="金融.json" style="border-left:3px solid #a3e635; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(208篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="雅思" style="color:#22d3ee; border-left:3px solid #22d3ee;">雅思 ▾</div>
+  <div class="domain-pages" id="雅思">
+    <a href="雅思.json" style="border-left:3px solid #22d3ee; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(511篇)</span></a>
+  </div>
+
+    <script>
+    document.querySelectorAll('.domain-header').forEach(function(h){
+      h.addEventListener('click', function(){
+        var t = document.getElementById(this.dataset.target);
+        t.style.display = t.style.display==='none' ? 'block' : 'none';
+        this.innerHTML = this.innerHTML.replace(/[▾▸]/, t.style.display==='none'?'▸':'▾');
+      });
+    });
+    </script>
+    
+</div>
+<button id="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">☰</button>
+
+<div id="header">
+  <h1>📚 商业 · 投资理财</h1>
+  <div id="search-wrap">
+    <input id="search-box" type="text" placeholder="🔍 搜索书名/概念...">
+    <div id="search-results"></div>
+  </div>
+  <div class="stats">
+    <span id="node-count">0</span> 节点 ·
+    <span id="link-count">0</span> 连接
+  </div>
+  <div class="ctrls">
+    <button class="btn" id="btn-toggle-concept">隐藏概念</button>
+    <button class="btn" id="btn-reset">重置视图</button>
+  </div>
+</div>
+
+<div id="graph"></div>
+<div id="tooltip"></div>
+
+<!-- 右侧详情面板 -->
+<div id="detail-panel">
+  <div id="detail-header">
+    <h2 id="detail-title"></h2>
+    <button id="detail-close" onclick="closeDetail()">✕</button>
+  </div>
+  <div id="detail-body"></div>
+</div>
+
+<script>
+var NODES = [{"id": "CAN SLIM选股法则.md", "label": "CAN SLIM选股法则", "title": "CAN SLIM选股法则", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "本书核心是提出并阐释CAN SLIM选股投资法则，旨在解决个体投资者如何在股市中系统性地识别超级牛股、把握买卖时机并进行风险管理的问题。作者认为大多数投资者既非价值投资的殉道士也非趋势投资的牺牲品，而可以通过一套融合基本面与技术面分析的可操作规则，在牛熊市中均能有效获利。问题意识源于作者自身投资失败的教训以及对百年美股历史数据的归纳。** 全书以“图例先行”为特色：第1章展示100只超级牛股的历史走势图，揭示反复出现的经典价格形态（如带柄茶杯、高而窄的旗形）。** “带柄茶杯形态”可以类比为艺术设计中的“视觉节奏”：前期的上涨如同画面中的强音，随后的回调（杯身）是呼吸间隙，杯柄区域的缩量是静默", "keywords": ["带柄茶杯", "欧奈尔"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/笑傲股市(原书第4版) - 威廉·欧奈尔(My重排版)_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/CAN SLIM选股法则.md"}, {"id": "财务语言.md", "label": "财务语言", "title": "财务语言", "type": "book", "degree": 8, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "信息不对称与信息解读能力：财富机会往往隐藏在少数人掌握的信息和特定的“语言”（术语、逻辑）中。仅仅知道信息（如“战争结果”）还不够，关键在于如何利用“内部逻辑”解读和操作信息。财务语言：每个财富领域（股市、房产、风投）都有一套独特的词汇和底层逻辑。富人通过学习特定领域的“语言”和“逻辑”，主动扩展自己的认知边界，从而看到普通人看不到的“钱景”。原因：不懂财务语言和领域逻辑 → 结果：听不懂消息，看不到机会", "keywords": ["相关笔记", "以小博大与行动勇气", "认知决定财富边界", "可执行的行动步骤", "与其他领域的联系", "聚焦与不平衡", "语言学习领域", "核心概念"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/第11课 学会用富人的眼光赚自己的钱"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/财务语言.md"}, {"id": "机构投资者.md", "label": "机构投资者", "title": "机构投资者", "type": "book", "degree": 7, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：精准投资：管清友的投资思维课。核心主题：在财富巨变的时代，通过建立系统化的投资思维框架，掌握不同投资品类的核心逻辑，从而在风险可控的前提下做出精准的投资决策，实现财富的保值增值。适合人群：希望从“盲目跟风”转向“理性投资”的普通投资者；对股票、基金、房产、黄金等各类投资品感兴趣但缺乏系统认知的入门者；以及希望理解中国投资市场特殊性的中产阶级。这一思维体系包含两个核心：机会思维（把握关键选择，如查理·芒格所说剔除最好的15个决策后表现一般）和风险思维（事前留安全边际，事后严格止损，如罗伊·纽伯格连续68年不亏损的10%止损原则）。根据书中三层分类，结合自己的风险承受能力（可参考“保底型、稳", "keywords": ["相关笔记", "投资思", "机会思维", "风险思维", "基础层", "进阶层", "高级层"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/精准投资：管清友的投资思维课"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/机构投资者.md"}, {"id": "战术资产配置.md", "label": "战术资产配置", "title": "战术资产配置", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：《积极型资产配置指南：经济周期分析与六阶段投资时钟 (华章经典·金融投资)》。作者：马丁J.普林格(Martin J.Pring)。核心主题：本书旨在通过分析经济周期的规律性，构建一个“六阶段投资时钟”框架，指导投资者在不同经济阶段，对债券、股票和商品等不同资产类别进行战术性资产配置，以实现风险最小化和收益最大化。经济周期并非随机波动，而是由一系列按时间顺序发生的事件（如利率、经济指标、通货膨胀）驱动，这为资产配置提供了明确的路线图。要点2：六阶段投资时钟是动态配置的核心工具", "keywords": ["相关笔记", "经济周"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/积极型资产配置指南：经济周期分析与六阶段投资时钟 (华章经典·金融投资)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/战术资产配置.md"}, {"id": "资产配置.md", "label": "资产配置", "title": "资产配置", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：《积极型资产配置指南：经济周期分析与六阶段投资时钟 (华章经典·金融投资)》。作者：马丁J.普林格(Martin J.Pring)。核心主题：本书旨在通过分析经济周期的规律性，构建一个“六阶段投资时钟”框架，指导投资者在不同经济阶段，对债券、股票和商品等不同资产类别进行战术性资产配置，以实现风险最小化和收益最大化。经济周期并非随机波动，而是由一系列按时间顺序发生的事件（如利率、经济指标、通货膨胀）驱动，这为资产配置提供了明确的路线图。要点2：六阶段投资时钟是动态配置的核心工具", "keywords": ["经济周期", "资产配"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/积极型资产配置指南：经济周期分析与六阶段投资时钟 (华章经典·金融投资)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/资产配置.md"}, {"id": "风险管理.md", "label": "风险管理", "title": "风险管理", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：《积极型资产配置指南：经济周期分析与六阶段投资时钟 (华章经典·金融投资)》。作者：马丁J.普林格(Martin J.Pring)。核心主题：本书旨在通过分析经济周期的规律性，构建一个“六阶段投资时钟”框架，指导投资者在不同经济阶段，对债券、股票和商品等不同资产类别进行战术性资产配置，以实现风险最小化和收益最大化。经济周期并非随机波动，而是由一系列按时间顺序发生的事件（如利率、经济指标、通货膨胀）驱动，这为资产配置提供了明确的路线图。要点2：六阶段投资时钟是动态配置的核心工具", "keywords": ["经济周期", "资产配"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/积极型资产配置指南：经济周期分析与六阶段投资时钟 (华章经典·金融投资)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/风险管理.md"}, {"id": "风险控制.md", "label": "风险控制", "title": "风险控制", "type": "book", "degree": 8, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "核心主题：本书揭示了投资世界中各类周期（经济、企业、心理、市场等）的内在规律与因果关系，教导投资者如何识别当前周期所处的位置，并利用“周期定位”的策略，在风险与机遇中做出更优决策，从而实现长期战胜市场。适合人群：所有希望提升投资决策质量、理解市场波动本质的投资者，尤其是对价值投资、逆向投资理念感兴趣的读者。无论是初入市场的新手，还是经验丰富的专业投资人，都能从中获得深刻的洞见。最后，“少走中间多走极端”，市场心理和价格很少停留在“合理”的均值上，而是从一个极端摆向另一个极端，如从极度贪婪到极度恐惧，从价格过高到价格过低。这是全书最精彩的部分，包括：④投资人心理和情绪钟摆（在贪婪与恐惧之间摆动）", "keywords": ["投资人心理和情绪钟摆", "政府调节逆周期", "企业盈利周期", "风险态度周期", "市场情绪指标", "经济周期", "估值指标", "信贷指标"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/周期"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/风险控制.md"}, {"id": "止损规则.md", "label": "止损规则", "title": "止损规则", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "本书核心是提出并阐释CAN SLIM选股投资法则，旨在解决个体投资者如何在股市中系统性地识别超级牛股、把握买卖时机并进行风险管理的问题。作者认为大多数投资者既非价值投资的殉道士也非趋势投资的牺牲品，而可以通过一套融合基本面与技术面分析的可操作规则，在牛熊市中均能有效获利。问题意识源于作者自身投资失败的教训以及对百年美股历史数据的归纳。** 全书以“图例先行”为特色：第1章展示100只超级牛股的历史走势图，揭示反复出现的经典价格形态（如带柄茶杯、高而窄的旗形）。** “带柄茶杯形态”可以类比为艺术设计中的“视觉节奏”：前期的上涨如同画面中的强音，随后的回调（杯身）是呼吸间隙，杯柄区域的缩量是静默", "keywords": ["带柄茶杯", "欧奈尔"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/笑傲股市(原书第4版) - 威廉·欧奈尔(My重排版)_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/止损规则.md"}, {"id": "心理钟摆.md", "label": "心理钟摆", "title": "心理钟摆", "type": "book", "degree": 8, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "核心主题：本书揭示了投资世界中各类周期（经济、企业、心理、市场等）的内在规律与因果关系，教导投资者如何识别当前周期所处的位置，并利用“周期定位”的策略，在风险与机遇中做出更优决策，从而实现长期战胜市场。适合人群：所有希望提升投资决策质量、理解市场波动本质的投资者，尤其是对价值投资、逆向投资理念感兴趣的读者。无论是初入市场的新手，还是经验丰富的专业投资人，都能从中获得深刻的洞见。最后，“少走中间多走极端”，市场心理和价格很少停留在“合理”的均值上，而是从一个极端摆向另一个极端，如从极度贪婪到极度恐惧，从价格过高到价格过低。这是全书最精彩的部分，包括：④投资人心理和情绪钟摆（在贪婪与恐惧之间摆动）", "keywords": ["投资人心理和情绪钟摆", "政府调节逆周期", "企业盈利周期", "风险态度周期", "市场情绪指标", "经济周期", "估值指标", "信贷指标"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/周期"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/心理钟摆.md"}, {"id": "复利思维.md", "label": "复利思维", "title": "复利思维", "type": "book", "degree": 7, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：精准投资：管清友的投资思维课。核心主题：在财富巨变的时代，通过建立系统化的投资思维框架，掌握不同投资品类的核心逻辑，从而在风险可控的前提下做出精准的投资决策，实现财富的保值增值。适合人群：希望从“盲目跟风”转向“理性投资”的普通投资者；对股票、基金、房产、黄金等各类投资品感兴趣但缺乏系统认知的入门者；以及希望理解中国投资市场特殊性的中产阶级。这一思维体系包含两个核心：机会思维（把握关键选择，如查理·芒格所说剔除最好的15个决策后表现一般）和风险思维（事前留安全边际，事后严格止损，如罗伊·纽伯格连续68年不亏损的10%止损原则）。根据书中三层分类，结合自己的风险承受能力（可参考“保底型、稳", "keywords": ["投资思维", "机会思维", "风险思维", "基础层", "进阶层", "高级层", "投资品"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/精准投资：管清友的投资思维课"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/复利思维.md"}, {"id": "逆向思维.md", "label": "逆向思维", "title": "逆向思维", "type": "book", "degree": 8, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "核心主题：通过建立“赢家模式”与“股市赢利三部曲”（主体思维选股法、股市钱规则、赢家模式八大实战系统），帮助股民从输家转变为持续盈利的赢家，核心在于改变思维、建立系统、顺应市场规律。适合人群：有一定股市经验但长期亏损、渴望系统化操作框架的散户投资者；对投资心理学和资金博弈逻辑感兴趣的读者；希望将投资思维迁移到创业与日常决策的学习者。要点1：赢家与输家的根本区别在于“主导权”认知。赢家模式：将操作结果归因于自身对市场规律的认知与适应，主动改变自己以顺应市场（如极端走势后补课研究政策、资金动态）。第三部：赢家模式八大实战系统——包括政策解读、次新股、年报板块、趋势技术、止盈止损、逆向重组、股指期货", "keywords": ["赢家模式八大实战系统", "主体思维选股法", "股市钱规则", "内归因", "外归因", "股市赢", "赚在起跑", "起跑线"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/赚在起跑线：股市赢家模式"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/逆向思维.md"}, {"id": "财务自由.md", "label": "财务自由", "title": "财务自由", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：财务自由之路（Ⅲ）：理财大师为你量身定制的投资组合体系。核心主题：本书系统性地阐述了如何通过构建个性化的投资组合，实现年均8%～12%甚至更高的收益率，从而在低时间投入和低压力下实现财务自由。核心在于破除对投资的三大偏见，并基于个人目标、资产状况、投资个性与年限，将资金分配到不同风险等级的有形资产中。所有投资分为三类：货币资产（储蓄、债券等）、有形资产（不动产、股票、股票基金等）和赌博（期货、赌场等）。核心结论是：只有有形资产能让你在长期内抵御通货膨胀并实现财富翻番", "keywords": ["相关笔记", "财务自"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/财务自由之路（Ⅲ）：理财大师为你量身定制的投资组合体系"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/财务自由.md"}, {"id": "生命周期投资策略.md", "label": "生命周期投资策略", "title": "生命周期投资策略", "type": "book", "degree": 3, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：漫步华尔街（原书第10版）。作者：(美)马尔基尔(Malkiel，B.G.)。核心主题：论证“随机漫步”理论——股票价格短期不可预测，个人投资者通过长期持有低成本指数基金，能够战胜大多数专业基金经理。适合人群：希望建立长期稳健投资策略的个人投资者；对股市有效性理论感兴趣的金融从业者；想了解行为金融学与投资心理学关联的读者。第10章引入行为金融学：投资者常因过度自信、锚定效应、羊群效应等心理偏差做出错误决策", "keywords": ["金融学", "行为金融", "人投资"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/漫步华尔街（原书第10版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/生命周期投资策略.md"}, {"id": "知行合一.md", "label": "知行合一", "title": "知行合一", "type": "book", "degree": 7, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：在股市大崩溃前抛出的人：巴鲁克自传（典藏版）。作者：伯纳德·巴鲁克(Bernard M.Baruch)。核心主题：通过巴鲁克从华尔街投机者到政治家的传奇经历，揭示投资成功的本质不在于预测市场，而在于理解人性、掌握事实、及时行动，并以此为基础实现财富与人生的双重成功。巴鲁克认为，股票市场记录的不是事件本身，而是人类对这些事件的反应。巴鲁克将投机者定义为“评判未来并在未来情形出现之前即采取行动的人”", "keywords": ["巴鲁克", "获得事实", "形成判断", "及时行动", "股市大", "市大崩", "大崩溃"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/在股市大崩溃前抛出的人：巴鲁克自传（典藏版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/知行合一.md"}, {"id": "市场有效性.md", "label": "市场有效性", "title": "市场有效性", "type": "book", "degree": 3, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：漫步华尔街（原书第10版）。作者：(美)马尔基尔(Malkiel，B.G.)。核心主题：论证“随机漫步”理论——股票价格短期不可预测，个人投资者通过长期持有低成本指数基金，能够战胜大多数专业基金经理。适合人群：希望建立长期稳健投资策略的个人投资者；对股市有效性理论感兴趣的金融从业者；想了解行为金融学与投资心理学关联的读者。要点3：市场有效性的争议与行为金融学的启示", "keywords": ["金融学", "行为金融", "人投资"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/漫步华尔街（原书第10版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/市场有效性.md"}, {"id": "错误学习.md", "label": "错误学习", "title": "错误学习", "type": "book", "degree": 7, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：在股市大崩溃前抛出的人：巴鲁克自传（典藏版）。作者：伯纳德·巴鲁克(Bernard M.Baruch)。核心主题：通过巴鲁克从华尔街投机者到政治家的传奇经历，揭示投资成功的本质不在于预测市场，而在于理解人性、掌握事实、及时行动，并以此为基础实现财富与人生的双重成功。巴鲁克认为，股票市场记录的不是事件本身，而是人类对这些事件的反应。巴鲁克将投机者定义为“评判未来并在未来情形出现之前即采取行动的人”", "keywords": ["巴鲁克", "获得事实", "形成判断", "及时行动", "股市大", "市大崩", "大崩溃"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/在股市大崩溃前抛出的人：巴鲁克自传（典藏版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/错误学习.md"}, {"id": "有形资产.md", "label": "有形资产", "title": "有形资产", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：财务自由之路（Ⅲ）：理财大师为你量身定制的投资组合体系。核心主题：本书系统性地阐述了如何通过构建个性化的投资组合，实现年均8%～12%甚至更高的收益率，从而在低时间投入和低压力下实现财务自由。核心在于破除对投资的三大偏见，并基于个人目标、资产状况、投资个性与年限，将资金分配到不同风险等级的有形资产中。所有投资分为三类：货币资产（储蓄、债券等）、有形资产（不动产、股票、股票基金等）和赌博（期货、赌场等）。核心结论是：只有有形资产能让你在长期内抵御通货膨胀并实现财富翻番", "keywords": ["有形资产", "财务自"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/财务自由之路（Ⅲ）：理财大师为你量身定制的投资组合体系"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/有形资产.md"}, {"id": "聚焦与不平衡.md", "label": "聚焦与不平衡", "title": "聚焦与不平衡", "type": "book", "degree": 8, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "信息不对称与信息解读能力：财富机会往往隐藏在少数人掌握的信息和特定的“语言”（术语、逻辑）中。仅仅知道信息（如“战争结果”）还不够，关键在于如何利用“内部逻辑”解读和操作信息。财务语言：每个财富领域（股市、房产、风投）都有一套独特的词汇和底层逻辑。聚焦与不平衡：追求财富增长需要高度专注和集中火力，而不是追求生活或投资的“平衡”。原因：不懂财务语言和领域逻辑 → 结果：听不懂消息，看不到机会", "keywords": ["以小博大与行动勇气", "认知决定财富边界", "可执行的行动步骤", "与其他领域的联系", "聚焦与不平衡", "语言学习领域", "核心概念", "财务语言"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/第11课 学会用富人的眼光赚自己的钱"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/聚焦与不平衡.md"}, {"id": "信息不对称.md", "label": "信息不对称", "title": "信息不对称", "type": "book", "degree": 8, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "信息不对称与信息解读能力：财富机会往往隐藏在少数人掌握的信息和特定的“语言”（术语、逻辑）中。仅仅知道信息（如“战争结果”）还不够，关键在于如何利用“内部逻辑”解读和操作信息。财务语言：每个财富领域（股市、房产、风投）都有一套独特的词汇和底层逻辑。富人通过学习特定领域的“语言”和“逻辑”，主动扩展自己的认知边界，从而看到普通人看不到的“钱景”。原因：不懂财务语言和领域逻辑 → 结果：听不懂消息，看不到机会", "keywords": ["以小博大与行动勇气", "认知决定财富边界", "可执行的行动步骤", "与其他领域的联系", "聚焦与不平衡", "语言学习领域", "核心概念", "财务语言"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/第11课 学会用富人的眼光赚自己的钱"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/信息不对称.md"}, {"id": "底层逻辑.md", "label": "底层逻辑", "title": "底层逻辑", "type": "book", "degree": 8, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "信息不对称与信息解读能力：财富机会往往隐藏在少数人掌握的信息和特定的“语言”（术语、逻辑）中。仅仅知道信息（如“战争结果”）还不够，关键在于如何利用“内部逻辑”解读和操作信息。财务语言：每个财富领域（股市、房产、风投）都有一套独特的词汇和底层逻辑。原因：不懂财务语言和领域逻辑 → 结果：听不懂消息，看不到机会。不懂英语的人无法阅读英文原版书，不懂财务语言的人也无法读懂市场信息", "keywords": ["以小博大与行动勇气", "认知决定财富边界", "可执行的行动步骤", "与其他领域的联系", "聚焦与不平衡", "语言学习领域", "核心概念", "财务语言"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/第11课 学会用富人的眼光赚自己的钱"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/底层逻辑.md"}, {"id": "止损.md", "label": "止损", "title": "止损", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：韭菜的自我修养(李笑来首次公开投资原则)。核心主题：本书旨在揭示交易市场中“韭菜”（通常指亏损的散户）的本质、常见错误和思维误区，并提供一系列基于作者个人经验的投资原则和认知升级方法，帮助读者摆脱“韭菜”宿命，成为合格的投资者。适合人群：所有对投资交易（特别是区块链、加密货币等高风险市场）感兴趣的初学者；在市场中屡次亏损、感到迷茫的“老韭菜”；以及任何希望提升自身投资认知、避免常见陷阱的读者。“韭菜”并非简单的“亏损散户”，其核心特征是缺乏学习能力和基本阅读能力，并且在交易中犯下根本性错误。摆脱“韭菜”宿命的第一步是树立一个核心观念：交易市场并非“零和游戏”", "keywords": ["投资原则", "菜的自"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/韭菜的自我修养(李笑来首次公开投资原则)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/止损.md"}, {"id": "财务杠杆.md", "label": "财务杠杆", "title": "财务杠杆", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "作者： 约翰·罗斯柴尔德（John Rothchild）。主题领域： 投资理财、金融史、家族传记、价值投资。出版信息： 中国人民大学出版社，2018-11，ISBN：978-7-300-26204-8。戴维斯双击 (Davis Double Play)： 指股价（Price）= 每股盈利（EPS）× 市盈率（PE）。“戴维斯双击” 理论，它简洁而深刻地揭示了股价波动的双重驱动力（盈利和估值），为理解市场周期和公司成长提供了强大的分析框架", "keywords": ["戴维斯双", "斯双击"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/戴维斯王朝_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/财务杠杆.md"}, {"id": "周期规律.md", "label": "周期规律", "title": "周期规律", "type": "book", "degree": 8, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "核心主题：本书揭示了投资世界中各类周期（经济、企业、心理、市场等）的内在规律与因果关系，教导投资者如何识别当前周期所处的位置，并利用“周期定位”的策略，在风险与机遇中做出更优决策，从而实现长期战胜市场。适合人群：所有希望提升投资决策质量、理解市场波动本质的投资者，尤其是对价值投资、逆向投资理念感兴趣的读者。无论是初入市场的新手，还是经验丰富的专业投资人，都能从中获得深刻的洞见。最后，“少走中间多走极端”，市场心理和价格很少停留在“合理”的均值上，而是从一个极端摆向另一个极端，如从极度贪婪到极度恐惧，从价格过高到价格过低。当多数指标指向一个极端时，就是你应该提高警惕或采取行动的时候", "keywords": ["投资人心理和情绪钟摆", "政府调节逆周期", "企业盈利周期", "风险态度周期", "市场情绪指标", "经济周期", "估值指标", "信贷指标"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/周期"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/周期规律.md"}, {"id": "有效市场假说.md", "label": "有效市场假说", "title": "有效市场假说", "type": "book", "degree": 3, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：漫步华尔街（原书第10版）。作者：(美)马尔基尔(Malkiel，B.G.)。核心主题：论证“随机漫步”理论——股票价格短期不可预测，个人投资者通过长期持有低成本指数基金，能够战胜大多数专业基金经理。适合人群：希望建立长期稳健投资策略的个人投资者；对股市有效性理论感兴趣的金融从业者；想了解行为金融学与投资心理学关联的读者。要点3：市场有效性的争议与行为金融学的启示", "keywords": ["金融学", "行为金融", "人投资"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/漫步华尔街（原书第10版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/有效市场假说.md"}, {"id": "从错误中学习.md", "label": "从错误中学习", "title": "从错误中学习", "type": "book", "degree": 7, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：在股市大崩溃前抛出的人：巴鲁克自传（典藏版）。作者：伯纳德·巴鲁克(Bernard M.Baruch)。核心主题：通过巴鲁克从华尔街投机者到政治家的传奇经历，揭示投资成功的本质不在于预测市场，而在于理解人性、掌握事实、及时行动，并以此为基础实现财富与人生的双重成功。巴鲁克认为，股票市场记录的不是事件本身，而是人类对这些事件的反应。巴鲁克将投机者定义为“评判未来并在未来情形出现之前即采取行动的人”", "keywords": ["巴鲁克", "获得事实", "形成判断", "及时行动", "股市大", "市大崩", "大崩溃"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/在股市大崩溃前抛出的人：巴鲁克自传（典藏版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/从错误中学习.md"}, {"id": "复利效应.md", "label": "复利效应", "title": "复利效应", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "作者： 约翰·罗斯柴尔德（John Rothchild）。主题领域： 投资理财、金融史、家族传记、价值投资。出版信息： 中国人民大学出版社，2018-11，ISBN：978-7-300-26204-8。戴维斯双击 (Davis Double Play)： 指股价（Price）= 每股盈利（EPS）× 市盈率（PE）。“戴维斯双击” 理论，它简洁而深刻地揭示了股价波动的双重驱动力（盈利和估值），为理解市场周期和公司成长提供了强大的分析框架", "keywords": ["戴维斯双", "斯双击"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/戴维斯王朝_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/复利效应.md"}, {"id": "系统化操作.md", "label": "系统化操作", "title": "系统化操作", "type": "book", "degree": 8, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "核心主题：通过建立“赢家模式”与“股市赢利三部曲”（主体思维选股法、股市钱规则、赢家模式八大实战系统），帮助股民从输家转变为持续盈利的赢家，核心在于改变思维、建立系统、顺应市场规律。适合人群：有一定股市经验但长期亏损、渴望系统化操作框架的散户投资者；对投资心理学和资金博弈逻辑感兴趣的读者；希望将投资思维迁移到创业与日常决策的学习者。要点1：赢家与输家的根本区别在于“主导权”认知。赢家模式：将操作结果归因于自身对市场规律的认知与适应，主动改变自己以顺应市场（如极端走势后补课研究政策、资金动态）。输家模式：将失败归咎于外界（政策、庄家、消息），抱怨环境却不反思自身操作缺陷", "keywords": ["赢家模式八大实战系统", "主体思维选股法", "股市钱规则", "内归因", "外归因", "股市赢", "赚在起跑", "起跑线"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/赚在起跑线：股市赢家模式"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/系统化操作.md"}, {"id": "投资思维.md", "label": "投资思维", "title": "投资思维", "type": "book", "degree": 7, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：精准投资：管清友的投资思维课。核心主题：在财富巨变的时代，通过建立系统化的投资思维框架，掌握不同投资品类的核心逻辑，从而在风险可控的前提下做出精准的投资决策，实现财富的保值增值。适合人群：希望从“盲目跟风”转向“理性投资”的普通投资者；对股票、基金、房产、黄金等各类投资品感兴趣但缺乏系统认知的入门者；以及希望理解中国投资市场特殊性的中产阶级。这一思维体系包含两个核心：机会思维（把握关键选择，如查理·芒格所说剔除最好的15个决策后表现一般）和风险思维（事前留安全边际，事后严格止损，如罗伊·纽伯格连续68年不亏损的10%止损原则）。根据书中三层分类，结合自己的风险承受能力（可参考“保底型、稳", "keywords": ["投资思维", "机会思维", "风险思维", "基础层", "进阶层", "高级层", "投资品"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/精准投资：管清友的投资思维课"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/投资思维.md"}, {"id": "行为金融学.md", "label": "行为金融学", "title": "行为金融学", "type": "book", "degree": 1, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：漫步华尔街（原书第10版）。作者：(美)马尔基尔(Malkiel，B.G.)。核心主题：论证“随机漫步”理论——股票价格短期不可预测，个人投资者通过长期持有低成本指数基金，能够战胜大多数专业基金经理。适合人群：希望建立长期稳健投资策略的个人投资者；对股市有效性理论感兴趣的金融从业者；想了解行为金融学与投资心理学关联的读者。要点3：市场有效性的争议与行为金融学的启示", "keywords": ["行为金融学"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/漫步华尔街（原书第10版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/行为金融学.md"}, {"id": "基本面与技术面结合.md", "label": "基本面与技术面结合", "title": "基本面与技术面结合", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "本书核心是提出并阐释CAN SLIM选股投资法则，旨在解决个体投资者如何在股市中系统性地识别超级牛股、把握买卖时机并进行风险管理的问题。作者认为大多数投资者既非价值投资的殉道士也非趋势投资的牺牲品，而可以通过一套融合基本面与技术面分析的可操作规则，在牛熊市中均能有效获利。问题意识源于作者自身投资失败的教训以及对百年美股历史数据的归纳。** 全书以“图例先行”为特色：第1章展示100只超级牛股的历史走势图，揭示反复出现的经典价格形态（如带柄茶杯、高而窄的旗形）。** “带柄茶杯形态”可以类比为艺术设计中的“视觉节奏”：前期的上涨如同画面中的强音，随后的回调（杯身）是呼吸间隙，杯柄区域的缩量是静默", "keywords": ["带柄茶杯", "欧奈尔"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/笑傲股市(原书第4版) - 威廉·欧奈尔(My重排版)_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/基本面与技术面结合.md"}, {"id": "趋势跟踪.md", "label": "趋势跟踪", "title": "趋势跟踪", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "本书核心是提出并阐释CAN SLIM选股投资法则，旨在解决个体投资者如何在股市中系统性地识别超级牛股、把握买卖时机并进行风险管理的问题。作者认为大多数投资者既非价值投资的殉道士也非趋势投资的牺牲品，而可以通过一套融合基本面与技术面分析的可操作规则，在牛熊市中均能有效获利。问题意识源于作者自身投资失败的教训以及对百年美股历史数据的归纳。** 全书以“图例先行”为特色：第1章展示100只超级牛股的历史走势图，揭示反复出现的经典价格形态（如带柄茶杯、高而窄的旗形）。** “带柄茶杯形态”可以类比为艺术设计中的“视觉节奏”：前期的上涨如同画面中的强音，随后的回调（杯身）是呼吸间隙，杯柄区域的缩量是静默", "keywords": ["带柄茶杯", "欧奈尔"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/笑傲股市(原书第4版) - 威廉·欧奈尔(My重排版)_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/趋势跟踪.md"}, {"id": "韭菜.md", "label": "韭菜", "title": "韭菜", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：韭菜的自我修养(李笑来首次公开投资原则)。核心主题：本书旨在揭示交易市场中“韭菜”（通常指亏损的散户）的本质、常见错误和思维误区，并提供一系列基于作者个人经验的投资原则和认知升级方法，帮助读者摆脱“韭菜”宿命，成为合格的投资者。适合人群：所有对投资交易（特别是区块链、加密货币等高风险市场）感兴趣的初学者；在市场中屡次亏损、感到迷茫的“老韭菜”；以及任何希望提升自身投资认知、避免常见陷阱的读者。“韭菜”并非简单的“亏损散户”，其核心特征是缺乏学习能力和基本阅读能力，并且在交易中犯下根本性错误。摆脱“韭菜”宿命的第一步是树立一个核心观念：交易市场并非“零和游戏”", "keywords": ["投资原则", "菜的自"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/韭菜的自我修养(李笑来首次公开投资原则)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/韭菜.md"}, {"id": "以小博大.md", "label": "以小博大", "title": "以小博大", "type": "book", "degree": 8, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "信息不对称与信息解读能力：财富机会往往隐藏在少数人掌握的信息和特定的“语言”（术语、逻辑）中。仅仅知道信息（如“战争结果”）还不够，关键在于如何利用“内部逻辑”解读和操作信息。财务语言：每个财富领域（股市、房产、风投）都有一套独特的词汇和底层逻辑。富人通过学习特定领域的“语言”和“逻辑”，主动扩展自己的认知边界，从而看到普通人看不到的“钱景”。原因：不懂财务语言和领域逻辑 → 结果：听不懂消息，看不到机会", "keywords": ["以小博大与行动勇气", "认知决定财富边界", "可执行的行动步骤", "与其他领域的联系", "聚焦与不平衡", "语言学习领域", "核心概念", "财务语言"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/第11课 学会用富人的眼光赚自己的钱"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/以小博大.md"}, {"id": "六阶段投资时钟.md", "label": "六阶段投资时钟", "title": "六阶段投资时钟", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：《积极型资产配置指南：经济周期分析与六阶段投资时钟 (华章经典·金融投资)》。作者：马丁J.普林格(Martin J.Pring)。核心主题：本书旨在通过分析经济周期的规律性，构建一个“六阶段投资时钟”框架，指导投资者在不同经济阶段，对债券、股票和商品等不同资产类别进行战术性资产配置，以实现风险最小化和收益最大化。经济周期并非随机波动，而是由一系列按时间顺序发生的事件（如利率、经济指标、通货膨胀）驱动，这为资产配置提供了明确的路线图。要点2：六阶段投资时钟是动态配置的核心工具", "keywords": ["经济周期", "资产配"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/积极型资产配置指南：经济周期分析与六阶段投资时钟 (华章经典·金融投资)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/六阶段投资时钟.md"}, {"id": "赢家模式.md", "label": "赢家模式", "title": "赢家模式", "type": "book", "degree": 8, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "核心主题：通过建立“赢家模式”与“股市赢利三部曲”（主体思维选股法、股市钱规则、赢家模式八大实战系统），帮助股民从输家转变为持续盈利的赢家，核心在于改变思维、建立系统、顺应市场规律。适合人群：有一定股市经验但长期亏损、渴望系统化操作框架的散户投资者；对投资心理学和资金博弈逻辑感兴趣的读者；希望将投资思维迁移到创业与日常决策的学习者。要点1：赢家与输家的根本区别在于“主导权”认知。赢家模式：将操作结果归因于自身对市场规律的认知与适应，主动改变自己以顺应市场（如极端走势后补课研究政策、资金动态）。输家模式：将失败归咎于外界（政策、庄家、消息），抱怨环境却不反思自身操作缺陷", "keywords": ["赢家模式八大实战系统", "主体思维选股法", "股市钱规则", "内归因", "外归因", "股市赢", "赚在起跑", "起跑线"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/赚在起跑线：股市赢家模式"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/赢家模式.md"}, {"id": "指数基金.md", "label": "指数基金", "title": "指数基金", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：漫步华尔街（原书第10版）。作者：(美)马尔基尔(Malkiel，B.G.)。核心主题：论证“随机漫步”理论——股票价格短期不可预测，个人投资者通过长期持有低成本指数基金，能够战胜大多数专业基金经理。适合人群：希望建立长期稳健投资策略的个人投资者；对股市有效性理论感兴趣的金融从业者；想了解行为金融学与投资心理学关联的读者。要点3：市场有效性的争议与行为金融学的启示", "keywords": ["金融学", "指数基金"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/漫步华尔街（原书第10版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/指数基金.md"}, {"id": "情境模式.md", "label": "情境模式", "title": "情境模式", "type": "book", "degree": 8, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "核心主题：通过建立“赢家模式”与“股市赢利三部曲”（主体思维选股法、股市钱规则、赢家模式八大实战系统），帮助股民从输家转变为持续盈利的赢家，核心在于改变思维、建立系统、顺应市场规律。适合人群：有一定股市经验但长期亏损、渴望系统化操作框架的散户投资者；对投资心理学和资金博弈逻辑感兴趣的读者；希望将投资思维迁移到创业与日常决策的学习者。要点1：赢家与输家的根本区别在于“主导权”认知。赢家模式：将操作结果归因于自身对市场规律的认知与适应，主动改变自己以顺应市场（如极端走势后补课研究政策、资金动态）。输家模式：将失败归咎于外界（政策、庄家、消息），抱怨环境却不反思自身操作缺陷", "keywords": ["赢家模式八大实战系统", "主体思维选股法", "股市钱规则", "内归因", "外归因", "股市赢", "赚在起跑", "起跑线"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/赚在起跑线：股市赢家模式"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/情境模式.md"}, {"id": "戴维斯双击.md", "label": "戴维斯双击", "title": "戴维斯双击", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "作者： 约翰·罗斯柴尔德（John Rothchild）。主题领域： 投资理财、金融史、家族传记、价值投资。出版信息： 中国人民大学出版社，2018-11，ISBN：978-7-300-26204-8。戴维斯双击 (Davis Double Play)： 指股价（Price）= 每股盈利（EPS）× 市盈率（PE）。“戴维斯双击” 理论，它简洁而深刻地揭示了股价波动的双重驱动力（盈利和估值），为理解市场周期和公司成长提供了强大的分析框架", "keywords": ["戴维斯双", "斯双击"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/戴维斯王朝_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/戴维斯双击.md"}, {"id": "带柄茶杯形态.md", "label": "带柄茶杯形态", "title": "带柄茶杯形态", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "本书核心是提出并阐释CAN SLIM选股投资法则，旨在解决个体投资者如何在股市中系统性地识别超级牛股、把握买卖时机并进行风险管理的问题。作者认为大多数投资者既非价值投资的殉道士也非趋势投资的牺牲品，而可以通过一套融合基本面与技术面分析的可操作规则，在牛熊市中均能有效获利。问题意识源于作者自身投资失败的教训以及对百年美股历史数据的归纳。** 1. 用CAN SLIM的“带柄茶杯形态”原理来设计一组动态海报：主画面经历“上升-回调-缩量横盘-突破”四个阶段，色彩与构图随之演变。** “带柄茶杯形态”可以类比为艺术设计中的“视觉节奏”：前期的上涨如同画面中的强音，随后的回调（杯身）是呼吸间隙，杯柄区", "keywords": ["带柄茶杯", "茶杯形"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/笑傲股市(原书第4版) - 威廉·欧奈尔(My重排版)_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/带柄茶杯形态.md"}, {"id": "学习能力.md", "label": "学习能力", "title": "学习能力", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：韭菜的自我修养(李笑来首次公开投资原则)。核心主题：本书旨在揭示交易市场中“韭菜”（通常指亏损的散户）的本质、常见错误和思维误区，并提供一系列基于作者个人经验的投资原则和认知升级方法，帮助读者摆脱“韭菜”宿命，成为合格的投资者。适合人群：所有对投资交易（特别是区块链、加密货币等高风险市场）感兴趣的初学者；在市场中屡次亏损、感到迷茫的“老韭菜”；以及任何希望提升自身投资认知、避免常见陷阱的读者。“韭菜”并非简单的“亏损散户”，其核心特征是缺乏学习能力和基本阅读能力，并且在交易中犯下根本性错误。摆脱“韭菜”宿命的第一步是树立一个核心观念：交易市场并非“零和游戏”", "keywords": ["投资原则", "菜的自"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/韭菜的自我修养(李笑来首次公开投资原则)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/学习能力.md"}, {"id": "知足常乐.md", "label": "知足常乐", "title": "知足常乐", "type": "book", "degree": 7, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：在股市大崩溃前抛出的人：巴鲁克自传（典藏版）。作者：伯纳德·巴鲁克(Bernard M.Baruch)。核心主题：通过巴鲁克从华尔街投机者到政治家的传奇经历，揭示投资成功的本质不在于预测市场，而在于理解人性、掌握事实、及时行动，并以此为基础实现财富与人生的双重成功。巴鲁克认为，股票市场记录的不是事件本身，而是人类对这些事件的反应。巴鲁克将投机者定义为“评判未来并在未来情形出现之前即采取行动的人”", "keywords": ["巴鲁克", "获得事实", "形成判断", "及时行动", "股市大", "市大崩", "大崩溃"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/在股市大崩溃前抛出的人：巴鲁克自传（典藏版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/知足常乐.md"}, {"id": "逆向投资.md", "label": "逆向投资", "title": "逆向投资", "type": "book", "degree": 8, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "核心主题：本书揭示了投资世界中各类周期（经济、企业、心理、市场等）的内在规律与因果关系，教导投资者如何识别当前周期所处的位置，并利用“周期定位”的策略，在风险与机遇中做出更优决策，从而实现长期战胜市场。适合人群：所有希望提升投资决策质量、理解市场波动本质的投资者，尤其是对价值投资、逆向投资理念感兴趣的读者。无论是初入市场的新手，还是经验丰富的专业投资人，都能从中获得深刻的洞见。最后，“少走中间多走极端”，市场心理和价格很少停留在“合理”的均值上，而是从一个极端摆向另一个极端，如从极度贪婪到极度恐惧，从价格过高到价格过低。当多数指标指向一个极端时，就是你应该提高警惕或采取行动的时候", "keywords": ["投资人心理和情绪钟摆", "政府调节逆周期", "企业盈利周期", "风险态度周期", "市场情绪指标", "经济周期", "估值指标", "信贷指标"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/周期"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/逆向投资.md"}, {"id": "周期.md", "label": "周期", "title": "周期", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：韭菜的自我修养(李笑来首次公开投资原则)。核心主题：本书旨在揭示交易市场中“韭菜”（通常指亏损的散户）的本质、常见错误和思维误区，并提供一系列基于作者个人经验的投资原则和认知升级方法，帮助读者摆脱“韭菜”宿命，成为合格的投资者。适合人群：所有对投资交易（特别是区块链、加密货币等高风险市场）感兴趣的初学者；在市场中屡次亏损、感到迷茫的“老韭菜”；以及任何希望提升自身投资认知、避免常见陷阱的读者。“韭菜”并非简单的“亏损散户”，其核心特征是缺乏学习能力和基本阅读能力，并且在交易中犯下根本性错误。摆脱“韭菜”宿命的第一步是树立一个核心观念：交易市场并非“零和游戏”", "keywords": ["投资原则", "菜的自"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/韭菜的自我修养(李笑来首次公开投资原则)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/周期.md"}, {"id": "通货膨胀.md", "label": "通货膨胀", "title": "通货膨胀", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：财务自由之路（Ⅲ）：理财大师为你量身定制的投资组合体系。核心主题：本书系统性地阐述了如何通过构建个性化的投资组合，实现年均8%～12%甚至更高的收益率，从而在低时间投入和低压力下实现财务自由。核心在于破除对投资的三大偏见，并基于个人目标、资产状况、投资个性与年限，将资金分配到不同风险等级的有形资产中。所有投资分为三类：货币资产（储蓄、债券等）、有形资产（不动产、股票、股票基金等）和赌博（期货、赌场等）。核心结论是：只有有形资产能让你在长期内抵御通货膨胀并实现财富翻番", "keywords": ["有形资产", "财务自"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/财务自由之路（Ⅲ）：理财大师为你量身定制的投资组合体系"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/通货膨胀.md"}, {"id": "价值投资.md", "label": "价值投资", "title": "价值投资", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "作者： 约翰·罗斯柴尔德（John Rothchild）。主题领域： 投资理财、金融史、家族传记、价值投资。出版信息： 中国人民大学出版社，2018-11，ISBN：978-7-300-26204-8。戴维斯双击 (Davis Double Play)： 指股价（Price）= 每股盈利（EPS）× 市盈率（PE）。“戴维斯双击” 理论，它简洁而深刻地揭示了股价波动的双重驱动力（盈利和估值），为理解市场周期和公司成长提供了强大的分析框架", "keywords": ["戴维斯双", "斯双击"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/戴维斯王朝_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/价值投资.md"}, {"id": "场外赚钱能力.md", "label": "场外赚钱能力", "title": "场外赚钱能力", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：韭菜的自我修养(李笑来首次公开投资原则)。核心主题：本书旨在揭示交易市场中“韭菜”（通常指亏损的散户）的本质、常见错误和思维误区，并提供一系列基于作者个人经验的投资原则和认知升级方法，帮助读者摆脱“韭菜”宿命，成为合格的投资者。适合人群：所有对投资交易（特别是区块链、加密货币等高风险市场）感兴趣的初学者；在市场中屡次亏损、感到迷茫的“老韭菜”；以及任何希望提升自身投资认知、避免常见陷阱的读者。“韭菜”并非简单的“亏损散户”，其核心特征是缺乏学习能力和基本阅读能力，并且在交易中犯下根本性错误。摆脱“韭菜”宿命的第一步是树立一个核心观念：交易市场并非“零和游戏”", "keywords": ["投资原则", "菜的自"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/韭菜的自我修养(李笑来首次公开投资原则)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/场外赚钱能力.md"}, {"id": "金钱永不过时.md", "label": "金钱永不过时", "title": "金钱永不过时", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "作者： 约翰·罗斯柴尔德（John Rothchild）。主题领域： 投资理财、金融史、家族传记、价值投资。出版信息： 中国人民大学出版社，2018-11，ISBN：978-7-300-26204-8。“戴维斯双击” 是方法论，“金钱永不过时” 是选择标的（如保险股）的哲学基础。“金钱永不过时” 的投资哲学，为投资者提供了一个穿越经济周期的、永恒的投资赛道，这种行业层面的“护城河”思考极具启发性", "keywords": ["戴维斯双", "斯双击"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/戴维斯王朝_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/金钱永不过时.md"}, {"id": "事实判断行动.md", "label": "事实判断行动", "title": "事实判断行动", "type": "book", "degree": 7, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：在股市大崩溃前抛出的人：巴鲁克自传（典藏版）。作者：伯纳德·巴鲁克(Bernard M.Baruch)。核心主题：通过巴鲁克从华尔街投机者到政治家的传奇经历，揭示投资成功的本质不在于预测市场，而在于理解人性、掌握事实、及时行动，并以此为基础实现财富与人生的双重成功。巴鲁克认为，股票市场记录的不是事件本身，而是人类对这些事件的反应。巴鲁克将投机者定义为“评判未来并在未来情形出现之前即采取行动的人”", "keywords": ["巴鲁克", "获得事实", "形成判断", "及时行动", "股市大", "市大崩", "大崩溃"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/在股市大崩溃前抛出的人：巴鲁克自传（典藏版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/事实判断行动.md"}, {"id": "信贷周期.md", "label": "信贷周期", "title": "信贷周期", "type": "book", "degree": 8, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "核心主题：本书揭示了投资世界中各类周期（经济、企业、心理、市场等）的内在规律与因果关系，教导投资者如何识别当前周期所处的位置，并利用“周期定位”的策略，在风险与机遇中做出更优决策，从而实现长期战胜市场。适合人群：所有希望提升投资决策质量、理解市场波动本质的投资者，尤其是对价值投资、逆向投资理念感兴趣的读者。无论是初入市场的新手，还是经验丰富的专业投资人，都能从中获得深刻的洞见。最后，“少走中间多走极端”，市场心理和价格很少停留在“合理”的均值上，而是从一个极端摆向另一个极端，如从极度贪婪到极度恐惧，从价格过高到价格过低。当多数指标指向一个极端时，就是你应该提高警惕或采取行动的时候", "keywords": ["投资人心理和情绪钟摆", "政府调节逆周期", "企业盈利周期", "风险态度周期", "市场情绪指标", "经济周期", "估值指标", "信贷指标"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/周期"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/信贷周期.md"}, {"id": "人性管理.md", "label": "人性管理", "title": "人性管理", "type": "book", "degree": 7, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：在股市大崩溃前抛出的人：巴鲁克自传（典藏版）。作者：伯纳德·巴鲁克(Bernard M.Baruch)。核心主题：通过巴鲁克从华尔街投机者到政治家的传奇经历，揭示投资成功的本质不在于预测市场，而在于理解人性、掌握事实、及时行动，并以此为基础实现财富与人生的双重成功。巴鲁克认为，股票市场记录的不是事件本身，而是人类对这些事件的反应。巴鲁克将投机者定义为“评判未来并在未来情形出现之前即采取行动的人”", "keywords": ["巴鲁克", "获得事实", "形成判断", "及时行动", "股市大", "市大崩", "大崩溃"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/在股市大崩溃前抛出的人：巴鲁克自传（典藏版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/人性管理.md"}, {"id": "经济周期.md", "label": "经济周期", "title": "经济周期", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：《积极型资产配置指南：经济周期分析与六阶段投资时钟 (华章经典·金融投资)》。作者：马丁J.普林格(Martin J.Pring)。核心主题：本书旨在通过分析经济周期的规律性，构建一个“六阶段投资时钟”框架，指导投资者在不同经济阶段，对债券、股票和商品等不同资产类别进行战术性资产配置，以实现风险最小化和收益最大化。经济周期并非随机波动，而是由一系列按时间顺序发生的事件（如利率、经济指标、通货膨胀）驱动，这为资产配置提供了明确的路线图。要点2：六阶段投资时钟是动态配置的核心工具", "keywords": ["经济周期", "资产配"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/积极型资产配置指南：经济周期分析与六阶段投资时钟 (华章经典·金融投资)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/经济周期.md"}, {"id": "随机漫步理论.md", "label": "随机漫步理论", "title": "随机漫步理论", "type": "book", "degree": 3, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：漫步华尔街（原书第10版）。作者：(美)马尔基尔(Malkiel，B.G.)。核心主题：论证“随机漫步”理论——股票价格短期不可预测，个人投资者通过长期持有低成本指数基金，能够战胜大多数专业基金经理。适合人群：希望建立长期稳健投资策略的个人投资者；对股市有效性理论感兴趣的金融从业者；想了解行为金融学与投资心理学关联的读者。要点3：市场有效性的争议与行为金融学的启示", "keywords": ["金融学", "行为金融", "人投资"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/漫步华尔街（原书第10版）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/随机漫步理论.md"}, {"id": "归因理论.md", "label": "归因理论", "title": "归因理论", "type": "book", "degree": 7, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "核心主题：通过建立“赢家模式”与“股市赢利三部曲”（主体思维选股法、股市钱规则、赢家模式八大实战系统），帮助股民从输家转变为持续盈利的赢家，核心在于改变思维、建立系统、顺应市场规律。适合人群：有一定股市经验但长期亏损、渴望系统化操作框架的散户投资者；对投资心理学和资金博弈逻辑感兴趣的读者；希望将投资思维迁移到创业与日常决策的学习者。要点1：赢家与输家的根本区别在于“主导权”认知。赢家模式：将操作结果归因于自身对市场规律的认知与适应，主动改变自己以顺应市场（如极端走势后补课研究政策、资金动态）。输家模式：将失败归咎于外界（政策、庄家、消息），抱怨环境却不反思自身操作缺陷", "keywords": ["赢家模式八大实战系统", "主体思维选股法", "股市钱规则", "内归因", "外归因", "股市赢", "归因理论"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/赚在起跑线：股市赢家模式"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/归因理论.md"}, {"id": "投资组合体系.md", "label": "投资组合体系", "title": "投资组合体系", "type": "book", "degree": 2, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：财务自由之路（Ⅲ）：理财大师为你量身定制的投资组合体系。核心主题：本书系统性地阐述了如何通过构建个性化的投资组合，实现年均8%～12%甚至更高的收益率，从而在低时间投入和低压力下实现财务自由。核心在于破除对投资的三大偏见，并基于个人目标、资产状况、投资个性与年限，将资金分配到不同风险等级的有形资产中。所有投资分为三类：货币资产（储蓄、债券等）、有形资产（不动产、股票、股票基金等）和赌博（期货、赌场等）。核心结论是：只有有形资产能让你在长期内抵御通货膨胀并实现财富翻番", "keywords": ["投资组合", "有形资"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/财务自由之路（Ⅲ）：理财大师为你量身定制的投资组合体系"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/投资组合体系.md"}, {"id": "资产分类.md", "label": "资产分类", "title": "资产分类", "type": "book", "degree": 7, "cluster": "投资理财", "domain": "商业", "sub_domain": "投资理财", "summary": "书名：精准投资：管清友的投资思维课。核心主题：在财富巨变的时代，通过建立系统化的投资思维框架，掌握不同投资品类的核心逻辑，从而在风险可控的前提下做出精准的投资决策，实现财富的保值增值。适合人群：希望从“盲目跟风”转向“理性投资”的普通投资者；对股票、基金、房产、黄金等各类投资品感兴趣但缺乏系统认知的入门者；以及希望理解中国投资市场特殊性的中产阶级。这一思维体系包含两个核心：机会思维（把握关键选择，如查理·芒格所说剔除最好的15个决策后表现一般）和风险思维（事前留安全边际，事后严格止损，如罗伊·纽伯格连续68年不亏损的10%止损原则）。根据书中三层分类，结合自己的风险承受能力（可参考“保底型、稳", "keywords": ["投资思维", "机会思维", "风险思维", "基础层", "进阶层", "高级层", "投资品"], "tags": ["domain/商业", "sub_domain/投资理财", "type/concept", "source/精准投资：管清友的投资思维课"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/投资理财/资产分类.md"}];
+var LINKS = [{"source": "CAN SLIM选股法则.md", "target": "止损规则.md", "value": 2, "shared": ["欧奈尔", "带柄茶杯"]}, {"source": "CAN SLIM选股法则.md", "target": "基本面与技术面结合.md", "value": 2, "shared": ["欧奈尔", "带柄茶杯"]}, {"source": "CAN SLIM选股法则.md", "target": "趋势跟踪.md", "value": 2, "shared": ["欧奈尔", "带柄茶杯"]}, {"source": "财务语言.md", "target": "聚焦与不平衡.md", "value": 7, "shared": ["认知决定财富边界", "聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务语言.md", "target": "信息不对称.md", "value": 7, "shared": ["认知决定财富边界", "聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务语言.md", "target": "底层逻辑.md", "value": 7, "shared": ["认知决定财富边界", "聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务语言.md", "target": "以小博大.md", "value": 7, "shared": ["认知决定财富边界", "聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "机构投资者.md", "target": "复利思维.md", "value": 5, "shared": ["进阶层", "高级层", "机会思维", "基础层", "风险思维"]}, {"source": "机构投资者.md", "target": "投资思维.md", "value": 5, "shared": ["进阶层", "高级层", "机会思维", "基础层", "风险思维"]}, {"source": "机构投资者.md", "target": "资产分类.md", "value": 5, "shared": ["进阶层", "高级层", "机会思维", "基础层", "风险思维"]}, {"source": "资产配置.md", "target": "风险管理.md", "value": 2, "shared": ["资产配", "经济周期"]}, {"source": "资产配置.md", "target": "六阶段投资时钟.md", "value": 2, "shared": ["资产配", "经济周期"]}, {"source": "资产配置.md", "target": "经济周期.md", "value": 2, "shared": ["资产配", "经济周期"]}, {"source": "风险管理.md", "target": "六阶段投资时钟.md", "value": 2, "shared": ["资产配", "经济周期"]}, {"source": "风险管理.md", "target": "经济周期.md", "value": 2, "shared": ["资产配", "经济周期"]}, {"source": "风险控制.md", "target": "心理钟摆.md", "value": 8, "shared": ["风险态度周期", "政府调节逆周期", "估值指标", "市场情绪指标", "信贷指标"]}, {"source": "风险控制.md", "target": "周期规律.md", "value": 8, "shared": ["风险态度周期", "政府调节逆周期", "估值指标", "市场情绪指标", "信贷指标"]}, {"source": "风险控制.md", "target": "逆向投资.md", "value": 8, "shared": ["风险态度周期", "政府调节逆周期", "估值指标", "市场情绪指标", "信贷指标"]}, {"source": "风险控制.md", "target": "信贷周期.md", "value": 8, "shared": ["风险态度周期", "政府调节逆周期", "估值指标", "市场情绪指标", "信贷指标"]}, {"source": "止损规则.md", "target": "基本面与技术面结合.md", "value": 2, "shared": ["欧奈尔", "带柄茶杯"]}, {"source": "止损规则.md", "target": "趋势跟踪.md", "value": 2, "shared": ["欧奈尔", "带柄茶杯"]}, {"source": "心理钟摆.md", "target": "周期规律.md", "value": 8, "shared": ["风险态度周期", "政府调节逆周期", "估值指标", "市场情绪指标", "信贷指标"]}, {"source": "心理钟摆.md", "target": "逆向投资.md", "value": 8, "shared": ["风险态度周期", "政府调节逆周期", "估值指标", "市场情绪指标", "信贷指标"]}, {"source": "心理钟摆.md", "target": "信贷周期.md", "value": 8, "shared": ["风险态度周期", "政府调节逆周期", "估值指标", "市场情绪指标", "信贷指标"]}, {"source": "复利思维.md", "target": "投资思维.md", "value": 7, "shared": ["进阶层", "投资思维", "投资品", "高级层", "机会思维"]}, {"source": "复利思维.md", "target": "资产分类.md", "value": 7, "shared": ["进阶层", "投资思维", "投资品", "高级层", "机会思维"]}, {"source": "逆向思维.md", "target": "系统化操作.md", "value": 8, "shared": ["主体思维选股法", "股市赢", "起跑线", "内归因", "赚在起跑"]}, {"source": "逆向思维.md", "target": "赢家模式.md", "value": 8, "shared": ["主体思维选股法", "股市赢", "起跑线", "内归因", "赚在起跑"]}, {"source": "逆向思维.md", "target": "情境模式.md", "value": 8, "shared": ["主体思维选股法", "股市赢", "起跑线", "内归因", "赚在起跑"]}, {"source": "逆向思维.md", "target": "归因理论.md", "value": 6, "shared": ["主体思维选股法", "股市赢", "内归因", "外归因", "赢家模式八大实战系统"]}, {"source": "生命周期投资策略.md", "target": "市场有效性.md", "value": 3, "shared": ["人投资", "行为金融", "金融学"]}, {"source": "生命周期投资策略.md", "target": "有效市场假说.md", "value": 3, "shared": ["人投资", "行为金融", "金融学"]}, {"source": "生命周期投资策略.md", "target": "随机漫步理论.md", "value": 3, "shared": ["人投资", "行为金融", "金融学"]}, {"source": "知行合一.md", "target": "错误学习.md", "value": 7, "shared": ["市大崩", "巴鲁克", "股市大", "获得事实", "及时行动"]}, {"source": "知行合一.md", "target": "从错误中学习.md", "value": 7, "shared": ["市大崩", "巴鲁克", "股市大", "获得事实", "及时行动"]}, {"source": "知行合一.md", "target": "知足常乐.md", "value": 7, "shared": ["市大崩", "巴鲁克", "股市大", "获得事实", "及时行动"]}, {"source": "知行合一.md", "target": "事实判断行动.md", "value": 7, "shared": ["市大崩", "巴鲁克", "股市大", "获得事实", "及时行动"]}, {"source": "知行合一.md", "target": "人性管理.md", "value": 7, "shared": ["市大崩", "巴鲁克", "股市大", "获得事实", "及时行动"]}, {"source": "市场有效性.md", "target": "有效市场假说.md", "value": 3, "shared": ["人投资", "行为金融", "金融学"]}, {"source": "市场有效性.md", "target": "随机漫步理论.md", "value": 3, "shared": ["人投资", "行为金融", "金融学"]}, {"source": "错误学习.md", "target": "从错误中学习.md", "value": 7, "shared": ["市大崩", "巴鲁克", "股市大", "获得事实", "及时行动"]}, {"source": "错误学习.md", "target": "知足常乐.md", "value": 7, "shared": ["市大崩", "巴鲁克", "股市大", "获得事实", "及时行动"]}, {"source": "错误学习.md", "target": "事实判断行动.md", "value": 7, "shared": ["市大崩", "巴鲁克", "股市大", "获得事实", "及时行动"]}, {"source": "错误学习.md", "target": "人性管理.md", "value": 7, "shared": ["市大崩", "巴鲁克", "股市大", "获得事实", "及时行动"]}, {"source": "有形资产.md", "target": "通货膨胀.md", "value": 2, "shared": ["有形资产", "财务自"]}, {"source": "聚焦与不平衡.md", "target": "信息不对称.md", "value": 8, "shared": ["认知决定财富边界", "聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "聚焦与不平衡.md", "target": "底层逻辑.md", "value": 8, "shared": ["认知决定财富边界", "聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "聚焦与不平衡.md", "target": "以小博大.md", "value": 8, "shared": ["认知决定财富边界", "聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "信息不对称.md", "target": "底层逻辑.md", "value": 8, "shared": ["认知决定财富边界", "聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "信息不对称.md", "target": "以小博大.md", "value": 8, "shared": ["认知决定财富边界", "聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "底层逻辑.md", "target": "以小博大.md", "value": 8, "shared": ["认知决定财富边界", "聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "止损.md", "target": "韭菜.md", "value": 2, "shared": ["菜的自", "投资原则"]}, {"source": "止损.md", "target": "学习能力.md", "value": 2, "shared": ["菜的自", "投资原则"]}, {"source": "止损.md", "target": "周期.md", "value": 2, "shared": ["菜的自", "投资原则"]}, {"source": "止损.md", "target": "场外赚钱能力.md", "value": 2, "shared": ["菜的自", "投资原则"]}, {"source": "财务杠杆.md", "target": "复利效应.md", "value": 2, "shared": ["戴维斯双", "斯双击"]}, {"source": "财务杠杆.md", "target": "戴维斯双击.md", "value": 2, "shared": ["戴维斯双", "斯双击"]}, {"source": "财务杠杆.md", "target": "价值投资.md", "value": 2, "shared": ["戴维斯双", "斯双击"]}, {"source": "财务杠杆.md", "target": "金钱永不过时.md", "value": 2, "shared": ["戴维斯双", "斯双击"]}, {"source": "周期规律.md", "target": "逆向投资.md", "value": 8, "shared": ["风险态度周期", "政府调节逆周期", "估值指标", "市场情绪指标", "信贷指标"]}, {"source": "周期规律.md", "target": "信贷周期.md", "value": 8, "shared": ["风险态度周期", "政府调节逆周期", "估值指标", "市场情绪指标", "信贷指标"]}, {"source": "有效市场假说.md", "target": "随机漫步理论.md", "value": 3, "shared": ["人投资", "行为金融", "金融学"]}, {"source": "从错误中学习.md", "target": "知足常乐.md", "value": 7, "shared": ["市大崩", "巴鲁克", "股市大", "获得事实", "及时行动"]}, {"source": "从错误中学习.md", "target": "事实判断行动.md", "value": 7, "shared": ["市大崩", "巴鲁克", "股市大", "获得事实", "及时行动"]}, {"source": "从错误中学习.md", "target": "人性管理.md", "value": 7, "shared": ["市大崩", "巴鲁克", "股市大", "获得事实", "及时行动"]}, {"source": "复利效应.md", "target": "戴维斯双击.md", "value": 2, "shared": ["戴维斯双", "斯双击"]}, {"source": "复利效应.md", "target": "价值投资.md", "value": 2, "shared": ["戴维斯双", "斯双击"]}, {"source": "复利效应.md", "target": "金钱永不过时.md", "value": 2, "shared": ["戴维斯双", "斯双击"]}, {"source": "系统化操作.md", "target": "赢家模式.md", "value": 8, "shared": ["主体思维选股法", "股市赢", "起跑线", "内归因", "赚在起跑"]}, {"source": "系统化操作.md", "target": "情境模式.md", "value": 8, "shared": ["主体思维选股法", "股市赢", "起跑线", "内归因", "赚在起跑"]}, {"source": "系统化操作.md", "target": "归因理论.md", "value": 6, "shared": ["主体思维选股法", "股市赢", "内归因", "外归因", "赢家模式八大实战系统"]}, {"source": "投资思维.md", "target": "资产分类.md", "value": 7, "shared": ["进阶层", "投资思维", "投资品", "高级层", "机会思维"]}, {"source": "基本面与技术面结合.md", "target": "趋势跟踪.md", "value": 2, "shared": ["欧奈尔", "带柄茶杯"]}, {"source": "韭菜.md", "target": "学习能力.md", "value": 2, "shared": ["菜的自", "投资原则"]}, {"source": "韭菜.md", "target": "周期.md", "value": 2, "shared": ["菜的自", "投资原则"]}, {"source": "韭菜.md", "target": "场外赚钱能力.md", "value": 2, "shared": ["菜的自", "投资原则"]}, {"source": "六阶段投资时钟.md", "target": "经济周期.md", "value": 2, "shared": ["资产配", "经济周期"]}, {"source": "赢家模式.md", "target": "情境模式.md", "value": 8, "shared": ["主体思维选股法", "股市赢", "起跑线", "内归因", "赚在起跑"]}, {"source": "赢家模式.md", "target": "归因理论.md", "value": 6, "shared": ["主体思维选股法", "股市赢", "内归因", "外归因", "赢家模式八大实战系统"]}, {"source": "情境模式.md", "target": "归因理论.md", "value": 6, "shared": ["主体思维选股法", "股市赢", "内归因", "外归因", "赢家模式八大实战系统"]}, {"source": "戴维斯双击.md", "target": "价值投资.md", "value": 2, "shared": ["戴维斯双", "斯双击"]}, {"source": "戴维斯双击.md", "target": "金钱永不过时.md", "value": 2, "shared": ["戴维斯双", "斯双击"]}, {"source": "学习能力.md", "target": "周期.md", "value": 2, "shared": ["菜的自", "投资原则"]}, {"source": "学习能力.md", "target": "场外赚钱能力.md", "value": 2, "shared": ["菜的自", "投资原则"]}, {"source": "知足常乐.md", "target": "事实判断行动.md", "value": 7, "shared": ["市大崩", "巴鲁克", "股市大", "获得事实", "及时行动"]}, {"source": "知足常乐.md", "target": "人性管理.md", "value": 7, "shared": ["市大崩", "巴鲁克", "股市大", "获得事实", "及时行动"]}, {"source": "逆向投资.md", "target": "信贷周期.md", "value": 8, "shared": ["风险态度周期", "政府调节逆周期", "估值指标", "市场情绪指标", "信贷指标"]}, {"source": "周期.md", "target": "场外赚钱能力.md", "value": 2, "shared": ["菜的自", "投资原则"]}, {"source": "价值投资.md", "target": "金钱永不过时.md", "value": 2, "shared": ["戴维斯双", "斯双击"]}, {"source": "事实判断行动.md", "target": "人性管理.md", "value": 7, "shared": ["市大崩", "巴鲁克", "股市大", "获得事实", "及时行动"]}];
+var CLUSTER_COLORS = {"投资理财": "#10b981"};
+var SEARCH_DATA = [{"id": "CAN SLIM选股法则.md", "label": "CAN SLIM选股法则"}, {"id": "财务语言.md", "label": "财务语言"}, {"id": "机构投资者.md", "label": "机构投资者"}, {"id": "战术资产配置.md", "label": "战术资产配置"}, {"id": "资产配置.md", "label": "资产配置"}, {"id": "风险管理.md", "label": "风险管理"}, {"id": "风险控制.md", "label": "风险控制"}, {"id": "止损规则.md", "label": "止损规则"}, {"id": "心理钟摆.md", "label": "心理钟摆"}, {"id": "复利思维.md", "label": "复利思维"}, {"id": "逆向思维.md", "label": "逆向思维"}, {"id": "财务自由.md", "label": "财务自由"}, {"id": "生命周期投资策略.md", "label": "生命周期投资策略"}, {"id": "知行合一.md", "label": "知行合一"}, {"id": "市场有效性.md", "label": "市场有效性"}, {"id": "错误学习.md", "label": "错误学习"}, {"id": "有形资产.md", "label": "有形资产"}, {"id": "聚焦与不平衡.md", "label": "聚焦与不平衡"}, {"id": "信息不对称.md", "label": "信息不对称"}, {"id": "底层逻辑.md", "label": "底层逻辑"}, {"id": "止损.md", "label": "止损"}, {"id": "财务杠杆.md", "label": "财务杠杆"}, {"id": "周期规律.md", "label": "周期规律"}, {"id": "有效市场假说.md", "label": "有效市场假说"}, {"id": "从错误中学习.md", "label": "从错误中学习"}, {"id": "复利效应.md", "label": "复利效应"}, {"id": "系统化操作.md", "label": "系统化操作"}, {"id": "投资思维.md", "label": "投资思维"}, {"id": "行为金融学.md", "label": "行为金融学"}, {"id": "基本面与技术面结合.md", "label": "基本面与技术面结合"}, {"id": "趋势跟踪.md", "label": "趋势跟踪"}, {"id": "韭菜.md", "label": "韭菜"}, {"id": "以小博大.md", "label": "以小博大"}, {"id": "六阶段投资时钟.md", "label": "六阶段投资时钟"}, {"id": "赢家模式.md", "label": "赢家模式"}, {"id": "指数基金.md", "label": "指数基金"}, {"id": "情境模式.md", "label": "情境模式"}, {"id": "戴维斯双击.md", "label": "戴维斯双击"}, {"id": "带柄茶杯形态.md", "label": "带柄茶杯形态"}, {"id": "学习能力.md", "label": "学习能力"}, {"id": "知足常乐.md", "label": "知足常乐"}, {"id": "逆向投资.md", "label": "逆向投资"}, {"id": "周期.md", "label": "周期"}, {"id": "通货膨胀.md", "label": "通货膨胀"}, {"id": "价值投资.md", "label": "价值投资"}, {"id": "场外赚钱能力.md", "label": "场外赚钱能力"}, {"id": "金钱永不过时.md", "label": "金钱永不过时"}, {"id": "事实判断行动.md", "label": "事实判断行动"}, {"id": "信贷周期.md", "label": "信贷周期"}, {"id": "人性管理.md", "label": "人性管理"}, {"id": "经济周期.md", "label": "经济周期"}, {"id": "随机漫步理论.md", "label": "随机漫步理论"}, {"id": "归因理论.md", "label": "归因理论"}, {"id": "投资组合体系.md", "label": "投资组合体系"}, {"id": "资产分类.md", "label": "资产分类"}];
+var CONCEPT_SEARCH = [];
+
+
+/* ---- 搜索 ---- */
+var searchBox = document.getElementById("search-box");
+var searchResults = document.getElementById("search-results");
+
+searchBox.addEventListener("input", function(){
+  var q = this.value.trim().toLowerCase();
+  if(!q) { searchResults.style.display="none"; return; }
+  var combined = SEARCH_DATA.concat(CONCEPT_SEARCH.map(function(c){ return {id:c,label:c,type:"concept"}; }));
+  var matches = combined.filter(function(d){ return d.label.toLowerCase().indexOf(q)>-1; }).slice(0,12);
+  if(!matches.length) { searchResults.style.display="none"; return; }
+  searchResults.innerHTML = matches.map(function(d){
+    return '<div class="sri" data-id="'+d.id+'">'+d.label+'</div>';
+  }).join("");
+  searchResults.style.display="block";
+});
+
+searchResults.addEventListener("click", function(e){
+  var el = e.target.closest(".sri");
+  if(!el) return;
+  highlightNode(el.getAttribute("data-id"));
+  searchResults.style.display="none";
+  searchBox.value="";
+});
+
+function highlightNode(id){
+  svg.selectAll(".node").classed("highlight", function(d){ return d.id===id; });
+  svg.selectAll(".link").classed("highlight", function(d){
+    return d.source.id===id || d.target.id===id;
+  });
+  var nd = nodeMap.get(id);
+  if(!nd) return;
+  var t = d3.zoomTransform(svg.node());
+  var x = -nd.x*t.k + width/2;
+  var y = -nd.y*t.k + height/2;
+  svg.transition().duration(600).call(zoom.transform, d3.zoomIdentity.translate(x,y).scale(t.k));
+}
+
+/* ---- 详情面板 ---- */
+function showDetail(d){
+  var panel = document.getElementById("detail-panel");
+  var title = document.getElementById("detail-title");
+  var body  = document.getElementById("detail-body");
+
+  title.textContent = (d.title || d.label || d.id || "").replace(/\.md$/, "");
+
+  var html = "";
+
+  /* 元信息 */
+  html += '<div class="section"><div class="meta-row"><span class="meta-label">类型</span><span>' + (d.type==="concept" ? "💡 概念" : "📖 笔记") + '</span></div>';
+  if(d.domain)   html += '<div class="meta-row"><span class="meta-label">领域</span><span>' + d.domain + '</span></div>';
+  if(d.cluster) html += '<div class="meta-row"><span class="meta-label">聚类</span><span>' + d.cluster + '</span></div>';
+  if(d.degree !== undefined) html += '<div class="meta-row"><span class="meta-label">连通度</span><span>' + d.degree + '</span></div>';
+  html += '</div>';
+
+  /* 摘要 */
+  if(d.summary){
+    html += '<div class="section"><div class="section-title">📝 摘要</div><div class="summary">' + escapeHtml(d.summary.slice(0,500)) + (d.summary.length>500 ? "..." : "") + '</div></div>';
+  }
+
+  /* 关键词 */
+  if(d.keywords && d.keywords.length){
+    html += '<div class="section"><div class="section-title">🔑 关键词</div>';
+    d.keywords.forEach(function(kw){ html += '<span class="keyword">' + escapeHtml(kw) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 标签 */
+  if(d.tags && d.tags.length){
+    html += '<div class="section"><div class="section-title">🏷️ 标签</div>';
+    d.tags.forEach(function(tg){ html += '<span class="tag">' + escapeHtml(tg) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 打开原文件：用 Obsidian URI 协议，避免浏览器 file:// 限制 */
+  if(d.path){
+    var obsidianUrl = "obsidian://open?path=" + encodeURIComponent(d.path);
+    html += '<div class="section"><a class="open-link" href="' + obsidianUrl + '">📂 在 Obsidian 中打开</a></div>';
+  }
+
+  body.innerHTML = html;
+  panel.classList.add("open");
+}
+
+function closeDetail(){
+  document.getElementById("detail-panel").classList.remove("open");
+}
+
+function escapeHtml(s){
+  if(!s) return "";
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ---- D3 力导向图 ---- */
+var width  = window.innerWidth;
+var height = window.innerHeight - 48;
+var svg = d3.select("#graph").append("svg").attr("width",width).attr("height",height);
+var g = svg.append("g");
+var zoom = d3.zoom().scaleExtent([0.05,5]).on("zoom", function(e){ g.attr("transform", e.transform); });
+svg.call(zoom);
+
+var simulation = d3.forceSimulation(NODES)
+  .force("link",    d3.forceLink(LINKS).id(function(d){ return d.id; }).distance(90))
+  .force("charge",  d3.forceManyBody().strength(-220))
+  .force("center",  d3.forceCenter(width/2, height/2))
+  .force("collision", d3.forceCollide(30))
+  .force("x",       d3.forceX(width/2).strength(0.06))
+  .force("y",       d3.forceY(height/2).strength(0.06));
+
+var link = g.append("g").attr("class","links").selectAll("line")
+  .data(LINKS).join("line")
+  .attr("class", function(d){ return "link" + ((d.type==="book-book") ? " link-book" : ""); });
+
+var node = g.append("g").attr("class","nodes").selectAll("g")
+  .data(NODES).join("g")
+  .attr("class","node")
+  .attr("data-id", function(d){ return d.id; })
+  .call(d3.drag()
+    .on("start", function(event,d){ if(!event.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+    .on("drag",  function(event,d){ d.fx=event.x; d.fy=event.y; })
+    .on("end",   function(event,d){ if(!event.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+node.append("circle")
+  .attr("r", function(d){ return d.type==="book" ? 5+Math.sqrt(d.degree||1)*1.5 : 7; })
+  .attr("fill", function(d){ return d.type==="book" ? (CLUSTER_COLORS[d.cluster]||"#94a3b8") : "#10b981"; })
+  .attr("stroke", function(d){ return d.type==="book" ? "#0f172a" : "#d97706"; })
+  .on("mouseover", function(event,d){
+    var html = d.type==="book"
+      ? "<strong>📖 "+d.label+"</strong><br>连通度:"+d.degree+"<br>聚类:"+(d.cluster||"未分类")
+      : "<strong>💡 "+d.concept+"</strong><br>关联:"+d.book_count+" 篇";
+    d3.select("#tooltip").html(html).style("opacity",1)
+      .style("left",(event.pageX+12)+"px").style("top",(event.pageY-8)+"px");
+  })
+  .on("mouseout", function(){ d3.select("#tooltip").style("opacity",0); })
+  .on("click", function(event,d){
+    event.stopPropagation();
+    showDetail(d);
+  });
+
+node.append("text").attr("dx",11).attr("dy","0.35em").text(function(d){ return d.label; });
+
+var nodeMap = new Map();
+simulation.on("tick", function(){
+  link
+    .attr("x1", function(d){ return d.source.x; })
+    .attr("y1", function(d){ return d.source.y; })
+    .attr("x2", function(d){ return d.target.x; })
+    .attr("y2", function(d){ return d.target.y; });
+  node.attr("transform", function(d){
+    nodeMap.set(d.id, d);
+    return "translate("+d.x+","+d.y+")";
+  });
+});
+
+/* ---- 图例 ---- */
+var legendItems = d3.select("#legend").append("div").style("font-weight","bold").style("margin-bottom","8px").text("🎨 聚类").node().parentNode;
+Object.entries(CLUSTER_COLORS).forEach(function(entry){
+  var li = d3.select(legendItems).append("div").attr("class","li");
+  li.append("span").attr("class","ld").style("background",entry[1]);
+  li.append("span").text(entry[0]);
+});
+
+/* ---- 按钮 ---- */
+var conceptVisible = true;
+d3.select("#btn-toggle-concept").on("click", function(){
+  conceptVisible = !conceptVisible;
+  svg.selectAll(".node").filter(function(d){ return d.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  svg.selectAll(".link").filter(function(d){ return d.source.type==="concept"||d.target.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  d3.select(this).text(conceptVisible?"隐藏概念":"显示概念").classed("active",!conceptVisible);
+});
+d3.select("#btn-reset").on("click", function(){
+  closeDetail();
+  svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+});
+
+svg.on("click", function(){ searchResults.style.display="none"; });
+document.addEventListener("click", function(e){
+  if(!document.getElementById("detail-panel").contains(e.target) && !e.target.closest(".node")){
+    closeDetail();
+  }
+});
+
+/* 更新统计 */
+d3.select("#node-count").text(NODES.length);
+d3.select("#link-count").text(LINKS.length);
+</script>
+</body>
+</html>

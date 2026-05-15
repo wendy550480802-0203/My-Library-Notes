@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>文学 - 文学阅读 - 知识图谱</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#0f172a; color:#e2e8f0; overflow:hidden; }
+
+/* 侧边栏 */
+#sidebar { position:fixed; left:0; top:0; width:220px; height:100vh; background:#1e293b; border-right:1px solid #334155; overflow-y:auto; z-index:50; transition:transform 0.3s; font-size:12px; }
+#sidebar.collapsed { transform:translateX(-220px); }
+#sidebar h2 { font-size:13px; padding:12px 14px 8px; color:#94a3b8; border-bottom:1px solid #334155; }
+#sidebar .domain-header { padding:7px 14px; cursor:pointer; font-weight:600; border-bottom:1px solid #1a2332; transition:background 0.15s; user-select:none; }
+#sidebar .domain-header:hover { background:#334155; }
+#sidebar .domain-pages { display:none; }
+#sidebar .domain-pages a { display:block; padding:5px 14px 5px 24px; color:#cbd5e1; text-decoration:none; border-bottom:1px solid #1a2332; transition:background 0.15s; font-size:11px; }
+#sidebar .domain-pages a:hover { background:#334155; color:#fff; }
+#sidebar .domain-pages a.active { font-weight:600; }
+#sidebar a.active { background:#8b5cf6; color:#0f172a; }
+#sidebar-toggle { position:fixed; left:8px; top:56px; z-index:60; background:#334155; border:1px solid #475569; color:#e2e8f0; border-radius:6px; padding:4px 7px; cursor:pointer; font-size:13px; transition:left 0.3s; }
+#sidebar:not(.collapsed) ~ #sidebar-toggle { left:228px; }
+
+/* 右侧详情面板 */
+#detail-panel { position:fixed; top:0; right:-420px; width:400px; height:100vh; background:#1e293b; border-left:1px solid #334155; z-index:55; transition:right 0.3s; display:flex; flex-direction:column; }
+#detail-panel.open { right:0; }
+#detail-header { padding:14px 16px; border-bottom:1px solid #334155; display:flex; align-items:flex-start; gap:10px; }
+#detail-header h2 { flex:1; font-size:14px; line-height:1.4; margin:0; word-break:break-all; }
+#detail-close { background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer; padding:0 4px; line-height:1; }
+#detail-close:hover { color:#fff; }
+#detail-body { flex:1; overflow-y:auto; padding:16px; font-size:13px; line-height:1.7; }
+#detail-body .section { margin-bottom:16px; }
+#detail-body .section-title { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+#detail-body .tag { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#334155; border-radius:4px; font-size:11px; color:#cbd5e1; }
+#detail-body .keyword { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#8b5cf622; border:1px solid #8b5cf666; border-radius:4px; font-size:11px; color:#e2e8f0; }
+#detail-body .summary { color:#cbd5e1; white-space:pre-wrap; }
+#detail-body .open-link { display:inline-block; margin-top:12px; padding:6px 14px; background:#8b5cf6; color:#0f172a; border-radius:6px; text-decoration:none; font-size:12px; font-weight:600; }
+#detail-body .open-link:hover { opacity:0.85; }
+#detail-body .meta-row { display:flex; gap:12px; margin-bottom:8px; font-size:12px; }
+#detail-body .meta-label { color:#94a3b8; min-width:60px; }
+#detail-body .connected-list { list-style:none; padding:0; }
+#detail-body .connected-list li { padding:4px 0; border-bottom:1px solid #1a2332; font-size:12px; cursor:pointer; }
+#detail-body .connected-list li:hover { color:#8b5cf6; }
+
+#header { padding:10px 20px 10px 50px; background:#1e293b; border-bottom:1px solid #334155; display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-left:200px; transition:margin-left 0.3s; }
+#sidebar.collapsed ~ #header { margin-left:0; }
+#header h1 { margin:0; font-size:17px; color:#8b5cf6; white-space:nowrap; }
+#search-wrap { position:relative; }
+#search-box { width:220px; padding:5px 10px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#e2e8f0; font-size:13px; }
+#search-results { position:absolute; top:32px; left:0; width:260px; max-height:300px; overflow-y:auto; background:#1e293b; border:1px solid #475569; border-radius:6px; display:none; z-index:100; }
+.sri { padding:7px 10px; cursor:pointer; font-size:12px; border-bottom:1px solid #334155; }
+.sri:hover { background:#334155; }
+.stats { font-size:12px; color:#94a3b8; white-space:nowrap; }
+.ctrls { display:flex; gap:6px; margin-left:auto; }
+.btn { padding:5px 12px; border-radius:6px; border:1px solid #475569; background:#334155; color:#e2e8f0; cursor:pointer; font-size:12px; }
+.btn:hover { background:#475569; }
+.btn.active { background:#8b5cf6; color:#0f172a; border-color:#8b5cf6; }
+#legend { position:absolute; top:52px; left:220px; background:#1e293b; border:1px solid #475569; border-radius:8px; padding:10px 14px; font-size:12px; z-index:10; }
+.li { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+.ld { width:10px; height:10px; border-radius:50%; }
+#tooltip { position:absolute; padding:8px 12px; background:#1e293b; border:1px solid #475569; border-radius:8px; font-size:12px; pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:100; box-shadow:0 4px 20px rgba(0,0,0,0.5); max-width:320px; }
+#graph { width:calc(100vw - 200px); height:calc(100vh - 48px); margin-left:200px; transition:width 0.3s, margin-left 0.3s; }
+#sidebar.collapsed ~ #graph { margin-left:0; width:100vw; }
+#detail-panel.open ~ #graph { width:calc(100vw - 200px - 400px); }
+.link { stroke:#475569; stroke-opacity:0.3; }
+.link-book { stroke-opacity:0.12; }
+.node circle { cursor:pointer; stroke-width:1.5; }
+.node text { fill:#e2e8f0; font-size:10px; pointer-events:none; }
+.highlight circle { stroke:#fff !important; stroke-width:2.5px; }
+.highlight text { fill:#fff; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>📚 藏书阁 · 知识图谱</h2>
+  <div class="domain-header" data-target="IT" style="color:#67e8f9; border-left:3px solid #67e8f9;">IT ▾</div>
+  <div class="domain-pages" id="IT">
+    <a href="IT.json" style="border-left:3px solid #67e8f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(225篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="个人成长" style="color:#fb923c; border-left:3px solid #fb923c;">个人成长 ▾</div>
+  <div class="domain-pages" id="个人成长">
+    <a href="个人成长.json" style="border-left:3px solid #fb923c; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(461篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="产品" style="color:#a855f7; border-left:3px solid #a855f7;">产品 ▾</div>
+  <div class="domain-pages" id="产品">
+    <a href="产品_(其他).json" style="border-left:3px solid #a855f7; padding-left:18px;">(其他) <span style="font-size:10px;color:#64748b;">(553篇)</span></a>
+    <a href="产品_产品思维.json" style="border-left:3px solid #a855f7; padding-left:18px;">产品思维 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="产品_小程序生态.json" style="border-left:3px solid #a855f7; padding-left:18px;">小程序生态 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="产品_用户增长.json" style="border-left:3px solid #a855f7; padding-left:18px;">用户增长 <span style="font-size:10px;color:#64748b;">(49篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="会计" style="color:#86efac; border-left:3px solid #86efac;">会计 ▾</div>
+  <div class="domain-pages" id="会计">
+    <a href="会计.json" style="border-left:3px solid #86efac; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(67篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="健康" style="color:#34d399; border-left:3px solid #34d399;">健康 ▾</div>
+  <div class="domain-pages" id="健康">
+    <a href="健康.json" style="border-left:3px solid #34d399; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(284篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="写作" style="color:#c084fc; border-left:3px solid #c084fc;">写作 ▾</div>
+  <div class="domain-pages" id="写作">
+    <a href="写作.json" style="border-left:3px solid #c084fc; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(238篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="历史" style="color:#06b6d4; border-left:3px solid #06b6d4;">历史 ▾</div>
+  <div class="domain-pages" id="历史">
+    <a href="历史_(其他)_part1.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part2.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part3.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part4.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part5.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(541篇)</span></a>
+    <a href="历史_世界史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">世界史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="历史_中国历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国历史 <span style="font-size:10px;color:#64748b;">(96篇)</span></a>
+    <a href="历史_中国古代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国古代文学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="历史_中国现代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国现代文学 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="历史_中国近代史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国近代史 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="历史_人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">人物传记 <span style="font-size:10px;color:#64748b;">(143篇)</span></a>
+    <a href="历史_军事历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">军事历史 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="历史_历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史 <span style="font-size:10px;color:#64748b;">(538篇)</span></a>
+    <a href="历史_历史与政治.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史与政治 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史人物传记 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="历史_历史学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史学 <span style="font-size:10px;color:#64748b;">(189篇)</span></a>
+    <a href="历史_历史小说.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史小说 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史研究.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史研究 <span style="font-size:10px;color:#64748b;">(162篇)</span></a>
+    <a href="历史_思想史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">思想史 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="历史_文学与历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">文学与历史 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="历史_科技史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">科技史 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="历史_艺术史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">艺术史 <span style="font-size:10px;color:#64748b;">(83篇)</span></a>
+    <a href="历史_西方哲学史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">西方哲学史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="哲学" style="color:#14b8a6; border-left:3px solid #14b8a6;">哲学 ▾</div>
+  <div class="domain-pages" id="哲学">
+    <a href="哲学_(其他)_part1.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="哲学_(其他)_part2.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(272篇)</span></a>
+    <a href="哲学_中国哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">中国哲学 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="哲学_人生哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">人生哲学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="哲学_哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">哲学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+    <a href="哲学_政治哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">政治哲学 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="哲学_生活哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">生活哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+    <a href="哲学_社会哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">社会哲学 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="哲学_科学哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">科学哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="商业" style="color:#10b981; border-left:3px solid #10b981;">商业 ▾</div>
+  <div class="domain-pages" id="商业">
+    <a href="商业_(其他)_part1.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（1/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part2.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（2/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part3.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（3/3） <span style="font-size:10px;color:#64748b;">(391篇)</span></a>
+    <a href="商业_企业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">企业管理 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="商业_健康管理.json" style="border-left:3px solid #10b981; padding-left:18px;">健康管理 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="商业_创业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">创业管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业战略.json" style="border-left:3px solid #10b981; padding-left:18px;">商业战略 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">商业管理 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="商业_投资理财.json" style="border-left:3px solid #10b981; padding-left:18px;">投资理财 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_知识管理.json" style="border-left:3px solid #10b981; padding-left:18px;">知识管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_管理.json" style="border-left:3px solid #10b981; padding-left:18px;">管理 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_组织管理.json" style="border-left:3px solid #10b981; padding-left:18px;">组织管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_经济学.json" style="border-left:3px solid #10b981; padding-left:18px;">经济学 <span style="font-size:10px;color:#64748b;">(74篇)</span></a>
+    <a href="商业_金融投资.json" style="border-left:3px solid #10b981; padding-left:18px;">金融投资 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="商业_领导力.json" style="border-left:3px solid #10b981; padding-left:18px;">领导力 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="图书馆学" style="color:#5eead4; border-left:3px solid #5eead4;">图书馆学 ▾</div>
+  <div class="domain-pages" id="图书馆学">
+    <a href="图书馆学.json" style="border-left:3px solid #5eead4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(23篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="宗教" style="color:#c4b5fd; border-left:3px solid #c4b5fd;">宗教 ▾</div>
+  <div class="domain-pages" id="宗教">
+    <a href="宗教.json" style="border-left:3px solid #c4b5fd; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(19篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="心理学" style="color:#f59e0b; border-left:3px solid #f59e0b;">心理学 ▾</div>
+  <div class="domain-pages" id="心理学">
+    <a href="心理学_(其他)_part1.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（1/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part2.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（2/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part3.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（3/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part4.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（4/4） <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="心理学_个人成长与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">个人成长与心理学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理健康.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理健康 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理学 <span style="font-size:10px;color:#64748b;">(239篇)</span></a>
+    <a href="心理学_教育心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">教育心理学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="心理学_文学与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">文学与心理学 <span style="font-size:10px;color:#64748b;">(119篇)</span></a>
+    <a href="心理学_沟通技巧.json" style="border-left:3px solid #f59e0b; padding-left:18px;">沟通技巧 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="心理学_社会心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">社会心理学 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+    <a href="心理学_认知心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知心理学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="心理学_认知科学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知科学 <span style="font-size:10px;color:#64748b;">(39篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="房地产" style="color:#6ee7b7; border-left:3px solid #6ee7b7;">房地产 ▾</div>
+  <div class="domain-pages" id="房地产">
+    <a href="房地产.json" style="border-left:3px solid #6ee7b7; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(12篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="政治" style="color:#fbbf24; border-left:3px solid #fbbf24;">政治 ▾</div>
+  <div class="domain-pages" id="政治">
+    <a href="政治.json" style="border-left:3px solid #fbbf24; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(253篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="教育" style="color:#ec4899; border-left:3px solid #ec4899;">教育 ▾</div>
+  <div class="domain-pages" id="教育">
+    <a href="教育_(其他)_part1.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="教育_(其他)_part2.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(382篇)</span></a>
+    <a href="教育_个人成长.json" style="border-left:3px solid #ec4899; padding-left:18px;">个人成长 <span style="font-size:10px;color:#64748b;">(250篇)</span></a>
+    <a href="教育_儿童教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">儿童教育 <span style="font-size:10px;color:#64748b;">(62篇)</span></a>
+    <a href="教育_家庭教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">家庭教育 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="教育_教育理念.json" style="border-left:3px solid #ec4899; padding-left:18px;">教育理念 <span style="font-size:10px;color:#64748b;">(68篇)</span></a>
+    <a href="教育_财商教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">财商教育 <span style="font-size:10px;color:#64748b;">(48篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="文学" style="color:#8b5cf6; border-left:3px solid #8b5cf6;">文学 ▾</div>
+  <div class="domain-pages" id="文学">
+    <a href="文学_(其他)_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_中国古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">中国古典文学 <span style="font-size:10px;color:#64748b;">(112篇)</span></a>
+    <a href="文学_儿童文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">儿童文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">古典文学 <span style="font-size:10px;color:#64748b;">(92篇)</span></a>
+    <a href="文学_奇幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">奇幻文学 <span style="font-size:10px;color:#64748b;">(51篇)</span></a>
+    <a href="文学_女性主义文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">女性主义文学 <span style="font-size:10px;color:#64748b;">(38篇)</span></a>
+    <a href="文学_悬疑小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">悬疑小说分析 <span style="font-size:10px;color:#64748b;">(52篇)</span></a>
+    <a href="文学_推理小说.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="文学_推理小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说分析 <span style="font-size:10px;color:#64748b;">(126篇)</span></a>
+    <a href="文学_推理文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理文学 <span style="font-size:10px;color:#64748b;">(35篇)</span></a>
+    <a href="文学_文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学 <span style="font-size:10px;color:#64748b;">(223篇)</span></a>
+    <a href="文学_文学与个人成长.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与个人成长 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="文学_文学与人生哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与人生哲学 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="文学_文学与哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与哲学 <span style="font-size:10px;color:#64748b;">(303篇)</span></a>
+    <a href="文学_文学与社会学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与社会学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="文学_文学分析_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（1/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（2/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（3/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（4/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（5/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part6.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（6/6） <span style="font-size:10px;color:#64748b;">(254篇)</span></a>
+    <a href="文学_文学批评.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学批评 <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="文学_文学理论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学理论 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_文学研究.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学研究 <span style="font-size:10px;color:#64748b;">(84篇)</span></a>
+    <a href="文学_文学经典.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学经典 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="文学_文学解读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学解读 <span style="font-size:10px;color:#64748b;">(40篇)</span></a>
+    <a href="文学_文学评论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学评论 <span style="font-size:10px;color:#64748b;">(482篇)</span></a>
+    <a href="文学_文学赏析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学赏析 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="文学_文学鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学鉴赏 <span style="font-size:10px;color:#64748b;">(82篇)</span></a>
+    <a href="文学_文学阅读.json" class="active" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学阅读 <span style="font-size:10px;color:#64748b;">(78篇)</span></a>
+    <a href="文学_旅行文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">旅行文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_日本文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">日本文学 <span style="font-size:10px;color:#64748b;">(98篇)</span></a>
+    <a href="文学_武侠文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">武侠文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_科幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学 <span style="font-size:10px;color:#64748b;">(175篇)</span></a>
+    <a href="文学_科幻文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学分析 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="文学_网络文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">网络文学分析 <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_艺术鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">艺术鉴赏 <span style="font-size:10px;color:#64748b;">(44篇)</span></a>
+    <a href="文学_非虚构文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">非虚构文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="时尚生活" style="color:#f9a8d4; border-left:3px solid #f9a8d4;">时尚生活 ▾</div>
+  <div class="domain-pages" id="时尚生活">
+    <a href="时尚生活.json" style="border-left:3px solid #f9a8d4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(71篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="未知" style="color:#94a3b8; border-left:3px solid #94a3b8;">未知 ▾</div>
+  <div class="domain-pages" id="未知">
+    <a href="未知.json" style="border-left:3px solid #94a3b8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(16篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="法学" style="color:#fcd34d; border-left:3px solid #fcd34d;">法学 ▾</div>
+  <div class="domain-pages" id="法学">
+    <a href="法学.json" style="border-left:3px solid #fcd34d; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="社会学" style="color:#6366f1; border-left:3px solid #6366f1;">社会学 ▾</div>
+  <div class="domain-pages" id="社会学">
+    <a href="社会学_(其他)_part1.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="社会学_(其他)_part2.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(484篇)</span></a>
+    <a href="社会学_文化研究.json" style="border-left:3px solid #6366f1; padding-left:18px;">文化研究 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="社会学_社会学.json" style="border-left:3px solid #6366f1; padding-left:18px;">社会学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="科学" style="color:#f97316; border-left:3px solid #f97316;">科学 ▾</div>
+  <div class="domain-pages" id="科学">
+    <a href="科学_(其他)_part1.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="科学_(其他)_part2.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(116篇)</span></a>
+    <a href="科学_医学人文.json" style="border-left:3px solid #f97316; padding-left:18px;">医学人文 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="科学_神经科学.json" style="border-left:3px solid #f97316; padding-left:18px;">神经科学 <span style="font-size:10px;color:#64748b;">(56篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="编程" style="color:#818cf8; border-left:3px solid #818cf8;">编程 ▾</div>
+  <div class="domain-pages" id="编程">
+    <a href="编程.json" style="border-left:3px solid #818cf8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(151篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="艺术" style="color:#e879f9; border-left:3px solid #e879f9;">艺术 ▾</div>
+  <div class="domain-pages" id="艺术">
+    <a href="艺术.json" style="border-left:3px solid #e879f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(365篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="英语" style="color:#f472b6; border-left:3px solid #f472b6;">英语 ▾</div>
+  <div class="domain-pages" id="英语">
+    <a href="英语.json" style="border-left:3px solid #f472b6; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(209篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="语言文学" style="color:#d8b4fe; border-left:3px solid #d8b4fe;">语言文学 ▾</div>
+  <div class="domain-pages" id="语言文学">
+    <a href="语言文学.json" style="border-left:3px solid #d8b4fe; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="金融" style="color:#a3e635; border-left:3px solid #a3e635;">金融 ▾</div>
+  <div class="domain-pages" id="金融">
+    <a href="金融.json" style="border-left:3px solid #a3e635; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(208篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="雅思" style="color:#22d3ee; border-left:3px solid #22d3ee;">雅思 ▾</div>
+  <div class="domain-pages" id="雅思">
+    <a href="雅思.json" style="border-left:3px solid #22d3ee; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(511篇)</span></a>
+  </div>
+
+    <script>
+    document.querySelectorAll('.domain-header').forEach(function(h){
+      h.addEventListener('click', function(){
+        var t = document.getElementById(this.dataset.target);
+        t.style.display = t.style.display==='none' ? 'block' : 'none';
+        this.innerHTML = this.innerHTML.replace(/[▾▸]/, t.style.display==='none'?'▸':'▾');
+      });
+    });
+    </script>
+    
+</div>
+<button id="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">☰</button>
+
+<div id="header">
+  <h1>📚 文学 · 文学阅读</h1>
+  <div id="search-wrap">
+    <input id="search-box" type="text" placeholder="🔍 搜索书名/概念...">
+    <div id="search-results"></div>
+  </div>
+  <div class="stats">
+    <span id="node-count">0</span> 节点 ·
+    <span id="link-count">0</span> 连接
+  </div>
+  <div class="ctrls">
+    <button class="btn" id="btn-toggle-concept">隐藏概念</button>
+    <button class="btn" id="btn-reset">重置视图</button>
+  </div>
+</div>
+
+<div id="graph"></div>
+<div id="tooltip"></div>
+
+<!-- 右侧详情面板 -->
+<div id="detail-panel">
+  <div id="detail-header">
+    <h2 id="detail-title"></h2>
+    <button id="detail-close" onclick="closeDetail()">✕</button>
+  </div>
+  <div id="detail-body"></div>
+</div>
+
+<script>
+var NODES = [{"id": "角色多面性.md", "label": "角色多面性", "title": "角色多面性", "type": "book", "degree": 3, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：在一个魔法消退、旧神陨落的奇幻世界“荆棘与白骨的王国”中，围绕“天降女王”的预言、狮鹫与人类的冲突、以及古老血脉与权力的争夺，展开了一场关于生存、信仰、背叛与救赎的史诗冒险。适合人群：史诗奇幻文学爱好者、喜欢宏大世界构建与政治权谋的读者、对“黑暗奇幻”风格有偏好的读者（类似《冰与火之歌》、《第一律法》）。要点1：独特的世界观——“魔法消退”与“荆棘魔法”。“天降女王”的预言贯穿全书，暗示一位拥有古老血脉的女性将统一王国或带来毁灭。“天降女王”、“荆棘王”等预言是书中角色行动的动力，也常被野心家利用", "keywords": ["相关笔记", "行动建议", "天降女"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/荆棘与白骨的王国4册"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/角色多面性.md"}, {"id": "历史小说.md", "label": "历史小说", "title": "历史小说", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：本书以16世纪英格兰宗教改革为背景，通过主人公内德·威拉德与玛格丽·菲茨杰拉德的爱情与命运，以及他们各自家族在政治、宗教漩涡中的挣扎，探讨了在动荡年代个人信仰、家族忠诚与个人自由之间的冲突与抉择。适合人群：适合喜欢宏大历史叙事、家族史诗、宫斗权谋与浪漫爱情结合的读者；尤其适合对都铎王朝、宗教改革历史感兴趣的读者；也是肯·福莱特“中世纪三部曲”粉丝的必读之作。节选开篇的引子就揭示了本书的核心矛盾：宗教改革引发的残酷迫害。主人公内德效忠于“自由思考上帝”的原则，而玛格丽的家庭则是虔诚的天主教徒，这为两人的爱情和未来埋下了悲剧的伏笔。内德对玛格丽一往情深，但玛格丽的父亲雷金纳德爵士为了家族", "keywords": ["玛格丽", "宗教改革"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/永恒火焰（全3册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/历史小说.md"}, {"id": "刹那与永恒.md", "label": "刹那与永恒", "title": "刹那与永恒", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：通过一位约克郡乡村兽医在退伍后重返岗位的第一天经历，以幽默、自嘲的笔触，展现了乡村生活中人与动物、人与人之间既恼人又温暖的互动，揭示了平凡日子里那些看似“刹那”的挑战，最终凝结成“永恒”记忆与情感的真谛。适合人群：喜爱动物、乡村生活与自然文学的读者；对英国约克郡风土人情感兴趣的人；喜欢幽默、温暖、治愈系故事的读者；从事或向往自由职业（如兽医、医生等）的人。要点1：乡村兽医工作的真实与艰辛。例如，通往雷普莱先生家的七道门，尤其是那道“邪恶”的第七扇门，每次通过都是一场搏斗。哈利先生与雷普莱先生的关系，超越", "keywords": ["雷普莱先", "莱先生"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/万物刹那又永恒"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/刹那与永恒.md"}, {"id": "唤醒与责任.md", "label": "唤醒与责任", "title": "唤醒与责任", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：古蜀国密码（套装6册）（荣获2017年网络文学金熊猫金奖，已售出多本小说影视版权。核心主题：本书以古蜀国为背景，讲述了鱼凫王女凫风初蕾在游历天下时，意外唤醒沉睡万年的上古共工百里行暮，两人在寻找天穆之野、应对大禹王万国大会的冒险中，揭开上古神话与文明隐秘，并最终承担起各自命运的故事。核心探讨了权力、责任、爱情与文明兴衰的宏大主题。无论是凫风初蕾寻找不周山，还是百里行暮提及黄帝通过天穆之野打败蚩尤，都体现了在神话背景下，个人与文明对更高层次力量、知识和地位的追求。书中，百里行暮作为“活历史”，对三万年前的往事（如怒撞不周山、与颛顼之战）有着亲历者的视角，而凫风初蕾则代表后世对神话的“传说”", "keywords": ["百里行暮", "凫风初"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/古蜀国密码（套装6册）（荣获2017年网络文学金熊猫金奖，已售出多本小说影视版权。）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/唤醒与责任.md"}, {"id": "生活艺术化.md", "label": "生活艺术化", "title": "生活艺术化", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：本书通过作者三毛在撒哈拉沙漠的日常生活与奇遇，展现了在极端物质匮乏的环境中，如何用爱、勇气和创造力构建精神家园，将荒凉单调的沙漠生活活成一首自由而浪漫的诗。适合人群：向往远方与自由、对异域文化好奇、在生活中寻找诗意与创造力、或正经历生活困境需要精神鼓舞的读者。要点1：以“爱”为基石，构建沙漠中的精神家园。例如，在《白手成家》中，她描述了自己如何用棺材板做家具，用捡来的骆驼头骨装饰墙壁，将荒凉变为艺术的殿堂。这种“白手成家”的过程，展现了爱、耐心与创造力如何战胜环境，将“远方”变为“家”", "keywords": ["相关笔记", "撒哈拉"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/撒哈拉的故事"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/生活艺术化.md"}, {"id": "幽默化解.md", "label": "幽默化解", "title": "幽默化解", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "作者：蔡智恒, ePUBw.COM。核心主题：本书通过一个高中男生被逼写一万字作文的苦恼经历，引出了一个因共享课桌抽屉而与补校女生产生奇妙书信往来的故事。核心主题是青春期的无奈、成长的烦恼，以及在单调压抑的校园生活中，人与人之间意外建立的、带有温度和幽默感的连接。这生动描绘了学生在集体压力下，面对不情愿的任务时的无力感和反抗的徒劳。主人公最终从同学口中得知，学校有补校学生，他与一位补校女生共享同一张课桌", "keywords": ["主人公", "补校女生"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/回眸"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/幽默化解.md"}, {"id": "历史谜团.md", "label": "历史谜团", "title": "历史谜团", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：以民调局调查员沈辣和孙胖子的视角，讲述他们在追查一艘失踪六百年、每隔二十年出现一次的明代鬼船过程中，遭遇超自然事件、内部权力斗争与历史谜团交织的冒险故事。适合人群：喜欢中国本土超自然悬疑、灵异探险、都市传说类小说的读者；对民国盗墓、明代航海史、神秘组织（如鬼道教）感兴趣的读者；追求快节奏、强悬念、带幽默感的叙事风格的读者。要点1：鬼船传说的引入与首次遭遇。这一事件不仅奠定了全书的核心悬念（鬼船的真相），也展示了民调局成员面对未知时的专业反应与内部紧张关系（如孙胖子对林枫的警惕）。孙胖子认为林枫在众人拼尽全力后才“捡现成”，而林枫在飞机上因沈辣提及“七五年南山墓地”而暴怒，掐住其脖子警", "keywords": ["民调局", "孙胖子", "调查员", "调局异"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/民调局异闻录3:血海鬼船"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/历史谜团.md"}, {"id": "情感联结.md", "label": "情感联结", "title": "情感联结", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：【Kindle图书共享】山茶文具店。核心主题：通过讲述镰仓一家代笔文具店店主雨宫鸠子的日常生活与代笔工作，探讨了人与人之间细腻的情感联结、对传统技艺的传承与坚守，以及如何通过“书写”这一行为，与过去和解、与自我和解，最终找到内心平静与生活意义的故事。适合人群：喜欢慢生活、治愈系文学的读者；对日本文化、书法艺术、传统手工艺感兴趣的人；正在经历人生转折期、寻求内心平静或与亲人（特别是祖辈）和解的读者。回到山茶文具店后，她通过模仿上代的工作方式（如严格遵守书信礼仪、使用上代留下的工具）、处理上代的遗产、以及与邻里（如芭芭拉夫人、鱼福老板娘）的互动，逐渐理解了上代的爱与坚守。她开始喝以前不喜欢的", "keywords": ["文具店", "山茶文具"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/【Kindle图书共享】山茶文具店"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/情感联结.md"}, {"id": "失败人生的价值.md", "label": "失败人生的价值", "title": "失败人生的价值", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：鱼河岸小店（直木奖获奖作家西加奈子倾情之作。《火花》作者又吉直树力荐，你以为的失败人生，也许是别人努力活着的结果。核心主题：通过一个11岁女孩“喜久子”的视角，讲述其母亲“肉子”（菊子）坎坷而充满生命力的感情史与生活经历，探讨“失败”人生的真正价值，以及小镇共同体中人与人之间的温暖与包容。适合人群：喜欢日式温情小说、关注边缘人物命运、对“失败”与“成功”有反思需求的读者；对亲子关系、小镇生活、女性成长主题感兴趣的读者。但作者并未批判，而是通过女儿喜久子的冷静观察，揭示出肉子的“失败”源于她不会怀疑人的善良、对爱情的全情投入，以及“因为孩子是无罪的”这种心软", "keywords": ["喜久子", "共同体", "鱼河岸", "西加奈"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/鱼河岸小店（直木奖获奖作家西加奈子倾情之作！ 《火花"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/失败人生的价值.md"}, {"id": "悬念伏笔.md", "label": "悬念伏笔", "title": "悬念伏笔", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：三十六骑【微信公众号：书单共享】。核心主题：本书以东汉时期班超“投笔从戎”、出使西域的历史为背景，通过虚构的侠客、墨家、盗家等江湖人物，讲述一个关于集结奇人异士、深入绝域、践行个人信念与家国使命的传奇故事。核心探讨了在乱世中，个体如何寻找并坚守自己的“道”。适合人群：喜欢历史传奇、武侠江湖、权谋智斗的读者；对东汉历史、诸子百家文化（如墨家、盗家）感兴趣的读者；欣赏团队冒险、个人成长与家国情怀交织故事的读者。作者将真实历史人物班超（史学家班固之弟）置于一个充满侠客、机关术和隐秘门派的江湖世界中", "keywords": ["三十六骑", "微信公"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/三十六骑【微信公众号：书单共享】"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/悬念伏笔.md"}, {"id": "力量追寻.md", "label": "力量追寻", "title": "力量追寻", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：古蜀国密码（套装6册）（荣获2017年网络文学金熊猫金奖，已售出多本小说影视版权。核心主题：本书以古蜀国为背景，讲述了鱼凫王女凫风初蕾在游历天下时，意外唤醒沉睡万年的上古共工百里行暮，两人在寻找天穆之野、应对大禹王万国大会的冒险中，揭开上古神话与文明隐秘，并最终承担起各自命运的故事。核心探讨了权力、责任、爱情与文明兴衰的宏大主题。无论是凫风初蕾寻找不周山，还是百里行暮提及黄帝通过天穆之野打败蚩尤，都体现了在神话背景下，个人与文明对更高层次力量、知识和地位的追求。书中，百里行暮作为“活历史”，对三万年前的往事（如怒撞不周山、与颛顼之战）有着亲历者的视角，而凫风初蕾则代表后世对神话的“传说”", "keywords": ["百里行暮", "凫风初"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/古蜀国密码（套装6册）（荣获2017年网络文学金熊猫金奖，已售出多本小说影视版权。）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/力量追寻.md"}, {"id": "人物塑造.md", "label": "人物塑造", "title": "人物塑造", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：三十六骑【微信公众号：书单共享】。核心主题：本书以东汉时期班超“投笔从戎”、出使西域的历史为背景，通过虚构的侠客、墨家、盗家等江湖人物，讲述一个关于集结奇人异士、深入绝域、践行个人信念与家国使命的传奇故事。核心探讨了在乱世中，个体如何寻找并坚守自己的“道”。适合人群：喜欢历史传奇、武侠江湖、权谋智斗的读者；对东汉历史、诸子百家文化（如墨家、盗家）感兴趣的读者；欣赏团队冒险、个人成长与家国情怀交织故事的读者。作者将真实历史人物班超（史学家班固之弟）置于一个充满侠客、机关术和隐秘门派的江湖世界中", "keywords": ["三十六骑", "微信公"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/三十六骑【微信公众号：书单共享】"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/人物塑造.md"}, {"id": "非评判性观察.md", "label": "非评判性观察", "title": "非评判性观察", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：本书通过作者三毛在撒哈拉沙漠的日常生活与奇遇，展现了在极端物质匮乏的环境中，如何用爱、勇气和创造力构建精神家园，将荒凉单调的沙漠生活活成一首自由而浪漫的诗。适合人群：向往远方与自由、对异域文化好奇、在生活中寻找诗意与创造力、或正经历生活困境需要精神鼓舞的读者。要点1：以“爱”为基石，构建沙漠中的精神家园。例如，在《白手成家》中，她描述了自己如何用棺材板做家具，用捡来的骆驼头骨装饰墙壁，将荒凉变为艺术的殿堂。这种“白手成家”的过程，展现了爱、耐心与创造力如何战胜环境，将“远方”变为“家”", "keywords": ["撒哈拉", "白手成家"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/撒哈拉的故事"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/非评判性观察.md"}, {"id": "超自然悬疑.md", "label": "超自然悬疑", "title": "超自然悬疑", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：以民调局调查员沈辣和孙胖子的视角，讲述他们在追查一艘失踪六百年、每隔二十年出现一次的明代鬼船过程中，遭遇超自然事件、内部权力斗争与历史谜团交织的冒险故事。适合人群：喜欢中国本土超自然悬疑、灵异探险、都市传说类小说的读者；对民国盗墓、明代航海史、神秘组织（如鬼道教）感兴趣的读者；追求快节奏、强悬念、带幽默感的叙事风格的读者。要点1：鬼船传说的引入与首次遭遇。这一事件不仅奠定了全书的核心悬念（鬼船的真相），也展示了民调局成员面对未知时的专业反应与内部紧张关系（如孙胖子对林枫的警惕）。孙胖子认为林枫在众人拼尽全力后才“捡现成”，而林枫在飞机上因沈辣提及“七五年南山墓地”而暴怒，掐住其脖子警", "keywords": ["民调局", "孙胖子", "调查员", "超自然"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/民调局异闻录3:血海鬼船"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/超自然悬疑.md"}, {"id": "意图-行为缺口.md", "label": "意图-行为缺口", "title": "意图-行为缺口", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：通过一位约克郡乡村兽医在退伍后重返岗位的第一天经历，以幽默、自嘲的笔触，展现了乡村生活中人与动物、人与人之间既恼人又温暖的互动，揭示了平凡日子里那些看似“刹那”的挑战，最终凝结成“永恒”记忆与情感的真谛。适合人群：喜爱动物、乡村生活与自然文学的读者；对英国约克郡风土人情感兴趣的人；喜欢幽默、温暖、治愈系故事的读者；从事或向往自由职业（如兽医、医生等）的人。要点1：乡村兽医工作的真实与艰辛。例如，通往雷普莱先生家的七道门，尤其是那道“邪恶”的第七扇门，每次通过都是一场搏斗。哈利先生与雷普莱先生的关系，超越", "keywords": ["雷普莱先", "莱先生"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/万物刹那又永恒"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/意图-行为缺口.md"}, {"id": "权力博弈.md", "label": "权力博弈", "title": "权力博弈", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：本书以16世纪英格兰宗教改革为背景，通过主人公内德·威拉德与玛格丽·菲茨杰拉德的爱情与命运，以及他们各自家族在政治、宗教漩涡中的挣扎，探讨了在动荡年代个人信仰、家族忠诚与个人自由之间的冲突与抉择。适合人群：适合喜欢宏大历史叙事、家族史诗、宫斗权谋与浪漫爱情结合的读者；尤其适合对都铎王朝、宗教改革历史感兴趣的读者；也是肯·福莱特“中世纪三部曲”粉丝的必读之作。节选开篇的引子就揭示了本书的核心矛盾：宗教改革引发的残酷迫害。主人公内德效忠于“自由思考上帝”的原则，而玛格丽的家庭则是虔诚的天主教徒，这为两人的爱情和未来埋下了悲剧的伏笔。内德对玛格丽一往情深，但玛格丽的父亲雷金纳德爵士为了家族", "keywords": ["玛格丽", "宗教改革"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/永恒火焰（全3册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/权力博弈.md"}, {"id": "书信沟通.md", "label": "书信沟通", "title": "书信沟通", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "作者：蔡智恒, ePUBw.COM。核心主题：本书通过一个高中男生被逼写一万字作文的苦恼经历，引出了一个因共享课桌抽屉而与补校女生产生奇妙书信往来的故事。核心主题是青春期的无奈、成长的烦恼，以及在单调压抑的校园生活中，人与人之间意外建立的、带有温度和幽默感的连接。这生动描绘了学生在集体压力下，面对不情愿的任务时的无力感和反抗的徒劳。主人公最终从同学口中得知，学校有补校学生，他与一位补校女生共享同一张课桌", "keywords": ["主人公", "补校女生"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/回眸"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/书信沟通.md"}, {"id": "少年成长.md", "label": "少年成长", "title": "少年成长", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：七侯笔录全2册【公众号：书单共享】。核心主题：本书以中国历史上的天才文人为核心，将他们的才情与魂魄炼化为具有神通的“笔灵”，讲述了一个关于文化传承、少年成长与奇幻冒险的故事。核心探讨了“不教天下才情付诸东流”的美好希冀，以及用传统文化讲述“怪力乱神”故事的独特魅力。本书最核心的创意是将中国历史上的文化名人（如李白）的灵魂与才情，炼化成拥有不同神通和性格的“笔灵”。这启发我们思考：真正的文化传承不仅仅是背诵和复述，更是对先贤精神与才情的再理解、再创造和个性化表达", "keywords": ["文化传承", "七侯笔"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/七侯笔录全2册【公众号：书单共享】"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/少年成长.md"}, {"id": "青春成长.md", "label": "青春成长", "title": "青春成长", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "作者：蔡智恒, ePUBw.COM。核心主题：本书通过一个高中男生被逼写一万字作文的苦恼经历，引出了一个因共享课桌抽屉而与补校女生产生奇妙书信往来的故事。核心主题是青春期的无奈、成长的烦恼，以及在单调压抑的校园生活中，人与人之间意外建立的、带有温度和幽默感的连接。这生动描绘了学生在集体压力下，面对不情愿的任务时的无力感和反抗的徒劳。主人公最终从同学口中得知，学校有补校学生，他与一位补校女生共享同一张课桌", "keywords": ["主人公", "补校女生"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/回眸"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/青春成长.md"}, {"id": "魔法消退.md", "label": "魔法消退", "title": "魔法消退", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：在一个魔法消退、旧神陨落的奇幻世界“荆棘与白骨的王国”中，围绕“天降女王”的预言、狮鹫与人类的冲突、以及古老血脉与权力的争夺，展开了一场关于生存、信仰、背叛与救赎的史诗冒险。适合人群：史诗奇幻文学爱好者、喜欢宏大世界构建与政治权谋的读者、对“黑暗奇幻”风格有偏好的读者（类似《冰与火之歌》、《第一律法》）。要点1：独特的世界观——“魔法消退”与“荆棘魔法”。一种名为“荆棘魔法”的力量正在从世界上消退，导致旧有的秩序崩溃。故事中，多位角色，包括看似柔弱的公主、野心勃勃的王子以及神秘的狮鹫，都在为争夺或实现这一预言而行动，形成了多线并行的政治与军事斗争", "keywords": ["行动建议", "荆棘与白", "棘与白骨", "骨的王"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/荆棘与白骨的王国4册"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/魔法消退.md"}, {"id": "自我和解.md", "label": "自我和解", "title": "自我和解", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：【Kindle图书共享】山茶文具店。核心主题：通过讲述镰仓一家代笔文具店店主雨宫鸠子的日常生活与代笔工作，探讨了人与人之间细腻的情感联结、对传统技艺的传承与坚守，以及如何通过“书写”这一行为，与过去和解、与自我和解，最终找到内心平静与生活意义的故事。适合人群：喜欢慢生活、治愈系文学的读者；对日本文化、书法艺术、传统手工艺感兴趣的人；正在经历人生转折期、寻求内心平静或与亲人（特别是祖辈）和解的读者。回到山茶文具店后，她通过模仿上代的工作方式（如严格遵守书信礼仪、使用上代留下的工具）、处理上代的遗产、以及与邻里（如芭芭拉夫人、鱼福老板娘）的互动，逐渐理解了上代的爱与坚守。她开始喝以前不喜欢的", "keywords": ["文具店", "山茶文具"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/【Kindle图书共享】山茶文具店"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/自我和解.md"}, {"id": "幽默自嘲.md", "label": "幽默自嘲", "title": "幽默自嘲", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：通过一位约克郡乡村兽医在退伍后重返岗位的第一天经历，以幽默、自嘲的笔触，展现了乡村生活中人与动物、人与人之间既恼人又温暖的互动，揭示了平凡日子里那些看似“刹那”的挑战，最终凝结成“永恒”记忆与情感的真谛。适合人群：喜爱动物、乡村生活与自然文学的读者；对英国约克郡风土人情感兴趣的人；喜欢幽默、温暖、治愈系故事的读者；从事或向往自由职业（如兽医、医生等）的人。要点1：乡村兽医工作的真实与艰辛。例如，通往雷普莱先生家的七道门，尤其是那道“邪恶”的第七扇门，每次通过都是一场搏斗。哈利先生与雷普莱先生的关系，超越", "keywords": ["雷普莱先", "莱先生"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/万物刹那又永恒"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/幽默自嘲.md"}, {"id": "人物肖像.md", "label": "人物肖像", "title": "人物肖像", "type": "book", "degree": 3, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：通过回忆1920年代在巴黎作为青年作家的清贫生活，揭示了艺术创作与贫困、爱情、友谊及城市氛围之间深刻而复杂的关系，并探讨了纯粹与毒化、青春与永恒的主题。文学爱好者，特别是海明威或“迷惘的一代”的读者。对回忆录、自传体文学感兴趣的读者。他认为，只有离开巴黎才能更好地描写巴黎，这座城市本身就是他创作灵感的源泉和“流动的圣节”。打造你的“流动的圣节”：仔细思考你生活中的“巴黎”在哪里", "keywords": ["海明威", "流动的圣", "动的圣节"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/流动的圣节"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/人物肖像.md"}, {"id": "成长小说.md", "label": "成长小说", "title": "成长小说", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：绿山墙的安妮(无删减全译本)(果麦经典)。核心主题：讲述了一个充满想象力、情感丰富的孤儿安妮·雪莉，如何被绿山墙农舍的兄妹马修和玛丽拉收养，用她的热情和活力改变了他们古板的生活，并在埃文利社区找到归属感与自我价值的成长故事。核心探讨了“家”的真正含义、想象力与现实的平衡、以及个体如何影响并塑造环境。马修和玛丽拉·卡斯伯特兄妹从最初的震惊、拒绝，到被安妮的真诚与活力所打动，最终决定留下她。安妮的想象力不仅仅是文学修辞，更是一种强大的心理防御与应对机制", "keywords": ["想象力", "绿山墙", "玛丽拉", "墙的安"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/绿山墙的安妮(无删减全译本)(果麦经典)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/成长小说.md"}, {"id": "权力话语.md", "label": "权力话语", "title": "权力话语", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：以民调局调查员沈辣和孙胖子的视角，讲述他们在追查一艘失踪六百年、每隔二十年出现一次的明代鬼船过程中，遭遇超自然事件、内部权力斗争与历史谜团交织的冒险故事。适合人群：喜欢中国本土超自然悬疑、灵异探险、都市传说类小说的读者；对民国盗墓、明代航海史、神秘组织（如鬼道教）感兴趣的读者；追求快节奏、强悬念、带幽默感的叙事风格的读者。要点1：鬼船传说的引入与首次遭遇。这一事件不仅奠定了全书的核心悬念（鬼船的真相），也展示了民调局成员面对未知时的专业反应与内部紧张关系（如孙胖子对林枫的警惕）。孙胖子认为林枫在众人拼尽全力后才“捡现成”，而林枫在飞机上因沈辣提及“七五年南山墓地”而暴怒，掐住其脖子警", "keywords": ["相关笔记", "民调局"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/民调局异闻录3:血海鬼船"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/权力话语.md"}, {"id": "宗教改革.md", "label": "宗教改革", "title": "宗教改革", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：本书以16世纪英格兰宗教改革为背景，通过主人公内德·威拉德与玛格丽·菲茨杰拉德的爱情与命运，以及他们各自家族在政治、宗教漩涡中的挣扎，探讨了在动荡年代个人信仰、家族忠诚与个人自由之间的冲突与抉择。适合人群：适合喜欢宏大历史叙事、家族史诗、宫斗权谋与浪漫爱情结合的读者；尤其适合对都铎王朝、宗教改革历史感兴趣的读者；也是肯·福莱特“中世纪三部曲”粉丝的必读之作。节选开篇的引子就揭示了本书的核心矛盾：宗教改革引发的残酷迫害。主人公内德效忠于“自由思考上帝”的原则，而玛格丽的家庭则是虔诚的天主教徒，这为两人的爱情和未来埋下了悲剧的伏笔。内德对玛格丽一往情深，但玛格丽的父亲雷金纳德爵士为了家族", "keywords": ["玛格丽", "宗教改革"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/永恒火焰（全3册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/宗教改革.md"}, {"id": "诗意地栖居.md", "label": "诗意地栖居", "title": "诗意地栖居", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "本书以三毛在撒哈拉沙漠的生活为核心，探讨了异质文化碰撞下的生存美学、日常生活的创造性重构，以及现代人如何在极端环境中保持精神自由与情感温度。问题意识指向：物质匮乏与精神丰盈的辩证关系、文化身份认同的流动性、以及对“家”这一空间概念的重新定义。** 全书以代序（母亲的信）开场，建立情感基调；随后通过《沙漠中的饭店》《结婚记》《悬壶济世》《娃娃新娘》《荒山之夜》《沙漠观浴记》等篇章，从饮食、婚姻、医疗、风俗、冒险、身体叙事等多维度展开。我认同三毛将“物质匮乏”转化为“创作素材”的生活态度：她用粉丝比喻“雨”、用猪肉干充当“中药”，这种诗意的转化本身就是一种“设计思维”——在限制中寻找可能性。** ", "keywords": ["日常生活", "撒哈拉"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/三毛全集(精排版)_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/诗意地栖居.md"}, {"id": "幽默消解苦难.md", "label": "幽默消解苦难", "title": "幽默消解苦难", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：鱼河岸小店（直木奖获奖作家西加奈子倾情之作。《火花》作者又吉直树力荐，你以为的失败人生，也许是别人努力活着的结果。核心主题：通过一个11岁女孩“喜久子”的视角，讲述其母亲“肉子”（菊子）坎坷而充满生命力的感情史与生活经历，探讨“失败”人生的真正价值，以及小镇共同体中人与人之间的温暖与包容。适合人群：喜欢日式温情小说、关注边缘人物命运、对“失败”与“成功”有反思需求的读者；对亲子关系、小镇生活、女性成长主题感兴趣的读者。但作者并未批判，而是通过女儿喜久子的冷静观察，揭示出肉子的“失败”源于她不会怀疑人的善良、对爱情的全情投入，以及“因为孩子是无罪的”这种心软", "keywords": ["喜久子", "共同体", "鱼河岸", "西加奈"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/鱼河岸小店（直木奖获奖作家西加奈子倾情之作！ 《火花"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/幽默消解苦难.md"}, {"id": "天降女王预言.md", "label": "天降女王预言", "title": "天降女王预言", "type": "book", "degree": 3, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：在一个魔法消退、旧神陨落的奇幻世界“荆棘与白骨的王国”中，围绕“天降女王”的预言、狮鹫与人类的冲突、以及古老血脉与权力的争夺，展开了一场关于生存、信仰、背叛与救赎的史诗冒险。适合人群：史诗奇幻文学爱好者、喜欢宏大世界构建与政治权谋的读者、对“黑暗奇幻”风格有偏好的读者（类似《冰与火之歌》、《第一律法》）。要点1：独特的世界观——“魔法消退”与“荆棘魔法”。“天降女王”的预言贯穿全书，暗示一位拥有古老血脉的女性将统一王国或带来毁灭。“天降女王”、“荆棘王”等预言是书中角色行动的动力，也常被野心家利用", "keywords": ["行动建议", "天降女王", "棘与白"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/荆棘与白骨的王国4册"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/天降女王预言.md"}, {"id": "集体记忆.md", "label": "集体记忆", "title": "集体记忆", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：以民调局调查员沈辣和孙胖子的视角，讲述他们在追查一艘失踪六百年、每隔二十年出现一次的明代鬼船过程中，遭遇超自然事件、内部权力斗争与历史谜团交织的冒险故事。适合人群：喜欢中国本土超自然悬疑、灵异探险、都市传说类小说的读者；对民国盗墓、明代航海史、神秘组织（如鬼道教）感兴趣的读者；追求快节奏、强悬念、带幽默感的叙事风格的读者。要点1：鬼船传说的引入与首次遭遇。这一事件不仅奠定了全书的核心悬念（鬼船的真相），也展示了民调局成员面对未知时的专业反应与内部紧张关系（如孙胖子对林枫的警惕）。孙胖子认为林枫在众人拼尽全力后才“捡现成”，而林枫在飞机上因沈辣提及“七五年南山墓地”而暴怒，掐住其脖子警", "keywords": ["民调局", "孙胖子", "调查员", "调局异"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/民调局异闻录3:血海鬼船"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/集体记忆.md"}, {"id": "荆棘魔法.md", "label": "荆棘魔法", "title": "荆棘魔法", "type": "book", "degree": 3, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：在一个魔法消退、旧神陨落的奇幻世界“荆棘与白骨的王国”中，围绕“天降女王”的预言、狮鹫与人类的冲突、以及古老血脉与权力的争夺，展开了一场关于生存、信仰、背叛与救赎的史诗冒险。适合人群：史诗奇幻文学爱好者、喜欢宏大世界构建与政治权谋的读者、对“黑暗奇幻”风格有偏好的读者（类似《冰与火之歌》、《第一律法》）。要点1：独特的世界观——“魔法消退”与“荆棘魔法”。一种名为“荆棘魔法”的力量正在从世界上消退，导致旧有的秩序崩溃。书中“荆棘魔法”的消退，正如现实世界中对石油、稀土等战略资源的争夺", "keywords": ["行动建议", "荆棘魔法", "棘与白"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/荆棘与白骨的王国4册"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/荆棘魔法.md"}, {"id": "异质文化碰撞.md", "label": "异质文化碰撞", "title": "异质文化碰撞", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "本书以三毛在撒哈拉沙漠的生活为核心，探讨了异质文化碰撞下的生存美学、日常生活的创造性重构，以及现代人如何在极端环境中保持精神自由与情感温度。问题意识指向：物质匮乏与精神丰盈的辩证关系、文化身份认同的流动性、以及对“家”这一空间概念的重新定义。** 全书以代序（母亲的信）开场，建立情感基调；随后通过《沙漠中的饭店》《结婚记》《悬壶济世》《娃娃新娘》《荒山之夜》《沙漠观浴记》等篇章，从饮食、婚姻、医疗、风俗、冒险、身体叙事等多维度展开。我认同三毛将“物质匮乏”转化为“创作素材”的生活态度：她用粉丝比喻“雨”、用猪肉干充当“中药”，这种诗意的转化本身就是一种“设计思维”——在限制中寻找可能性。** ", "keywords": ["日常生活", "撒哈拉"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/三毛全集(精排版)_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/异质文化碰撞.md"}, {"id": "个人抉择.md", "label": "个人抉择", "title": "个人抉择", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：本书以16世纪英格兰宗教改革为背景，通过主人公内德·威拉德与玛格丽·菲茨杰拉德的爱情与命运，以及他们各自家族在政治、宗教漩涡中的挣扎，探讨了在动荡年代个人信仰、家族忠诚与个人自由之间的冲突与抉择。适合人群：适合喜欢宏大历史叙事、家族史诗、宫斗权谋与浪漫爱情结合的读者；尤其适合对都铎王朝、宗教改革历史感兴趣的读者；也是肯·福莱特“中世纪三部曲”粉丝的必读之作。节选开篇的引子就揭示了本书的核心矛盾：宗教改革引发的残酷迫害。主人公内德效忠于“自由思考上帝”的原则，而玛格丽的家庭则是虔诚的天主教徒，这为两人的爱情和未来埋下了悲剧的伏笔。内德对玛格丽一往情深，但玛格丽的父亲雷金纳德爵士为了家族", "keywords": ["玛格丽", "宗教改革"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/永恒火焰（全3册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/个人抉择.md"}, {"id": "日常生活创造性重构.md", "label": "日常生活创造性重构", "title": "日常生活创造性重构", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "本书以三毛在撒哈拉沙漠的生活为核心，探讨了异质文化碰撞下的生存美学、日常生活的创造性重构，以及现代人如何在极端环境中保持精神自由与情感温度。问题意识指向：物质匮乏与精神丰盈的辩证关系、文化身份认同的流动性、以及对“家”这一空间概念的重新定义。** 全书以代序（母亲的信）开场，建立情感基调；随后通过《沙漠中的饭店》《结婚记》《悬壶济世》《娃娃新娘》《荒山之夜》《沙漠观浴记》等篇章，从饮食、婚姻、医疗、风俗、冒险、身体叙事等多维度展开。我认同三毛将“物质匮乏”转化为“创作素材”的生活态度：她用粉丝比喻“雨”、用猪肉干充当“中药”，这种诗意的转化本身就是一种“设计思维”——在限制中寻找可能性。** ", "keywords": ["日常生活", "创造性"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/三毛全集(精排版)_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/日常生活创造性重构.md"}, {"id": "技艺传承.md", "label": "技艺传承", "title": "技艺传承", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：【Kindle图书共享】山茶文具店。核心主题：通过讲述镰仓一家代笔文具店店主雨宫鸠子的日常生活与代笔工作，探讨了人与人之间细腻的情感联结、对传统技艺的传承与坚守，以及如何通过“书写”这一行为，与过去和解、与自我和解，最终找到内心平静与生活意义的故事。适合人群：喜欢慢生活、治愈系文学的读者；对日本文化、书法艺术、传统手工艺感兴趣的人；正在经历人生转折期、寻求内心平静或与亲人（特别是祖辈）和解的读者。回到山茶文具店后，她通过模仿上代的工作方式（如严格遵守书信礼仪、使用上代留下的工具）、处理上代的遗产、以及与邻里（如芭芭拉夫人、鱼福老板娘）的互动，逐渐理解了上代的爱与坚守。她开始喝以前不喜欢的", "keywords": ["文具店", "山茶文具"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/【Kindle图书共享】山茶文具店"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/技艺传承.md"}, {"id": "文化相对主义.md", "label": "文化相对主义", "title": "文化相对主义", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：本书通过作者三毛在撒哈拉沙漠的日常生活与奇遇，展现了在极端物质匮乏的环境中，如何用爱、勇气和创造力构建精神家园，将荒凉单调的沙漠生活活成一首自由而浪漫的诗。适合人群：向往远方与自由、对异域文化好奇、在生活中寻找诗意与创造力、或正经历生活困境需要精神鼓舞的读者。要点1：以“爱”为基石，构建沙漠中的精神家园。例如，在《白手成家》中，她描述了自己如何用棺材板做家具，用捡来的骆驼头骨装饰墙壁，将荒凉变为艺术的殿堂。这种“白手成家”的过程，展现了爱、耐心与创造力如何战胜环境，将“远方”变为“家”", "keywords": ["撒哈拉", "白手成家"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/撒哈拉的故事"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/文化相对主义.md"}, {"id": "历史传奇.md", "label": "历史传奇", "title": "历史传奇", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：三十六骑【微信公众号：书单共享】。核心主题：本书以东汉时期班超“投笔从戎”、出使西域的历史为背景，通过虚构的侠客、墨家、盗家等江湖人物，讲述一个关于集结奇人异士、深入绝域、践行个人信念与家国使命的传奇故事。核心探讨了在乱世中，个体如何寻找并坚守自己的“道”。适合人群：喜欢历史传奇、武侠江湖、权谋智斗的读者；对东汉历史、诸子百家文化（如墨家、盗家）感兴趣的读者；欣赏团队冒险、个人成长与家国情怀交织故事的读者。作者将真实历史人物班超（史学家班固之弟）置于一个充满侠客、机关术和隐秘门派的江湖世界中", "keywords": ["三十六骑", "微信公"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/三十六骑【微信公众号：书单共享】"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/历史传奇.md"}, {"id": "记忆重构.md", "label": "记忆重构", "title": "记忆重构", "type": "book", "degree": 3, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：通过回忆1920年代在巴黎作为青年作家的清贫生活，揭示了艺术创作与贫困、爱情、友谊及城市氛围之间深刻而复杂的关系，并探讨了纯粹与毒化、青春与永恒的主题。文学爱好者，特别是海明威或“迷惘的一代”的读者。对回忆录、自传体文学感兴趣的读者。他认为，只有离开巴黎才能更好地描写巴黎，这座城市本身就是他创作灵感的源泉和“流动的圣节”。打造你的“流动的圣节”：仔细思考你生活中的“巴黎”在哪里", "keywords": ["海明威", "流动的圣", "动的圣节"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/流动的圣节"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/记忆重构.md"}, {"id": "成长蜕变.md", "label": "成长蜕变", "title": "成长蜕变", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：猫武士首部曲(套装共6册)(全球销量突破5000万册,一部写给成人的童话故事,一部写给孩子的励志传奇,一部震撼心灵的动物小说)。作者：艾琳･亨特（由维奇·霍姆斯、凯特·卡里、基立·鲍德卓和图伊·苏瑟兰四位作家组成的创作团队）。核心主题：一只名为拉斯特的宠物猫，响应内心的野性呼唤，加入森林猫族“雷族”，通过克服偏见、挑战自我、忠于族群，最终成长为一名真正的“猫武士”，并肩负起拯救族群的预言使命。他的成长之路充满挑战，包括艰苦的训练、克服自身作为“外来者”的偏见、在族群冲突中证明自己，最终赢得了族群的尊重与信任，完成了从“拉斯特”到“火爪”，再到未来的“火心”的身份蜕变。灰爪对宠物猫的嘲讽（", "keywords": ["拉斯特", "一部写给"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/猫武士首部曲(套装共6册)(全球销量突破5000万册,一部写给成人的童话故事,一部写给孩子的励志传奇,一部震撼心灵的动物小说)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/成长蜕变.md"}, {"id": "心流体验.md", "label": "心流体验", "title": "心流体验", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：本书通过作者三毛在撒哈拉沙漠的日常生活与奇遇，展现了在极端物质匮乏的环境中，如何用爱、勇气和创造力构建精神家园，将荒凉单调的沙漠生活活成一首自由而浪漫的诗。适合人群：向往远方与自由、对异域文化好奇、在生活中寻找诗意与创造力、或正经历生活困境需要精神鼓舞的读者。要点1：以“爱”为基石，构建沙漠中的精神家园。这种“白手成家”的过程，展现了爱、耐心与创造力如何战胜环境，将“远方”变为“家”。三毛的“白手成家”过程，正是创造“心流”的经典案例，证明了幸福是可以主动创造的，而非被动等待", "keywords": ["撒哈拉", "白手成家"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/撒哈拉的故事"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/心流体验.md"}, {"id": "狮鹫文明.md", "label": "狮鹫文明", "title": "狮鹫文明", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：在一个魔法消退、旧神陨落的奇幻世界“荆棘与白骨的王国”中，围绕“天降女王”的预言、狮鹫与人类的冲突、以及古老血脉与权力的争夺，展开了一场关于生存、信仰、背叛与救赎的史诗冒险。适合人群：史诗奇幻文学爱好者、喜欢宏大世界构建与政治权谋的读者、对“黑暗奇幻”风格有偏好的读者（类似《冰与火之歌》、《第一律法》）。要点1：独特的世界观——“魔法消退”与“荆棘魔法”。一种名为“荆棘魔法”的力量正在从世界上消退，导致旧有的秩序崩溃。故事中，多位角色，包括看似柔弱的公主、野心勃勃的王子以及神秘的狮鹫，都在为争夺或实现这一预言而行动，形成了多线并行的政治与军事斗争", "keywords": ["行动建议", "荆棘与白", "棘与白骨", "骨的王"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/荆棘与白骨的王国4册"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/狮鹫文明.md"}, {"id": "星族预言.md", "label": "星族预言", "title": "星族预言", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：猫武士首部曲(套装共6册)(全球销量突破5000万册,一部写给成人的童话故事,一部写给孩子的励志传奇,一部震撼心灵的动物小说)。作者：艾琳･亨特（由维奇·霍姆斯、凯特·卡里、基立·鲍德卓和图伊·苏瑟兰四位作家组成的创作团队）。核心主题：一只名为拉斯特的宠物猫，响应内心的野性呼唤，加入森林猫族“雷族”，通过克服偏见、挑战自我、忠于族群，最终成长为一名真正的“猫武士”，并肩负起拯救族群的预言使命。他的成长之路充满挑战，包括艰苦的训练、克服自身作为“外来者”的偏见、在族群冲突中证明自己，最终赢得了族群的尊重与信任，完成了从“拉斯特”到“火爪”，再到未来的“火心”的身份蜕变。灰爪对宠物猫的嘲讽（", "keywords": ["拉斯特", "一部写给"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/猫武士首部曲(套装共6册)(全球销量突破5000万册,一部写给成人的童话故事,一部写给孩子的励志传奇,一部震撼心灵的动物小说)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/星族预言.md"}, {"id": "关系契约.md", "label": "关系契约", "title": "关系契约", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：通过一位约克郡乡村兽医在退伍后重返岗位的第一天经历，以幽默、自嘲的笔触，展现了乡村生活中人与动物、人与人之间既恼人又温暖的互动，揭示了平凡日子里那些看似“刹那”的挑战，最终凝结成“永恒”记忆与情感的真谛。适合人群：喜爱动物、乡村生活与自然文学的读者；对英国约克郡风土人情感兴趣的人；喜欢幽默、温暖、治愈系故事的读者；从事或向往自由职业（如兽医、医生等）的人。要点1：乡村兽医工作的真实与艰辛。例如，通往雷普莱先生家的七道门，尤其是那道“邪恶”的第七扇门，每次通过都是一场搏斗。哈利先生与雷普莱先生的关系，超越", "keywords": ["雷普莱先", "莱先生"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/万物刹那又永恒"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/关系契约.md"}, {"id": "游历探索.md", "label": "游历探索", "title": "游历探索", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：古蜀国密码（套装6册）（荣获2017年网络文学金熊猫金奖，已售出多本小说影视版权。核心主题：本书以古蜀国为背景，讲述了鱼凫王女凫风初蕾在游历天下时，意外唤醒沉睡万年的上古共工百里行暮，两人在寻找天穆之野、应对大禹王万国大会的冒险中，揭开上古神话与文明隐秘，并最终承担起各自命运的故事。核心探讨了权力、责任、爱情与文明兴衰的宏大主题。无论是凫风初蕾寻找不周山，还是百里行暮提及黄帝通过天穆之野打败蚩尤，都体现了在神话背景下，个人与文明对更高层次力量、知识和地位的追求。书中，百里行暮作为“活历史”，对三万年前的往事（如怒撞不周山、与颛顼之战）有着亲历者的视角，而凫风初蕾则代表后世对神话的“传说”", "keywords": ["百里行暮", "凫风初"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/古蜀国密码（套装6册）（荣获2017年网络文学金熊猫金奖，已售出多本小说影视版权。）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/游历探索.md"}, {"id": "校园生活.md", "label": "校园生活", "title": "校园生活", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "作者：蔡智恒, ePUBw.COM。核心主题：本书通过一个高中男生被逼写一万字作文的苦恼经历，引出了一个因共享课桌抽屉而与补校女生产生奇妙书信往来的故事。核心主题是青春期的无奈、成长的烦恼，以及在单调压抑的校园生活中，人与人之间意外建立的、带有温度和幽默感的连接。这生动描绘了学生在集体压力下，面对不情愿的任务时的无力感和反抗的徒劳。主人公最终从同学口中得知，学校有补校学生，他与一位补校女生共享同一张课桌", "keywords": ["主人公", "补校女生"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/回眸"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/校园生活.md"}, {"id": "品格塑造.md", "label": "品格塑造", "title": "品格塑造", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：绿山墙的安妮(无删减全译本)(果麦经典)。核心主题：讲述了一个充满想象力、情感丰富的孤儿安妮·雪莉，如何被绿山墙农舍的兄妹马修和玛丽拉收养，用她的热情和活力改变了他们古板的生活，并在埃文利社区找到归属感与自我价值的成长故事。核心探讨了“家”的真正含义、想象力与现实的平衡、以及个体如何影响并塑造环境。马修和玛丽拉·卡斯伯特兄妹从最初的震惊、拒绝，到被安妮的真诚与活力所打动，最终决定留下她。安妮的想象力不仅仅是文学修辞，更是一种强大的心理防御与应对机制", "keywords": ["想象力", "绿山墙", "玛丽拉", "墙的安"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/绿山墙的安妮(无删减全译本)(果麦经典)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/品格塑造.md"}, {"id": "乡村兽医.md", "label": "乡村兽医", "title": "乡村兽医", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：通过一位约克郡乡村兽医在退伍后重返岗位的第一天经历，以幽默、自嘲的笔触，展现了乡村生活中人与动物、人与人之间既恼人又温暖的互动，揭示了平凡日子里那些看似“刹那”的挑战，最终凝结成“永恒”记忆与情感的真谛。适合人群：喜爱动物、乡村生活与自然文学的读者；对英国约克郡风土人情感兴趣的人；喜欢幽默、温暖、治愈系故事的读者；从事或向往自由职业（如兽医、医生等）的人。要点1：乡村兽医工作的真实与艰辛。反思自己生活中是否有类似的“雷普莱先生”时刻——即总是承诺却难以兑现的小事。哈利先生与雷普莱先生的关系，超越", "keywords": ["雷普莱先", "莱先生"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/万物刹那又永恒"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/乡村兽医.md"}, {"id": "初心.md", "label": "初心", "title": "初心", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：七侯笔录全2册【公众号：书单共享】。核心主题：本书以中国历史上的天才文人为核心，将他们的才情与魂魄炼化为具有神通的“笔灵”，讲述了一个关于文化传承、少年成长与奇幻冒险的故事。核心探讨了“不教天下才情付诸东流”的美好希冀，以及用传统文化讲述“怪力乱神”故事的独特魅力。本书最核心的创意是将中国历史上的文化名人（如李白）的灵魂与才情，炼化成拥有不同神通和性格的“笔灵”。这启发我们思考：真正的文化传承不仅仅是背诵和复述，更是对先贤精神与才情的再理解、再创造和个性化表达", "keywords": ["文化传承", "七侯笔"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/七侯笔录全2册【公众号：书单共享】"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/初心.md"}, {"id": "精神家园构建.md", "label": "精神家园构建", "title": "精神家园构建", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：本书通过作者三毛在撒哈拉沙漠的日常生活与奇遇，展现了在极端物质匮乏的环境中，如何用爱、勇气和创造力构建精神家园，将荒凉单调的沙漠生活活成一首自由而浪漫的诗。适合人群：向往远方与自由、对异域文化好奇、在生活中寻找诗意与创造力、或正经历生活困境需要精神鼓舞的读者。要点1：以“爱”为基石，构建沙漠中的精神家园。例如，在《白手成家》中，她描述了自己如何用棺材板做家具，用捡来的骆驼头骨装饰墙壁，将荒凉变为艺术的殿堂。这种“白手成家”的过程，展现了爱、耐心与创造力如何战胜环境，将“远方”变为“家”", "keywords": ["撒哈拉", "白手成家"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/撒哈拉的故事"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/精神家园构建.md"}, {"id": "想象力.md", "label": "想象力", "title": "想象力", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：绿山墙的安妮(无删减全译本)(果麦经典)。核心主题：讲述了一个充满想象力、情感丰富的孤儿安妮·雪莉，如何被绿山墙农舍的兄妹马修和玛丽拉收养，用她的热情和活力改变了他们古板的生活，并在埃文利社区找到归属感与自我价值的成长故事。核心探讨了“家”的真正含义、想象力与现实的平衡、以及个体如何影响并塑造环境。马修和玛丽拉·卡斯伯特兄妹从最初的震惊、拒绝，到被安妮的真诚与活力所打动，最终决定留下她。安妮的想象力不仅仅是文学修辞，更是一种强大的心理防御与应对机制", "keywords": ["想象力", "绿山墙", "玛丽拉", "墙的安"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/绿山墙的安妮(无删减全译本)(果麦经典)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/想象力.md"}, {"id": "小镇共同体包容性.md", "label": "小镇共同体包容性", "title": "小镇共同体包容性", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：鱼河岸小店（直木奖获奖作家西加奈子倾情之作。《火花》作者又吉直树力荐，你以为的失败人生，也许是别人努力活着的结果。核心主题：通过一个11岁女孩“喜久子”的视角，讲述其母亲“肉子”（菊子）坎坷而充满生命力的感情史与生活经历，探讨“失败”人生的真正价值，以及小镇共同体中人与人之间的温暖与包容。但作者并未批判，而是通过女儿喜久子的冷静观察，揭示出肉子的“失败”源于她不会怀疑人的善良、对爱情的全情投入，以及“因为孩子是无罪的”这种心软。小镇的包容性体现在：它允许“失败”存在，不将人钉死在道德标签上，而是将人纳入共同体的日常之中", "keywords": ["共同体", "喜久子", "鱼河岸", "西加奈"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/鱼河岸小店（直木奖获奖作家西加奈子倾情之作！ 《火花"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/小镇共同体包容性.md"}, {"id": "上古神话重构.md", "label": "上古神话重构", "title": "上古神话重构", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：古蜀国密码（套装6册）（荣获2017年网络文学金熊猫金奖，已售出多本小说影视版权。核心主题：本书以古蜀国为背景，讲述了鱼凫王女凫风初蕾在游历天下时，意外唤醒沉睡万年的上古共工百里行暮，两人在寻找天穆之野、应对大禹王万国大会的冒险中，揭开上古神话与文明隐秘，并最终承担起各自命运的故事。核心探讨了权力、责任、爱情与文明兴衰的宏大主题。凫风初蕾唤醒了百里行暮，也唤醒了一段被尘封的上古历史。无论是凫风初蕾寻找不周山，还是百里行暮提及黄帝通过天穆之野打败蚩尤，都体现了在神话背景下，个人与文明对更高层次力量、知识和地位的追求", "keywords": ["百里行暮", "凫风初"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/古蜀国密码（套装6册）（荣获2017年网络文学金熊猫金奖，已售出多本小说影视版权。）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/上古神话重构.md"}, {"id": "地方感.md", "label": "地方感", "title": "地方感", "type": "book", "degree": 3, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：通过回忆1920年代在巴黎作为青年作家的清贫生活，揭示了艺术创作与贫困、爱情、友谊及城市氛围之间深刻而复杂的关系，并探讨了纯粹与毒化、青春与永恒的主题。文学爱好者，特别是海明威或“迷惘的一代”的读者。对回忆录、自传体文学感兴趣的读者。他认为，只有离开巴黎才能更好地描写巴黎，这座城市本身就是他创作灵感的源泉和“流动的圣节”。打造你的“流动的圣节”：仔细思考你生活中的“巴黎”在哪里", "keywords": ["海明威", "流动的圣", "动的圣节"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/流动的圣节"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/地方感.md"}, {"id": "奇幻设定.md", "label": "奇幻设定", "title": "奇幻设定", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：七侯笔录全2册【公众号：书单共享】。核心主题：本书以中国历史上的天才文人为核心，将他们的才情与魂魄炼化为具有神通的“笔灵”，讲述了一个关于文化传承、少年成长与奇幻冒险的故事。核心探讨了“不教天下才情付诸东流”的美好希冀，以及用传统文化讲述“怪力乱神”故事的独特魅力。本书最核心的创意是将中国历史上的文化名人（如李白）的灵魂与才情，炼化成拥有不同神通和性格的“笔灵”。这启发我们思考：真正的文化传承不仅仅是背诵和复述，更是对先贤精神与才情的再理解、再创造和个性化表达", "keywords": ["文化传承", "七侯笔"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/七侯笔录全2册【公众号：书单共享】"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/奇幻设定.md"}, {"id": "族群社会.md", "label": "族群社会", "title": "族群社会", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：猫武士首部曲(套装共6册)(全球销量突破5000万册,一部写给成人的童话故事,一部写给孩子的励志传奇,一部震撼心灵的动物小说)。作者：艾琳･亨特（由维奇·霍姆斯、凯特·卡里、基立·鲍德卓和图伊·苏瑟兰四位作家组成的创作团队）。核心主题：一只名为拉斯特的宠物猫，响应内心的野性呼唤，加入森林猫族“雷族”，通过克服偏见、挑战自我、忠于族群，最终成长为一名真正的“猫武士”，并肩负起拯救族群的预言使命。他的成长之路充满挑战，包括艰苦的训练、克服自身作为“外来者”的偏见、在族群冲突中证明自己，最终赢得了族群的尊重与信任，完成了从“拉斯特”到“火爪”，再到未来的“火心”的身份蜕变。灰爪对宠物猫的嘲讽（", "keywords": ["拉斯特", "一部写给"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/猫武士首部曲(套装共6册)(全球销量突破5000万册,一部写给成人的童话故事,一部写给孩子的励志传奇,一部震撼心灵的动物小说)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/族群社会.md"}, {"id": "笔灵.md", "label": "笔灵", "title": "笔灵", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：七侯笔录全2册【公众号：书单共享】。核心主题：本书以中国历史上的天才文人为核心，将他们的才情与魂魄炼化为具有神通的“笔灵”，讲述了一个关于文化传承、少年成长与奇幻冒险的故事。核心探讨了“不教天下才情付诸东流”的美好希冀，以及用传统文化讲述“怪力乱神”故事的独特魅力。本书最核心的创意是将中国历史上的文化名人（如李白）的灵魂与才情，炼化成拥有不同神通和性格的“笔灵”。这启发我们思考：真正的文化传承不仅仅是背诵和复述，更是对先贤精神与才情的再理解、再创造和个性化表达", "keywords": ["文化传承", "七侯笔"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/七侯笔录全2册【公众号：书单共享】"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/笔灵.md"}, {"id": "亲子关系与成长.md", "label": "亲子关系与成长", "title": "亲子关系与成长", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：鱼河岸小店（直木奖获奖作家西加奈子倾情之作。《火花》作者又吉直树力荐，你以为的失败人生，也许是别人努力活着的结果。核心主题：通过一个11岁女孩“喜久子”的视角，讲述其母亲“肉子”（菊子）坎坷而充满生命力的感情史与生活经历，探讨“失败”人生的真正价值，以及小镇共同体中人与人之间的温暖与包容。适合人群：喜欢日式温情小说、关注边缘人物命运、对“失败”与“成功”有反思需求的读者；对亲子关系、小镇生活、女性成长主题感兴趣的读者。但作者并未批判，而是通过女儿喜久子的冷静观察，揭示出肉子的“失败”源于她不会怀疑人的善良、对爱情的全情投入，以及“因为孩子是无罪的”这种心软", "keywords": ["喜久子", "共同体", "鱼河岸", "西加奈"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/鱼河岸小店（直木奖获奖作家西加奈子倾情之作！ 《火花"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/亲子关系与成长.md"}, {"id": "边缘空间创造性生产.md", "label": "边缘空间创造性生产", "title": "边缘空间创造性生产", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "本书以三毛在撒哈拉沙漠的生活为核心，探讨了异质文化碰撞下的生存美学、日常生活的创造性重构，以及现代人如何在极端环境中保持精神自由与情感温度。问题意识指向：物质匮乏与精神丰盈的辩证关系、文化身份认同的流动性、以及对“家”这一空间概念的重新定义。** 全书以代序（母亲的信）开场，建立情感基调；随后通过《沙漠中的饭店》《结婚记》《悬壶济世》《娃娃新娘》《荒山之夜》《沙漠观浴记》等篇章，从饮食、婚姻、医疗、风俗、冒险、身体叙事等多维度展开。我认同三毛将“物质匮乏”转化为“创作素材”的生活态度：她用粉丝比喻“雨”、用猪肉干充当“中药”，这种诗意的转化本身就是一种“设计思维”——在限制中寻找可能性。** ", "keywords": ["创造性", "撒哈拉", "日常生", "常生活"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/三毛全集(精排版)_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/边缘空间创造性生产.md"}, {"id": "贫困与创作.md", "label": "贫困与创作", "title": "贫困与创作", "type": "book", "degree": 3, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：通过回忆1920年代在巴黎作为青年作家的清贫生活，揭示了艺术创作与贫困、爱情、友谊及城市氛围之间深刻而复杂的关系，并探讨了纯粹与毒化、青春与永恒的主题。文学爱好者，特别是海明威或“迷惘的一代”的读者。对回忆录、自传体文学感兴趣的读者。他认为，只有离开巴黎才能更好地描写巴黎，这座城市本身就是他创作灵感的源泉和“流动的圣节”。打造你的“流动的圣节”：仔细思考你生活中的“巴黎”在哪里", "keywords": ["海明威", "流动的圣", "动的圣节"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/流动的圣节"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/贫困与创作.md"}, {"id": "西夏历史.md", "label": "西夏历史", "title": "西夏历史", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：本书以寻找西夏王朝失落宝藏和神秘历史真相为主线，融合了考古探险、悬疑解谜、国际谍战与历史阴谋，讲述了一群人在中蒙边境、巴丹吉林沙漠、俄罗斯等地，通过破解一系列古物线索，逐步揭开半个世纪前一场科考队失踪之谜及背后惊天秘密的冒险故事。喜欢《盗墓笔记》、《鬼吹灯》等悬疑探险类小说的读者。对西夏历史、考古、神秘文化感兴趣的读者。故事开篇于一场北京春季拍卖会，一件被众多专家（包括泰斗汪世骧）认定为只值10万的低等次品——西夏嵌珠宝缠莲纹玉插屏，却被拍卖公司作为压轴品，起拍价高达80万。故事的核心背景是上世纪五十年代末，一支由中苏两国顶尖科学家（涵盖生物、考古、历史、军工等多领域）和情报人员组成", "keywords": ["玉插屏", "科考队", "西夏死", "夏死书"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/西夏死书（全5册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/西夏历史.md"}, {"id": "仪式感治愈.md", "label": "仪式感治愈", "title": "仪式感治愈", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：【Kindle图书共享】山茶文具店。核心主题：通过讲述镰仓一家代笔文具店店主雨宫鸠子的日常生活与代笔工作，探讨了人与人之间细腻的情感联结、对传统技艺的传承与坚守，以及如何通过“书写”这一行为，与过去和解、与自我和解，最终找到内心平静与生活意义的故事。适合人群：喜欢慢生活、治愈系文学的读者；对日本文化、书法艺术、传统手工艺感兴趣的人；正在经历人生转折期、寻求内心平静或与亲人（特别是祖辈）和解的读者。回到山茶文具店后，她通过模仿上代的工作方式（如严格遵守书信礼仪、使用上代留下的工具）、处理上代的遗产、以及与邻里（如芭芭拉夫人、鱼福老板娘）的互动，逐渐理解了上代的爱与坚守。书中充满了对镰仓生活", "keywords": ["文具店", "仪式感", "山茶文", "茶文具"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/【Kindle图书共享】山茶文具店"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/仪式感治愈.md"}, {"id": "诸子百家.md", "label": "诸子百家", "title": "诸子百家", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：三十六骑【微信公众号：书单共享】。核心主题：本书以东汉时期班超“投笔从戎”、出使西域的历史为背景，通过虚构的侠客、墨家、盗家等江湖人物，讲述一个关于集结奇人异士、深入绝域、践行个人信念与家国使命的传奇故事。核心探讨了在乱世中，个体如何寻找并坚守自己的“道”。适合人群：喜欢历史传奇、武侠江湖、权谋智斗的读者；对东汉历史、诸子百家文化（如墨家、盗家）感兴趣的读者；欣赏团队冒险、个人成长与家国情怀交织故事的读者。作者将真实历史人物班超（史学家班固之弟）置于一个充满侠客、机关术和隐秘门派的江湖世界中", "keywords": ["诸子百家", "三十六"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/三十六骑【微信公众号：书单共享】"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/诸子百家.md"}, {"id": "家族史诗.md", "label": "家族史诗", "title": "家族史诗", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：本书以16世纪英格兰宗教改革为背景，通过主人公内德·威拉德与玛格丽·菲茨杰拉德的爱情与命运，以及他们各自家族在政治、宗教漩涡中的挣扎，探讨了在动荡年代个人信仰、家族忠诚与个人自由之间的冲突与抉择。适合人群：适合喜欢宏大历史叙事、家族史诗、宫斗权谋与浪漫爱情结合的读者；尤其适合对都铎王朝、宗教改革历史感兴趣的读者；也是肯·福莱特“中世纪三部曲”粉丝的必读之作。节选开篇的引子就揭示了本书的核心矛盾：宗教改革引发的残酷迫害。主人公内德效忠于“自由思考上帝”的原则，而玛格丽的家庭则是虔诚的天主教徒，这为两人的爱情和未来埋下了悲剧的伏笔。内德对玛格丽一往情深，但玛格丽的父亲雷金纳德爵士为了家族", "keywords": ["玛格丽", "宗教改革"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/永恒火焰（全3册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/家族史诗.md"}, {"id": "考古解谜.md", "label": "考古解谜", "title": "考古解谜", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：本书以寻找西夏王朝失落宝藏和神秘历史真相为主线，融合了考古探险、悬疑解谜、国际谍战与历史阴谋，讲述了一群人在中蒙边境、巴丹吉林沙漠、俄罗斯等地，通过破解一系列古物线索，逐步揭开半个世纪前一场科考队失踪之谜及背后惊天秘密的冒险故事。喜欢《盗墓笔记》、《鬼吹灯》等悬疑探险类小说的读者。对西夏历史、考古、神秘文化感兴趣的读者。故事开篇于一场北京春季拍卖会，一件被众多专家（包括泰斗汪世骧）认定为只值10万的低等次品——西夏嵌珠宝缠莲纹玉插屏，却被拍卖公司作为压轴品，起拍价高达80万。故事的核心背景是上世纪五十年代末，一支由中苏两国顶尖科学家（涵盖生物、考古、历史、军工等多领域）和情报人员组成", "keywords": ["玉插屏", "科考队", "西夏死", "夏死书"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/西夏死书（全5册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/考古解谜.md"}, {"id": "都市传说.md", "label": "都市传说", "title": "都市传说", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：以民调局调查员沈辣和孙胖子的视角，讲述他们在追查一艘失踪六百年、每隔二十年出现一次的明代鬼船过程中，遭遇超自然事件、内部权力斗争与历史谜团交织的冒险故事。适合人群：喜欢中国本土超自然悬疑、灵异探险、都市传说类小说的读者；对民国盗墓、明代航海史、神秘组织（如鬼道教）感兴趣的读者；追求快节奏、强悬念、带幽默感的叙事风格的读者。要点1：鬼船传说的引入与首次遭遇。这一事件不仅奠定了全书的核心悬念（鬼船的真相），也展示了民调局成员面对未知时的专业反应与内部紧张关系（如孙胖子对林枫的警惕）。孙胖子认为林枫在众人拼尽全力后才“捡现成”，而林枫在飞机上因沈辣提及“七五年南山墓地”而暴怒，掐住其脖子警", "keywords": ["民调局", "孙胖子", "调查员", "调局异"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/民调局异闻录3:血海鬼船"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/都市传说.md"}, {"id": "沙漠美学.md", "label": "沙漠美学", "title": "沙漠美学", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "本书以三毛在撒哈拉沙漠的生活为核心，探讨了异质文化碰撞下的生存美学、日常生活的创造性重构，以及现代人如何在极端环境中保持精神自由与情感温度。问题意识指向：物质匮乏与精神丰盈的辩证关系、文化身份认同的流动性、以及对“家”这一空间概念的重新定义。** 全书以代序（母亲的信）开场，建立情感基调；随后通过《沙漠中的饭店》《结婚记》《悬壶济世》《娃娃新娘》《荒山之夜》《沙漠观浴记》等篇章，从饮食、婚姻、医疗、风俗、冒险、身体叙事等多维度展开。我认同三毛将“物质匮乏”转化为“创作素材”的生活态度：她用粉丝比喻“雨”、用猪肉干充当“中药”，这种诗意的转化本身就是一种“设计思维”——在限制中寻找可能性。** ", "keywords": ["日常生活", "撒哈拉"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/三毛全集(精排版)_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/沙漠美学.md"}, {"id": "忠诚与荣誉.md", "label": "忠诚与荣誉", "title": "忠诚与荣誉", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：猫武士首部曲(套装共6册)(全球销量突破5000万册,一部写给成人的童话故事,一部写给孩子的励志传奇,一部震撼心灵的动物小说)。作者：艾琳･亨特（由维奇·霍姆斯、凯特·卡里、基立·鲍德卓和图伊·苏瑟兰四位作家组成的创作团队）。核心主题：一只名为拉斯特的宠物猫，响应内心的野性呼唤，加入森林猫族“雷族”，通过克服偏见、挑战自我、忠于族群，最终成长为一名真正的“猫武士”，并肩负起拯救族群的预言使命。他的成长之路充满挑战，包括艰苦的训练、克服自身作为“外来者”的偏见、在族群冲突中证明自己，最终赢得了族群的尊重与信任，完成了从“拉斯特”到“火爪”，再到未来的“火心”的身份蜕变。灰爪对宠物猫的嘲讽（", "keywords": ["拉斯特", "一部写给"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/猫武士首部曲(套装共6册)(全球销量突破5000万册,一部写给成人的童话故事,一部写给孩子的励志传奇,一部震撼心灵的动物小说)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/忠诚与荣誉.md"}, {"id": "社区与个体.md", "label": "社区与个体", "title": "社区与个体", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：绿山墙的安妮(无删减全译本)(果麦经典)。核心主题：讲述了一个充满想象力、情感丰富的孤儿安妮·雪莉，如何被绿山墙农舍的兄妹马修和玛丽拉收养，用她的热情和活力改变了他们古板的生活，并在埃文利社区找到归属感与自我价值的成长故事。核心探讨了“家”的真正含义、想象力与现实的平衡、以及个体如何影响并塑造环境。马修和玛丽拉·卡斯伯特兄妹从最初的震惊、拒绝，到被安妮的真诚与活力所打动，最终决定留下她。安妮的想象力不仅仅是文学修辞，更是一种强大的心理防御与应对机制", "keywords": ["想象力", "绿山墙", "玛丽拉", "墙的安"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/绿山墙的安妮(无删减全译本)(果麦经典)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/社区与个体.md"}, {"id": "极简主义实践.md", "label": "极简主义实践", "title": "极简主义实践", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：本书通过作者三毛在撒哈拉沙漠的日常生活与奇遇，展现了在极端物质匮乏的环境中，如何用爱、勇气和创造力构建精神家园，将荒凉单调的沙漠生活活成一首自由而浪漫的诗。适合人群：向往远方与自由、对异域文化好奇、在生活中寻找诗意与创造力、或正经历生活困境需要精神鼓舞的读者。要点1：以“爱”为基石，构建沙漠中的精神家园。例如，在《白手成家》中，她描述了自己如何用棺材板做家具，用捡来的骆驼头骨装饰墙壁，将荒凉变为艺术的殿堂。这种“白手成家”的过程，展现了爱、耐心与创造力如何战胜环境，将“远方”变为“家”", "keywords": ["撒哈拉", "白手成家"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/撒哈拉的故事"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/极简主义实践.md"}, {"id": "创造性应对.md", "label": "创造性应对", "title": "创造性应对", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "作者：蔡智恒, ePUBw.COM。核心主题：本书通过一个高中男生被逼写一万字作文的苦恼经历，引出了一个因共享课桌抽屉而与补校女生产生奇妙书信往来的故事。核心主题是青春期的无奈、成长的烦恼，以及在单调压抑的校园生活中，人与人之间意外建立的、带有温度和幽默感的连接。这生动描绘了学生在集体压力下，面对不情愿的任务时的无力感和反抗的徒劳。主人公最终从同学口中得知，学校有补校学生，他与一位补校女生共享同一张课桌", "keywords": ["主人公", "创造性", "补校女", "校女生"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/回眸"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/创造性应对.md"}, {"id": "归属感.md", "label": "归属感", "title": "归属感", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：绿山墙的安妮(无删减全译本)(果麦经典)。核心主题：讲述了一个充满想象力、情感丰富的孤儿安妮·雪莉，如何被绿山墙农舍的兄妹马修和玛丽拉收养，用她的热情和活力改变了他们古板的生活，并在埃文利社区找到归属感与自我价值的成长故事。核心探讨了“家”的真正含义、想象力与现实的平衡、以及个体如何影响并塑造环境。马修和玛丽拉·卡斯伯特兄妹从最初的震惊、拒绝，到被安妮的真诚与活力所打动，最终决定留下她。安妮的想象力不仅仅是文学修辞，更是一种强大的心理防御与应对机制", "keywords": ["想象力", "绿山墙", "玛丽拉", "墙的安"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/绿山墙的安妮(无删减全译本)(果麦经典)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/归属感.md"}, {"id": "文化传承.md", "label": "文化传承", "title": "文化传承", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：七侯笔录全2册【公众号：书单共享】。核心主题：本书以中国历史上的天才文人为核心，将他们的才情与魂魄炼化为具有神通的“笔灵”，讲述了一个关于文化传承、少年成长与奇幻冒险的故事。核心探讨了“不教天下才情付诸东流”的美好希冀，以及用传统文化讲述“怪力乱神”故事的独特魅力。本书最核心的创意是将中国历史上的文化名人（如李白）的灵魂与才情，炼化成拥有不同神通和性格的“笔灵”。这启发我们思考：真正的文化传承不仅仅是背诵和复述，更是对先贤精神与才情的再理解、再创造和个性化表达", "keywords": ["文化传承", "七侯笔"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/七侯笔录全2册【公众号：书单共享】"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/文化传承.md"}, {"id": "代笔艺术.md", "label": "代笔艺术", "title": "代笔艺术", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：【Kindle图书共享】山茶文具店。核心主题：通过讲述镰仓一家代笔文具店店主雨宫鸠子的日常生活与代笔工作，探讨了人与人之间细腻的情感联结、对传统技艺的传承与坚守，以及如何通过“书写”这一行为，与过去和解、与自我和解，最终找到内心平静与生活意义的故事。适合人群：喜欢慢生活、治愈系文学的读者；对日本文化、书法艺术、传统手工艺感兴趣的人；正在经历人生转折期、寻求内心平静或与亲人（特别是祖辈）和解的读者。回到山茶文具店后，她通过模仿上代的工作方式（如严格遵守书信礼仪、使用上代留下的工具）、处理上代的遗产、以及与邻里（如芭芭拉夫人、鱼福老板娘）的互动，逐渐理解了上代的爱与坚守。她开始喝以前不喜欢的", "keywords": ["文具店", "山茶文具"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/【Kindle图书共享】山茶文具店"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/代笔艺术.md"}, {"id": "武侠江湖.md", "label": "武侠江湖", "title": "武侠江湖", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：三十六骑【微信公众号：书单共享】。核心主题：本书以东汉时期班超“投笔从戎”、出使西域的历史为背景，通过虚构的侠客、墨家、盗家等江湖人物，讲述一个关于集结奇人异士、深入绝域、践行个人信念与家国使命的传奇故事。核心探讨了在乱世中，个体如何寻找并坚守自己的“道”。适合人群：喜欢历史传奇、武侠江湖、权谋智斗的读者；对东汉历史、诸子百家文化（如墨家、盗家）感兴趣的读者；欣赏团队冒险、个人成长与家国情怀交织故事的读者。作者将真实历史人物班超（史学家班固之弟）置于一个充满侠客、机关术和隐秘门派的江湖世界中", "keywords": ["三十六骑", "微信公"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/三十六骑【微信公众号：书单共享】"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/武侠江湖.md"}, {"id": "历史阴谋.md", "label": "历史阴谋", "title": "历史阴谋", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：本书以寻找西夏王朝失落宝藏和神秘历史真相为主线，融合了考古探险、悬疑解谜、国际谍战与历史阴谋，讲述了一群人在中蒙边境、巴丹吉林沙漠、俄罗斯等地，通过破解一系列古物线索，逐步揭开半个世纪前一场科考队失踪之谜及背后惊天秘密的冒险故事。喜欢《盗墓笔记》、《鬼吹灯》等悬疑探险类小说的读者。对西夏历史、考古、神秘文化感兴趣的读者。故事开篇于一场北京春季拍卖会，一件被众多专家（包括泰斗汪世骧）认定为只值10万的低等次品——西夏嵌珠宝缠莲纹玉插屏，却被拍卖公司作为压轴品，起拍价高达80万。故事的核心背景是上世纪五十年代末，一支由中苏两国顶尖科学家（涵盖生物、考古、历史、军工等多领域）和情报人员组成", "keywords": ["玉插屏", "科考队", "西夏死", "夏死书"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/西夏死书（全5册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/历史阴谋.md"}, {"id": "跨国冒险.md", "label": "跨国冒险", "title": "跨国冒险", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：本书以寻找西夏王朝失落宝藏和神秘历史真相为主线，融合了考古探险、悬疑解谜、国际谍战与历史阴谋，讲述了一群人在中蒙边境、巴丹吉林沙漠、俄罗斯等地，通过破解一系列古物线索，逐步揭开半个世纪前一场科考队失踪之谜及背后惊天秘密的冒险故事。喜欢《盗墓笔记》、《鬼吹灯》等悬疑探险类小说的读者。对西夏历史、考古、神秘文化感兴趣的读者。故事开篇于一场北京春季拍卖会，一件被众多专家（包括泰斗汪世骧）认定为只值10万的低等次品——西夏嵌珠宝缠莲纹玉插屏，却被拍卖公司作为压轴品，起拍价高达80万。故事的核心背景是上世纪五十年代末，一支由中苏两国顶尖科学家（涵盖生物、考古、历史、军工等多领域）和情报人员组成", "keywords": ["玉插屏", "科考队", "西夏死", "夏死书"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/西夏死书（全5册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/跨国冒险.md"}, {"id": "悬疑探险.md", "label": "悬疑探险", "title": "悬疑探险", "type": "book", "degree": 4, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "核心主题：本书以寻找西夏王朝失落宝藏和神秘历史真相为主线，融合了考古探险、悬疑解谜、国际谍战与历史阴谋，讲述了一群人在中蒙边境、巴丹吉林沙漠、俄罗斯等地，通过破解一系列古物线索，逐步揭开半个世纪前一场科考队失踪之谜及背后惊天秘密的冒险故事。喜欢《盗墓笔记》、《鬼吹灯》等悬疑探险类小说的读者。对西夏历史、考古、神秘文化感兴趣的读者。故事开篇于一场北京春季拍卖会，一件被众多专家（包括泰斗汪世骧）认定为只值10万的低等次品——西夏嵌珠宝缠莲纹玉插屏，却被拍卖公司作为压轴品，起拍价高达80万。故事的核心背景是上世纪五十年代末，一支由中苏两国顶尖科学家（涵盖生物、考古、历史、军工等多领域）和情报人员组成", "keywords": ["玉插屏", "科考队", "西夏死", "夏死书"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/西夏死书（全5册）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/悬疑探险.md"}, {"id": "文明兴衰.md", "label": "文明兴衰", "title": "文明兴衰", "type": "book", "degree": 2, "cluster": "文学阅读", "domain": "文学", "sub_domain": "文学阅读", "summary": "书名：古蜀国密码（套装6册）（荣获2017年网络文学金熊猫金奖，已售出多本小说影视版权。核心主题：本书以古蜀国为背景，讲述了鱼凫王女凫风初蕾在游历天下时，意外唤醒沉睡万年的上古共工百里行暮，两人在寻找天穆之野、应对大禹王万国大会的冒险中，揭开上古神话与文明隐秘，并最终承担起各自命运的故事。核心探讨了权力、责任、爱情与文明兴衰的宏大主题。无论是凫风初蕾寻找不周山，还是百里行暮提及黄帝通过天穆之野打败蚩尤，都体现了在神话背景下，个人与文明对更高层次力量、知识和地位的追求。书中，百里行暮作为“活历史”，对三万年前的往事（如怒撞不周山、与颛顼之战）有着亲历者的视角，而凫风初蕾则代表后世对神话的“传说”", "keywords": ["百里行暮", "凫风初"], "tags": ["domain/文学", "sub_domain/文学阅读", "type/concept", "source/古蜀国密码（套装6册）（荣获2017年网络文学金熊猫金奖，已售出多本小说影视版权。）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/文学/文学阅读/文明兴衰.md"}];
+var LINKS = [{"source": "历史小说.md", "target": "权力博弈.md", "value": 2, "shared": ["宗教改革", "玛格丽"]}, {"source": "历史小说.md", "target": "宗教改革.md", "value": 2, "shared": ["宗教改革", "玛格丽"]}, {"source": "历史小说.md", "target": "个人抉择.md", "value": 2, "shared": ["宗教改革", "玛格丽"]}, {"source": "历史小说.md", "target": "家族史诗.md", "value": 2, "shared": ["宗教改革", "玛格丽"]}, {"source": "刹那与永恒.md", "target": "意图-行为缺口.md", "value": 2, "shared": ["莱先生", "雷普莱先"]}, {"source": "刹那与永恒.md", "target": "幽默自嘲.md", "value": 2, "shared": ["莱先生", "雷普莱先"]}, {"source": "刹那与永恒.md", "target": "关系契约.md", "value": 2, "shared": ["莱先生", "雷普莱先"]}, {"source": "刹那与永恒.md", "target": "乡村兽医.md", "value": 2, "shared": ["莱先生", "雷普莱先"]}, {"source": "唤醒与责任.md", "target": "力量追寻.md", "value": 2, "shared": ["百里行暮", "凫风初"]}, {"source": "唤醒与责任.md", "target": "游历探索.md", "value": 2, "shared": ["百里行暮", "凫风初"]}, {"source": "唤醒与责任.md", "target": "上古神话重构.md", "value": 2, "shared": ["百里行暮", "凫风初"]}, {"source": "唤醒与责任.md", "target": "文明兴衰.md", "value": 2, "shared": ["百里行暮", "凫风初"]}, {"source": "幽默化解.md", "target": "书信沟通.md", "value": 2, "shared": ["补校女生", "主人公"]}, {"source": "幽默化解.md", "target": "青春成长.md", "value": 2, "shared": ["补校女生", "主人公"]}, {"source": "幽默化解.md", "target": "校园生活.md", "value": 2, "shared": ["补校女生", "主人公"]}, {"source": "历史谜团.md", "target": "超自然悬疑.md", "value": 3, "shared": ["孙胖子", "民调局", "调查员"]}, {"source": "历史谜团.md", "target": "集体记忆.md", "value": 4, "shared": ["调局异", "孙胖子", "民调局", "调查员"]}, {"source": "历史谜团.md", "target": "都市传说.md", "value": 4, "shared": ["调局异", "孙胖子", "民调局", "调查员"]}, {"source": "情感联结.md", "target": "自我和解.md", "value": 2, "shared": ["山茶文具", "文具店"]}, {"source": "情感联结.md", "target": "技艺传承.md", "value": 2, "shared": ["山茶文具", "文具店"]}, {"source": "情感联结.md", "target": "代笔艺术.md", "value": 2, "shared": ["山茶文具", "文具店"]}, {"source": "失败人生的价值.md", "target": "幽默消解苦难.md", "value": 4, "shared": ["共同体", "鱼河岸", "喜久子", "西加奈"]}, {"source": "失败人生的价值.md", "target": "小镇共同体包容性.md", "value": 4, "shared": ["共同体", "鱼河岸", "喜久子", "西加奈"]}, {"source": "失败人生的价值.md", "target": "亲子关系与成长.md", "value": 4, "shared": ["共同体", "鱼河岸", "喜久子", "西加奈"]}, {"source": "悬念伏笔.md", "target": "人物塑造.md", "value": 2, "shared": ["三十六骑", "微信公"]}, {"source": "悬念伏笔.md", "target": "历史传奇.md", "value": 2, "shared": ["三十六骑", "微信公"]}, {"source": "悬念伏笔.md", "target": "武侠江湖.md", "value": 2, "shared": ["三十六骑", "微信公"]}, {"source": "力量追寻.md", "target": "游历探索.md", "value": 2, "shared": ["百里行暮", "凫风初"]}, {"source": "力量追寻.md", "target": "上古神话重构.md", "value": 2, "shared": ["百里行暮", "凫风初"]}, {"source": "力量追寻.md", "target": "文明兴衰.md", "value": 2, "shared": ["百里行暮", "凫风初"]}, {"source": "人物塑造.md", "target": "历史传奇.md", "value": 2, "shared": ["三十六骑", "微信公"]}, {"source": "人物塑造.md", "target": "武侠江湖.md", "value": 2, "shared": ["三十六骑", "微信公"]}, {"source": "非评判性观察.md", "target": "文化相对主义.md", "value": 2, "shared": ["撒哈拉", "白手成家"]}, {"source": "非评判性观察.md", "target": "心流体验.md", "value": 2, "shared": ["撒哈拉", "白手成家"]}, {"source": "非评判性观察.md", "target": "精神家园构建.md", "value": 2, "shared": ["撒哈拉", "白手成家"]}, {"source": "非评判性观察.md", "target": "极简主义实践.md", "value": 2, "shared": ["撒哈拉", "白手成家"]}, {"source": "超自然悬疑.md", "target": "集体记忆.md", "value": 3, "shared": ["孙胖子", "民调局", "调查员"]}, {"source": "超自然悬疑.md", "target": "都市传说.md", "value": 3, "shared": ["孙胖子", "民调局", "调查员"]}, {"source": "意图-行为缺口.md", "target": "幽默自嘲.md", "value": 2, "shared": ["莱先生", "雷普莱先"]}, {"source": "意图-行为缺口.md", "target": "关系契约.md", "value": 2, "shared": ["莱先生", "雷普莱先"]}, {"source": "意图-行为缺口.md", "target": "乡村兽医.md", "value": 2, "shared": ["莱先生", "雷普莱先"]}, {"source": "权力博弈.md", "target": "宗教改革.md", "value": 2, "shared": ["宗教改革", "玛格丽"]}, {"source": "权力博弈.md", "target": "个人抉择.md", "value": 2, "shared": ["宗教改革", "玛格丽"]}, {"source": "权力博弈.md", "target": "家族史诗.md", "value": 2, "shared": ["宗教改革", "玛格丽"]}, {"source": "书信沟通.md", "target": "青春成长.md", "value": 2, "shared": ["补校女生", "主人公"]}, {"source": "书信沟通.md", "target": "校园生活.md", "value": 2, "shared": ["补校女生", "主人公"]}, {"source": "少年成长.md", "target": "初心.md", "value": 2, "shared": ["七侯笔", "文化传承"]}, {"source": "少年成长.md", "target": "奇幻设定.md", "value": 2, "shared": ["七侯笔", "文化传承"]}, {"source": "少年成长.md", "target": "笔灵.md", "value": 2, "shared": ["七侯笔", "文化传承"]}, {"source": "少年成长.md", "target": "文化传承.md", "value": 2, "shared": ["七侯笔", "文化传承"]}, {"source": "青春成长.md", "target": "校园生活.md", "value": 2, "shared": ["补校女生", "主人公"]}, {"source": "魔法消退.md", "target": "狮鹫文明.md", "value": 4, "shared": ["骨的王", "行动建议", "棘与白骨", "荆棘与白"]}, {"source": "自我和解.md", "target": "技艺传承.md", "value": 2, "shared": ["山茶文具", "文具店"]}, {"source": "自我和解.md", "target": "代笔艺术.md", "value": 2, "shared": ["山茶文具", "文具店"]}, {"source": "幽默自嘲.md", "target": "关系契约.md", "value": 2, "shared": ["莱先生", "雷普莱先"]}, {"source": "幽默自嘲.md", "target": "乡村兽医.md", "value": 2, "shared": ["莱先生", "雷普莱先"]}, {"source": "人物肖像.md", "target": "记忆重构.md", "value": 3, "shared": ["动的圣节", "海明威", "流动的圣"]}, {"source": "人物肖像.md", "target": "地方感.md", "value": 3, "shared": ["动的圣节", "海明威", "流动的圣"]}, {"source": "人物肖像.md", "target": "贫困与创作.md", "value": 3, "shared": ["动的圣节", "海明威", "流动的圣"]}, {"source": "成长小说.md", "target": "品格塑造.md", "value": 4, "shared": ["墙的安", "想象力", "玛丽拉", "绿山墙"]}, {"source": "成长小说.md", "target": "想象力.md", "value": 4, "shared": ["墙的安", "想象力", "玛丽拉", "绿山墙"]}, {"source": "成长小说.md", "target": "社区与个体.md", "value": 4, "shared": ["墙的安", "想象力", "玛丽拉", "绿山墙"]}, {"source": "成长小说.md", "target": "归属感.md", "value": 4, "shared": ["墙的安", "想象力", "玛丽拉", "绿山墙"]}, {"source": "宗教改革.md", "target": "个人抉择.md", "value": 2, "shared": ["宗教改革", "玛格丽"]}, {"source": "宗教改革.md", "target": "家族史诗.md", "value": 2, "shared": ["宗教改革", "玛格丽"]}, {"source": "诗意地栖居.md", "target": "异质文化碰撞.md", "value": 2, "shared": ["撒哈拉", "日常生活"]}, {"source": "诗意地栖居.md", "target": "沙漠美学.md", "value": 2, "shared": ["撒哈拉", "日常生活"]}, {"source": "幽默消解苦难.md", "target": "小镇共同体包容性.md", "value": 4, "shared": ["共同体", "鱼河岸", "喜久子", "西加奈"]}, {"source": "幽默消解苦难.md", "target": "亲子关系与成长.md", "value": 4, "shared": ["共同体", "鱼河岸", "喜久子", "西加奈"]}, {"source": "天降女王预言.md", "target": "荆棘魔法.md", "value": 2, "shared": ["棘与白", "行动建议"]}, {"source": "集体记忆.md", "target": "都市传说.md", "value": 4, "shared": ["调局异", "孙胖子", "民调局", "调查员"]}, {"source": "异质文化碰撞.md", "target": "沙漠美学.md", "value": 2, "shared": ["撒哈拉", "日常生活"]}, {"source": "个人抉择.md", "target": "家族史诗.md", "value": 2, "shared": ["宗教改革", "玛格丽"]}, {"source": "技艺传承.md", "target": "代笔艺术.md", "value": 2, "shared": ["山茶文具", "文具店"]}, {"source": "文化相对主义.md", "target": "心流体验.md", "value": 2, "shared": ["撒哈拉", "白手成家"]}, {"source": "文化相对主义.md", "target": "精神家园构建.md", "value": 2, "shared": ["撒哈拉", "白手成家"]}, {"source": "文化相对主义.md", "target": "极简主义实践.md", "value": 2, "shared": ["撒哈拉", "白手成家"]}, {"source": "历史传奇.md", "target": "武侠江湖.md", "value": 2, "shared": ["三十六骑", "微信公"]}, {"source": "记忆重构.md", "target": "地方感.md", "value": 3, "shared": ["动的圣节", "海明威", "流动的圣"]}, {"source": "记忆重构.md", "target": "贫困与创作.md", "value": 3, "shared": ["动的圣节", "海明威", "流动的圣"]}, {"source": "成长蜕变.md", "target": "星族预言.md", "value": 2, "shared": ["一部写给", "拉斯特"]}, {"source": "成长蜕变.md", "target": "族群社会.md", "value": 2, "shared": ["一部写给", "拉斯特"]}, {"source": "成长蜕变.md", "target": "忠诚与荣誉.md", "value": 2, "shared": ["一部写给", "拉斯特"]}, {"source": "心流体验.md", "target": "精神家园构建.md", "value": 2, "shared": ["撒哈拉", "白手成家"]}, {"source": "心流体验.md", "target": "极简主义实践.md", "value": 2, "shared": ["撒哈拉", "白手成家"]}, {"source": "星族预言.md", "target": "族群社会.md", "value": 2, "shared": ["一部写给", "拉斯特"]}, {"source": "星族预言.md", "target": "忠诚与荣誉.md", "value": 2, "shared": ["一部写给", "拉斯特"]}, {"source": "关系契约.md", "target": "乡村兽医.md", "value": 2, "shared": ["莱先生", "雷普莱先"]}, {"source": "游历探索.md", "target": "上古神话重构.md", "value": 2, "shared": ["百里行暮", "凫风初"]}, {"source": "游历探索.md", "target": "文明兴衰.md", "value": 2, "shared": ["百里行暮", "凫风初"]}, {"source": "品格塑造.md", "target": "想象力.md", "value": 4, "shared": ["墙的安", "想象力", "玛丽拉", "绿山墙"]}, {"source": "品格塑造.md", "target": "社区与个体.md", "value": 4, "shared": ["墙的安", "想象力", "玛丽拉", "绿山墙"]}, {"source": "品格塑造.md", "target": "归属感.md", "value": 4, "shared": ["墙的安", "想象力", "玛丽拉", "绿山墙"]}, {"source": "初心.md", "target": "奇幻设定.md", "value": 2, "shared": ["七侯笔", "文化传承"]}, {"source": "初心.md", "target": "笔灵.md", "value": 2, "shared": ["七侯笔", "文化传承"]}, {"source": "初心.md", "target": "文化传承.md", "value": 2, "shared": ["七侯笔", "文化传承"]}, {"source": "精神家园构建.md", "target": "极简主义实践.md", "value": 2, "shared": ["撒哈拉", "白手成家"]}, {"source": "想象力.md", "target": "社区与个体.md", "value": 4, "shared": ["墙的安", "想象力", "玛丽拉", "绿山墙"]}, {"source": "想象力.md", "target": "归属感.md", "value": 4, "shared": ["墙的安", "想象力", "玛丽拉", "绿山墙"]}, {"source": "小镇共同体包容性.md", "target": "亲子关系与成长.md", "value": 4, "shared": ["共同体", "鱼河岸", "喜久子", "西加奈"]}, {"source": "上古神话重构.md", "target": "文明兴衰.md", "value": 2, "shared": ["百里行暮", "凫风初"]}, {"source": "地方感.md", "target": "贫困与创作.md", "value": 3, "shared": ["动的圣节", "海明威", "流动的圣"]}, {"source": "奇幻设定.md", "target": "笔灵.md", "value": 2, "shared": ["七侯笔", "文化传承"]}, {"source": "奇幻设定.md", "target": "文化传承.md", "value": 2, "shared": ["七侯笔", "文化传承"]}, {"source": "族群社会.md", "target": "忠诚与荣誉.md", "value": 2, "shared": ["一部写给", "拉斯特"]}, {"source": "笔灵.md", "target": "文化传承.md", "value": 2, "shared": ["七侯笔", "文化传承"]}, {"source": "西夏历史.md", "target": "考古解谜.md", "value": 4, "shared": ["西夏死", "科考队", "玉插屏", "夏死书"]}, {"source": "西夏历史.md", "target": "历史阴谋.md", "value": 4, "shared": ["西夏死", "科考队", "玉插屏", "夏死书"]}, {"source": "西夏历史.md", "target": "跨国冒险.md", "value": 4, "shared": ["西夏死", "科考队", "玉插屏", "夏死书"]}, {"source": "西夏历史.md", "target": "悬疑探险.md", "value": 4, "shared": ["西夏死", "科考队", "玉插屏", "夏死书"]}, {"source": "考古解谜.md", "target": "历史阴谋.md", "value": 4, "shared": ["西夏死", "科考队", "玉插屏", "夏死书"]}, {"source": "考古解谜.md", "target": "跨国冒险.md", "value": 4, "shared": ["西夏死", "科考队", "玉插屏", "夏死书"]}, {"source": "考古解谜.md", "target": "悬疑探险.md", "value": 4, "shared": ["西夏死", "科考队", "玉插屏", "夏死书"]}, {"source": "社区与个体.md", "target": "归属感.md", "value": 4, "shared": ["墙的安", "想象力", "玛丽拉", "绿山墙"]}, {"source": "历史阴谋.md", "target": "跨国冒险.md", "value": 4, "shared": ["西夏死", "科考队", "玉插屏", "夏死书"]}, {"source": "历史阴谋.md", "target": "悬疑探险.md", "value": 4, "shared": ["西夏死", "科考队", "玉插屏", "夏死书"]}, {"source": "跨国冒险.md", "target": "悬疑探险.md", "value": 4, "shared": ["西夏死", "科考队", "玉插屏", "夏死书"]}];
+var CLUSTER_COLORS = {"文学阅读": "#8b5cf6"};
+var SEARCH_DATA = [{"id": "角色多面性.md", "label": "角色多面性"}, {"id": "历史小说.md", "label": "历史小说"}, {"id": "刹那与永恒.md", "label": "刹那与永恒"}, {"id": "唤醒与责任.md", "label": "唤醒与责任"}, {"id": "生活艺术化.md", "label": "生活艺术化"}, {"id": "幽默化解.md", "label": "幽默化解"}, {"id": "历史谜团.md", "label": "历史谜团"}, {"id": "情感联结.md", "label": "情感联结"}, {"id": "失败人生的价值.md", "label": "失败人生的价值"}, {"id": "悬念伏笔.md", "label": "悬念伏笔"}, {"id": "力量追寻.md", "label": "力量追寻"}, {"id": "人物塑造.md", "label": "人物塑造"}, {"id": "非评判性观察.md", "label": "非评判性观察"}, {"id": "超自然悬疑.md", "label": "超自然悬疑"}, {"id": "意图-行为缺口.md", "label": "意图-行为缺口"}, {"id": "权力博弈.md", "label": "权力博弈"}, {"id": "书信沟通.md", "label": "书信沟通"}, {"id": "少年成长.md", "label": "少年成长"}, {"id": "青春成长.md", "label": "青春成长"}, {"id": "魔法消退.md", "label": "魔法消退"}, {"id": "自我和解.md", "label": "自我和解"}, {"id": "幽默自嘲.md", "label": "幽默自嘲"}, {"id": "人物肖像.md", "label": "人物肖像"}, {"id": "成长小说.md", "label": "成长小说"}, {"id": "权力话语.md", "label": "权力话语"}, {"id": "宗教改革.md", "label": "宗教改革"}, {"id": "诗意地栖居.md", "label": "诗意地栖居"}, {"id": "幽默消解苦难.md", "label": "幽默消解苦难"}, {"id": "天降女王预言.md", "label": "天降女王预言"}, {"id": "集体记忆.md", "label": "集体记忆"}, {"id": "荆棘魔法.md", "label": "荆棘魔法"}, {"id": "异质文化碰撞.md", "label": "异质文化碰撞"}, {"id": "个人抉择.md", "label": "个人抉择"}, {"id": "日常生活创造性重构.md", "label": "日常生活创造性重构"}, {"id": "技艺传承.md", "label": "技艺传承"}, {"id": "文化相对主义.md", "label": "文化相对主义"}, {"id": "历史传奇.md", "label": "历史传奇"}, {"id": "记忆重构.md", "label": "记忆重构"}, {"id": "成长蜕变.md", "label": "成长蜕变"}, {"id": "心流体验.md", "label": "心流体验"}, {"id": "狮鹫文明.md", "label": "狮鹫文明"}, {"id": "星族预言.md", "label": "星族预言"}, {"id": "关系契约.md", "label": "关系契约"}, {"id": "游历探索.md", "label": "游历探索"}, {"id": "校园生活.md", "label": "校园生活"}, {"id": "品格塑造.md", "label": "品格塑造"}, {"id": "乡村兽医.md", "label": "乡村兽医"}, {"id": "初心.md", "label": "初心"}, {"id": "精神家园构建.md", "label": "精神家园构建"}, {"id": "想象力.md", "label": "想象力"}, {"id": "小镇共同体包容性.md", "label": "小镇共同体包容性"}, {"id": "上古神话重构.md", "label": "上古神话重构"}, {"id": "地方感.md", "label": "地方感"}, {"id": "奇幻设定.md", "label": "奇幻设定"}, {"id": "族群社会.md", "label": "族群社会"}, {"id": "笔灵.md", "label": "笔灵"}, {"id": "亲子关系与成长.md", "label": "亲子关系与成长"}, {"id": "边缘空间创造性生产.md", "label": "边缘空间创造性生产"}, {"id": "贫困与创作.md", "label": "贫困与创作"}, {"id": "西夏历史.md", "label": "西夏历史"}, {"id": "仪式感治愈.md", "label": "仪式感治愈"}, {"id": "诸子百家.md", "label": "诸子百家"}, {"id": "家族史诗.md", "label": "家族史诗"}, {"id": "考古解谜.md", "label": "考古解谜"}, {"id": "都市传说.md", "label": "都市传说"}, {"id": "沙漠美学.md", "label": "沙漠美学"}, {"id": "忠诚与荣誉.md", "label": "忠诚与荣誉"}, {"id": "社区与个体.md", "label": "社区与个体"}, {"id": "极简主义实践.md", "label": "极简主义实践"}, {"id": "创造性应对.md", "label": "创造性应对"}, {"id": "归属感.md", "label": "归属感"}, {"id": "文化传承.md", "label": "文化传承"}, {"id": "代笔艺术.md", "label": "代笔艺术"}, {"id": "武侠江湖.md", "label": "武侠江湖"}, {"id": "历史阴谋.md", "label": "历史阴谋"}, {"id": "跨国冒险.md", "label": "跨国冒险"}, {"id": "悬疑探险.md", "label": "悬疑探险"}, {"id": "文明兴衰.md", "label": "文明兴衰"}];
+var CONCEPT_SEARCH = [];
+
+
+/* ---- 搜索 ---- */
+var searchBox = document.getElementById("search-box");
+var searchResults = document.getElementById("search-results");
+
+searchBox.addEventListener("input", function(){
+  var q = this.value.trim().toLowerCase();
+  if(!q) { searchResults.style.display="none"; return; }
+  var combined = SEARCH_DATA.concat(CONCEPT_SEARCH.map(function(c){ return {id:c,label:c,type:"concept"}; }));
+  var matches = combined.filter(function(d){ return d.label.toLowerCase().indexOf(q)>-1; }).slice(0,12);
+  if(!matches.length) { searchResults.style.display="none"; return; }
+  searchResults.innerHTML = matches.map(function(d){
+    return '<div class="sri" data-id="'+d.id+'">'+d.label+'</div>';
+  }).join("");
+  searchResults.style.display="block";
+});
+
+searchResults.addEventListener("click", function(e){
+  var el = e.target.closest(".sri");
+  if(!el) return;
+  highlightNode(el.getAttribute("data-id"));
+  searchResults.style.display="none";
+  searchBox.value="";
+});
+
+function highlightNode(id){
+  svg.selectAll(".node").classed("highlight", function(d){ return d.id===id; });
+  svg.selectAll(".link").classed("highlight", function(d){
+    return d.source.id===id || d.target.id===id;
+  });
+  var nd = nodeMap.get(id);
+  if(!nd) return;
+  var t = d3.zoomTransform(svg.node());
+  var x = -nd.x*t.k + width/2;
+  var y = -nd.y*t.k + height/2;
+  svg.transition().duration(600).call(zoom.transform, d3.zoomIdentity.translate(x,y).scale(t.k));
+}
+
+/* ---- 详情面板 ---- */
+function showDetail(d){
+  var panel = document.getElementById("detail-panel");
+  var title = document.getElementById("detail-title");
+  var body  = document.getElementById("detail-body");
+
+  title.textContent = (d.title || d.label || d.id || "").replace(/\.md$/, "");
+
+  var html = "";
+
+  /* 元信息 */
+  html += '<div class="section"><div class="meta-row"><span class="meta-label">类型</span><span>' + (d.type==="concept" ? "💡 概念" : "📖 笔记") + '</span></div>';
+  if(d.domain)   html += '<div class="meta-row"><span class="meta-label">领域</span><span>' + d.domain + '</span></div>';
+  if(d.cluster) html += '<div class="meta-row"><span class="meta-label">聚类</span><span>' + d.cluster + '</span></div>';
+  if(d.degree !== undefined) html += '<div class="meta-row"><span class="meta-label">连通度</span><span>' + d.degree + '</span></div>';
+  html += '</div>';
+
+  /* 摘要 */
+  if(d.summary){
+    html += '<div class="section"><div class="section-title">📝 摘要</div><div class="summary">' + escapeHtml(d.summary.slice(0,500)) + (d.summary.length>500 ? "..." : "") + '</div></div>';
+  }
+
+  /* 关键词 */
+  if(d.keywords && d.keywords.length){
+    html += '<div class="section"><div class="section-title">🔑 关键词</div>';
+    d.keywords.forEach(function(kw){ html += '<span class="keyword">' + escapeHtml(kw) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 标签 */
+  if(d.tags && d.tags.length){
+    html += '<div class="section"><div class="section-title">🏷️ 标签</div>';
+    d.tags.forEach(function(tg){ html += '<span class="tag">' + escapeHtml(tg) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 打开原文件：用 Obsidian URI 协议，避免浏览器 file:// 限制 */
+  if(d.path){
+    var obsidianUrl = "obsidian://open?path=" + encodeURIComponent(d.path);
+    html += '<div class="section"><a class="open-link" href="' + obsidianUrl + '">📂 在 Obsidian 中打开</a></div>';
+  }
+
+  body.innerHTML = html;
+  panel.classList.add("open");
+}
+
+function closeDetail(){
+  document.getElementById("detail-panel").classList.remove("open");
+}
+
+function escapeHtml(s){
+  if(!s) return "";
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ---- D3 力导向图 ---- */
+var width  = window.innerWidth;
+var height = window.innerHeight - 48;
+var svg = d3.select("#graph").append("svg").attr("width",width).attr("height",height);
+var g = svg.append("g");
+var zoom = d3.zoom().scaleExtent([0.05,5]).on("zoom", function(e){ g.attr("transform", e.transform); });
+svg.call(zoom);
+
+var simulation = d3.forceSimulation(NODES)
+  .force("link",    d3.forceLink(LINKS).id(function(d){ return d.id; }).distance(90))
+  .force("charge",  d3.forceManyBody().strength(-220))
+  .force("center",  d3.forceCenter(width/2, height/2))
+  .force("collision", d3.forceCollide(30))
+  .force("x",       d3.forceX(width/2).strength(0.06))
+  .force("y",       d3.forceY(height/2).strength(0.06));
+
+var link = g.append("g").attr("class","links").selectAll("line")
+  .data(LINKS).join("line")
+  .attr("class", function(d){ return "link" + ((d.type==="book-book") ? " link-book" : ""); });
+
+var node = g.append("g").attr("class","nodes").selectAll("g")
+  .data(NODES).join("g")
+  .attr("class","node")
+  .attr("data-id", function(d){ return d.id; })
+  .call(d3.drag()
+    .on("start", function(event,d){ if(!event.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+    .on("drag",  function(event,d){ d.fx=event.x; d.fy=event.y; })
+    .on("end",   function(event,d){ if(!event.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+node.append("circle")
+  .attr("r", function(d){ return d.type==="book" ? 5+Math.sqrt(d.degree||1)*1.5 : 7; })
+  .attr("fill", function(d){ return d.type==="book" ? (CLUSTER_COLORS[d.cluster]||"#94a3b8") : "#8b5cf6"; })
+  .attr("stroke", function(d){ return d.type==="book" ? "#0f172a" : "#d97706"; })
+  .on("mouseover", function(event,d){
+    var html = d.type==="book"
+      ? "<strong>📖 "+d.label+"</strong><br>连通度:"+d.degree+"<br>聚类:"+(d.cluster||"未分类")
+      : "<strong>💡 "+d.concept+"</strong><br>关联:"+d.book_count+" 篇";
+    d3.select("#tooltip").html(html).style("opacity",1)
+      .style("left",(event.pageX+12)+"px").style("top",(event.pageY-8)+"px");
+  })
+  .on("mouseout", function(){ d3.select("#tooltip").style("opacity",0); })
+  .on("click", function(event,d){
+    event.stopPropagation();
+    showDetail(d);
+  });
+
+node.append("text").attr("dx",11).attr("dy","0.35em").text(function(d){ return d.label; });
+
+var nodeMap = new Map();
+simulation.on("tick", function(){
+  link
+    .attr("x1", function(d){ return d.source.x; })
+    .attr("y1", function(d){ return d.source.y; })
+    .attr("x2", function(d){ return d.target.x; })
+    .attr("y2", function(d){ return d.target.y; });
+  node.attr("transform", function(d){
+    nodeMap.set(d.id, d);
+    return "translate("+d.x+","+d.y+")";
+  });
+});
+
+/* ---- 图例 ---- */
+var legendItems = d3.select("#legend").append("div").style("font-weight","bold").style("margin-bottom","8px").text("🎨 聚类").node().parentNode;
+Object.entries(CLUSTER_COLORS).forEach(function(entry){
+  var li = d3.select(legendItems).append("div").attr("class","li");
+  li.append("span").attr("class","ld").style("background",entry[1]);
+  li.append("span").text(entry[0]);
+});
+
+/* ---- 按钮 ---- */
+var conceptVisible = true;
+d3.select("#btn-toggle-concept").on("click", function(){
+  conceptVisible = !conceptVisible;
+  svg.selectAll(".node").filter(function(d){ return d.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  svg.selectAll(".link").filter(function(d){ return d.source.type==="concept"||d.target.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  d3.select(this).text(conceptVisible?"隐藏概念":"显示概念").classed("active",!conceptVisible);
+});
+d3.select("#btn-reset").on("click", function(){
+  closeDetail();
+  svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+});
+
+svg.on("click", function(){ searchResults.style.display="none"; });
+document.addEventListener("click", function(e){
+  if(!document.getElementById("detail-panel").contains(e.target) && !e.target.closest(".node")){
+    closeDetail();
+  }
+});
+
+/* 更新统计 */
+d3.select("#node-count").text(NODES.length);
+d3.select("#link-count").text(LINKS.length);
+</script>
+</body>
+</html>

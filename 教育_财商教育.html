@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>教育 - 财商教育 - 知识图谱</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#0f172a; color:#e2e8f0; overflow:hidden; }
+
+/* 侧边栏 */
+#sidebar { position:fixed; left:0; top:0; width:220px; height:100vh; background:#1e293b; border-right:1px solid #334155; overflow-y:auto; z-index:50; transition:transform 0.3s; font-size:12px; }
+#sidebar.collapsed { transform:translateX(-220px); }
+#sidebar h2 { font-size:13px; padding:12px 14px 8px; color:#94a3b8; border-bottom:1px solid #334155; }
+#sidebar .domain-header { padding:7px 14px; cursor:pointer; font-weight:600; border-bottom:1px solid #1a2332; transition:background 0.15s; user-select:none; }
+#sidebar .domain-header:hover { background:#334155; }
+#sidebar .domain-pages { display:none; }
+#sidebar .domain-pages a { display:block; padding:5px 14px 5px 24px; color:#cbd5e1; text-decoration:none; border-bottom:1px solid #1a2332; transition:background 0.15s; font-size:11px; }
+#sidebar .domain-pages a:hover { background:#334155; color:#fff; }
+#sidebar .domain-pages a.active { font-weight:600; }
+#sidebar a.active { background:#ec4899; color:#0f172a; }
+#sidebar-toggle { position:fixed; left:8px; top:56px; z-index:60; background:#334155; border:1px solid #475569; color:#e2e8f0; border-radius:6px; padding:4px 7px; cursor:pointer; font-size:13px; transition:left 0.3s; }
+#sidebar:not(.collapsed) ~ #sidebar-toggle { left:228px; }
+
+/* 右侧详情面板 */
+#detail-panel { position:fixed; top:0; right:-420px; width:400px; height:100vh; background:#1e293b; border-left:1px solid #334155; z-index:55; transition:right 0.3s; display:flex; flex-direction:column; }
+#detail-panel.open { right:0; }
+#detail-header { padding:14px 16px; border-bottom:1px solid #334155; display:flex; align-items:flex-start; gap:10px; }
+#detail-header h2 { flex:1; font-size:14px; line-height:1.4; margin:0; word-break:break-all; }
+#detail-close { background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer; padding:0 4px; line-height:1; }
+#detail-close:hover { color:#fff; }
+#detail-body { flex:1; overflow-y:auto; padding:16px; font-size:13px; line-height:1.7; }
+#detail-body .section { margin-bottom:16px; }
+#detail-body .section-title { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+#detail-body .tag { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#334155; border-radius:4px; font-size:11px; color:#cbd5e1; }
+#detail-body .keyword { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#ec489922; border:1px solid #ec489966; border-radius:4px; font-size:11px; color:#e2e8f0; }
+#detail-body .summary { color:#cbd5e1; white-space:pre-wrap; }
+#detail-body .open-link { display:inline-block; margin-top:12px; padding:6px 14px; background:#ec4899; color:#0f172a; border-radius:6px; text-decoration:none; font-size:12px; font-weight:600; }
+#detail-body .open-link:hover { opacity:0.85; }
+#detail-body .meta-row { display:flex; gap:12px; margin-bottom:8px; font-size:12px; }
+#detail-body .meta-label { color:#94a3b8; min-width:60px; }
+#detail-body .connected-list { list-style:none; padding:0; }
+#detail-body .connected-list li { padding:4px 0; border-bottom:1px solid #1a2332; font-size:12px; cursor:pointer; }
+#detail-body .connected-list li:hover { color:#ec4899; }
+
+#header { padding:10px 20px 10px 50px; background:#1e293b; border-bottom:1px solid #334155; display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-left:200px; transition:margin-left 0.3s; }
+#sidebar.collapsed ~ #header { margin-left:0; }
+#header h1 { margin:0; font-size:17px; color:#ec4899; white-space:nowrap; }
+#search-wrap { position:relative; }
+#search-box { width:220px; padding:5px 10px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#e2e8f0; font-size:13px; }
+#search-results { position:absolute; top:32px; left:0; width:260px; max-height:300px; overflow-y:auto; background:#1e293b; border:1px solid #475569; border-radius:6px; display:none; z-index:100; }
+.sri { padding:7px 10px; cursor:pointer; font-size:12px; border-bottom:1px solid #334155; }
+.sri:hover { background:#334155; }
+.stats { font-size:12px; color:#94a3b8; white-space:nowrap; }
+.ctrls { display:flex; gap:6px; margin-left:auto; }
+.btn { padding:5px 12px; border-radius:6px; border:1px solid #475569; background:#334155; color:#e2e8f0; cursor:pointer; font-size:12px; }
+.btn:hover { background:#475569; }
+.btn.active { background:#ec4899; color:#0f172a; border-color:#ec4899; }
+#legend { position:absolute; top:52px; left:220px; background:#1e293b; border:1px solid #475569; border-radius:8px; padding:10px 14px; font-size:12px; z-index:10; }
+.li { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+.ld { width:10px; height:10px; border-radius:50%; }
+#tooltip { position:absolute; padding:8px 12px; background:#1e293b; border:1px solid #475569; border-radius:8px; font-size:12px; pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:100; box-shadow:0 4px 20px rgba(0,0,0,0.5); max-width:320px; }
+#graph { width:calc(100vw - 200px); height:calc(100vh - 48px); margin-left:200px; transition:width 0.3s, margin-left 0.3s; }
+#sidebar.collapsed ~ #graph { margin-left:0; width:100vw; }
+#detail-panel.open ~ #graph { width:calc(100vw - 200px - 400px); }
+.link { stroke:#475569; stroke-opacity:0.3; }
+.link-book { stroke-opacity:0.12; }
+.node circle { cursor:pointer; stroke-width:1.5; }
+.node text { fill:#e2e8f0; font-size:10px; pointer-events:none; }
+.highlight circle { stroke:#fff !important; stroke-width:2.5px; }
+.highlight text { fill:#fff; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>📚 藏书阁 · 知识图谱</h2>
+  <div class="domain-header" data-target="IT" style="color:#67e8f9; border-left:3px solid #67e8f9;">IT ▾</div>
+  <div class="domain-pages" id="IT">
+    <a href="IT.json" style="border-left:3px solid #67e8f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(225篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="个人成长" style="color:#fb923c; border-left:3px solid #fb923c;">个人成长 ▾</div>
+  <div class="domain-pages" id="个人成长">
+    <a href="个人成长.json" style="border-left:3px solid #fb923c; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(461篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="产品" style="color:#a855f7; border-left:3px solid #a855f7;">产品 ▾</div>
+  <div class="domain-pages" id="产品">
+    <a href="产品_(其他).json" style="border-left:3px solid #a855f7; padding-left:18px;">(其他) <span style="font-size:10px;color:#64748b;">(553篇)</span></a>
+    <a href="产品_产品思维.json" style="border-left:3px solid #a855f7; padding-left:18px;">产品思维 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="产品_小程序生态.json" style="border-left:3px solid #a855f7; padding-left:18px;">小程序生态 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="产品_用户增长.json" style="border-left:3px solid #a855f7; padding-left:18px;">用户增长 <span style="font-size:10px;color:#64748b;">(49篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="会计" style="color:#86efac; border-left:3px solid #86efac;">会计 ▾</div>
+  <div class="domain-pages" id="会计">
+    <a href="会计.json" style="border-left:3px solid #86efac; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(67篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="健康" style="color:#34d399; border-left:3px solid #34d399;">健康 ▾</div>
+  <div class="domain-pages" id="健康">
+    <a href="健康.json" style="border-left:3px solid #34d399; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(284篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="写作" style="color:#c084fc; border-left:3px solid #c084fc;">写作 ▾</div>
+  <div class="domain-pages" id="写作">
+    <a href="写作.json" style="border-left:3px solid #c084fc; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(238篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="历史" style="color:#06b6d4; border-left:3px solid #06b6d4;">历史 ▾</div>
+  <div class="domain-pages" id="历史">
+    <a href="历史_(其他)_part1.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part2.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part3.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part4.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part5.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(541篇)</span></a>
+    <a href="历史_世界史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">世界史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="历史_中国历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国历史 <span style="font-size:10px;color:#64748b;">(96篇)</span></a>
+    <a href="历史_中国古代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国古代文学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="历史_中国现代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国现代文学 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="历史_中国近代史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国近代史 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="历史_人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">人物传记 <span style="font-size:10px;color:#64748b;">(143篇)</span></a>
+    <a href="历史_军事历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">军事历史 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="历史_历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史 <span style="font-size:10px;color:#64748b;">(538篇)</span></a>
+    <a href="历史_历史与政治.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史与政治 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史人物传记 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="历史_历史学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史学 <span style="font-size:10px;color:#64748b;">(189篇)</span></a>
+    <a href="历史_历史小说.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史小说 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史研究.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史研究 <span style="font-size:10px;color:#64748b;">(162篇)</span></a>
+    <a href="历史_思想史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">思想史 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="历史_文学与历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">文学与历史 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="历史_科技史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">科技史 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="历史_艺术史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">艺术史 <span style="font-size:10px;color:#64748b;">(83篇)</span></a>
+    <a href="历史_西方哲学史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">西方哲学史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="哲学" style="color:#14b8a6; border-left:3px solid #14b8a6;">哲学 ▾</div>
+  <div class="domain-pages" id="哲学">
+    <a href="哲学_(其他)_part1.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="哲学_(其他)_part2.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(272篇)</span></a>
+    <a href="哲学_中国哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">中国哲学 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="哲学_人生哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">人生哲学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="哲学_哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">哲学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+    <a href="哲学_政治哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">政治哲学 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="哲学_生活哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">生活哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+    <a href="哲学_社会哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">社会哲学 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="哲学_科学哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">科学哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="商业" style="color:#10b981; border-left:3px solid #10b981;">商业 ▾</div>
+  <div class="domain-pages" id="商业">
+    <a href="商业_(其他)_part1.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（1/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part2.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（2/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part3.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（3/3） <span style="font-size:10px;color:#64748b;">(391篇)</span></a>
+    <a href="商业_企业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">企业管理 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="商业_健康管理.json" style="border-left:3px solid #10b981; padding-left:18px;">健康管理 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="商业_创业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">创业管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业战略.json" style="border-left:3px solid #10b981; padding-left:18px;">商业战略 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">商业管理 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="商业_投资理财.json" style="border-left:3px solid #10b981; padding-left:18px;">投资理财 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_知识管理.json" style="border-left:3px solid #10b981; padding-left:18px;">知识管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_管理.json" style="border-left:3px solid #10b981; padding-left:18px;">管理 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_组织管理.json" style="border-left:3px solid #10b981; padding-left:18px;">组织管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_经济学.json" style="border-left:3px solid #10b981; padding-left:18px;">经济学 <span style="font-size:10px;color:#64748b;">(74篇)</span></a>
+    <a href="商业_金融投资.json" style="border-left:3px solid #10b981; padding-left:18px;">金融投资 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="商业_领导力.json" style="border-left:3px solid #10b981; padding-left:18px;">领导力 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="图书馆学" style="color:#5eead4; border-left:3px solid #5eead4;">图书馆学 ▾</div>
+  <div class="domain-pages" id="图书馆学">
+    <a href="图书馆学.json" style="border-left:3px solid #5eead4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(23篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="宗教" style="color:#c4b5fd; border-left:3px solid #c4b5fd;">宗教 ▾</div>
+  <div class="domain-pages" id="宗教">
+    <a href="宗教.json" style="border-left:3px solid #c4b5fd; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(19篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="心理学" style="color:#f59e0b; border-left:3px solid #f59e0b;">心理学 ▾</div>
+  <div class="domain-pages" id="心理学">
+    <a href="心理学_(其他)_part1.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（1/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part2.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（2/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part3.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（3/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part4.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（4/4） <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="心理学_个人成长与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">个人成长与心理学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理健康.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理健康 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理学 <span style="font-size:10px;color:#64748b;">(239篇)</span></a>
+    <a href="心理学_教育心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">教育心理学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="心理学_文学与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">文学与心理学 <span style="font-size:10px;color:#64748b;">(119篇)</span></a>
+    <a href="心理学_沟通技巧.json" style="border-left:3px solid #f59e0b; padding-left:18px;">沟通技巧 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="心理学_社会心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">社会心理学 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+    <a href="心理学_认知心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知心理学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="心理学_认知科学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知科学 <span style="font-size:10px;color:#64748b;">(39篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="房地产" style="color:#6ee7b7; border-left:3px solid #6ee7b7;">房地产 ▾</div>
+  <div class="domain-pages" id="房地产">
+    <a href="房地产.json" style="border-left:3px solid #6ee7b7; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(12篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="政治" style="color:#fbbf24; border-left:3px solid #fbbf24;">政治 ▾</div>
+  <div class="domain-pages" id="政治">
+    <a href="政治.json" style="border-left:3px solid #fbbf24; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(253篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="教育" style="color:#ec4899; border-left:3px solid #ec4899;">教育 ▾</div>
+  <div class="domain-pages" id="教育">
+    <a href="教育_(其他)_part1.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="教育_(其他)_part2.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(382篇)</span></a>
+    <a href="教育_个人成长.json" style="border-left:3px solid #ec4899; padding-left:18px;">个人成长 <span style="font-size:10px;color:#64748b;">(250篇)</span></a>
+    <a href="教育_儿童教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">儿童教育 <span style="font-size:10px;color:#64748b;">(62篇)</span></a>
+    <a href="教育_家庭教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">家庭教育 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="教育_教育理念.json" style="border-left:3px solid #ec4899; padding-left:18px;">教育理念 <span style="font-size:10px;color:#64748b;">(68篇)</span></a>
+    <a href="教育_财商教育.json" class="active" style="border-left:3px solid #ec4899; padding-left:18px;">财商教育 <span style="font-size:10px;color:#64748b;">(48篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="文学" style="color:#8b5cf6; border-left:3px solid #8b5cf6;">文学 ▾</div>
+  <div class="domain-pages" id="文学">
+    <a href="文学_(其他)_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_中国古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">中国古典文学 <span style="font-size:10px;color:#64748b;">(112篇)</span></a>
+    <a href="文学_儿童文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">儿童文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">古典文学 <span style="font-size:10px;color:#64748b;">(92篇)</span></a>
+    <a href="文学_奇幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">奇幻文学 <span style="font-size:10px;color:#64748b;">(51篇)</span></a>
+    <a href="文学_女性主义文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">女性主义文学 <span style="font-size:10px;color:#64748b;">(38篇)</span></a>
+    <a href="文学_悬疑小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">悬疑小说分析 <span style="font-size:10px;color:#64748b;">(52篇)</span></a>
+    <a href="文学_推理小说.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="文学_推理小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说分析 <span style="font-size:10px;color:#64748b;">(126篇)</span></a>
+    <a href="文学_推理文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理文学 <span style="font-size:10px;color:#64748b;">(35篇)</span></a>
+    <a href="文学_文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学 <span style="font-size:10px;color:#64748b;">(223篇)</span></a>
+    <a href="文学_文学与个人成长.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与个人成长 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="文学_文学与人生哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与人生哲学 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="文学_文学与哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与哲学 <span style="font-size:10px;color:#64748b;">(303篇)</span></a>
+    <a href="文学_文学与社会学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与社会学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="文学_文学分析_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（1/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（2/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（3/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（4/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（5/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part6.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（6/6） <span style="font-size:10px;color:#64748b;">(254篇)</span></a>
+    <a href="文学_文学批评.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学批评 <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="文学_文学理论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学理论 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_文学研究.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学研究 <span style="font-size:10px;color:#64748b;">(84篇)</span></a>
+    <a href="文学_文学经典.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学经典 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="文学_文学解读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学解读 <span style="font-size:10px;color:#64748b;">(40篇)</span></a>
+    <a href="文学_文学评论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学评论 <span style="font-size:10px;color:#64748b;">(482篇)</span></a>
+    <a href="文学_文学赏析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学赏析 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="文学_文学鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学鉴赏 <span style="font-size:10px;color:#64748b;">(82篇)</span></a>
+    <a href="文学_文学阅读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学阅读 <span style="font-size:10px;color:#64748b;">(78篇)</span></a>
+    <a href="文学_旅行文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">旅行文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_日本文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">日本文学 <span style="font-size:10px;color:#64748b;">(98篇)</span></a>
+    <a href="文学_武侠文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">武侠文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_科幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学 <span style="font-size:10px;color:#64748b;">(175篇)</span></a>
+    <a href="文学_科幻文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学分析 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="文学_网络文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">网络文学分析 <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_艺术鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">艺术鉴赏 <span style="font-size:10px;color:#64748b;">(44篇)</span></a>
+    <a href="文学_非虚构文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">非虚构文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="时尚生活" style="color:#f9a8d4; border-left:3px solid #f9a8d4;">时尚生活 ▾</div>
+  <div class="domain-pages" id="时尚生活">
+    <a href="时尚生活.json" style="border-left:3px solid #f9a8d4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(71篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="未知" style="color:#94a3b8; border-left:3px solid #94a3b8;">未知 ▾</div>
+  <div class="domain-pages" id="未知">
+    <a href="未知.json" style="border-left:3px solid #94a3b8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(16篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="法学" style="color:#fcd34d; border-left:3px solid #fcd34d;">法学 ▾</div>
+  <div class="domain-pages" id="法学">
+    <a href="法学.json" style="border-left:3px solid #fcd34d; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="社会学" style="color:#6366f1; border-left:3px solid #6366f1;">社会学 ▾</div>
+  <div class="domain-pages" id="社会学">
+    <a href="社会学_(其他)_part1.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="社会学_(其他)_part2.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(484篇)</span></a>
+    <a href="社会学_文化研究.json" style="border-left:3px solid #6366f1; padding-left:18px;">文化研究 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="社会学_社会学.json" style="border-left:3px solid #6366f1; padding-left:18px;">社会学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="科学" style="color:#f97316; border-left:3px solid #f97316;">科学 ▾</div>
+  <div class="domain-pages" id="科学">
+    <a href="科学_(其他)_part1.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="科学_(其他)_part2.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(116篇)</span></a>
+    <a href="科学_医学人文.json" style="border-left:3px solid #f97316; padding-left:18px;">医学人文 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="科学_神经科学.json" style="border-left:3px solid #f97316; padding-left:18px;">神经科学 <span style="font-size:10px;color:#64748b;">(56篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="编程" style="color:#818cf8; border-left:3px solid #818cf8;">编程 ▾</div>
+  <div class="domain-pages" id="编程">
+    <a href="编程.json" style="border-left:3px solid #818cf8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(151篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="艺术" style="color:#e879f9; border-left:3px solid #e879f9;">艺术 ▾</div>
+  <div class="domain-pages" id="艺术">
+    <a href="艺术.json" style="border-left:3px solid #e879f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(365篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="英语" style="color:#f472b6; border-left:3px solid #f472b6;">英语 ▾</div>
+  <div class="domain-pages" id="英语">
+    <a href="英语.json" style="border-left:3px solid #f472b6; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(209篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="语言文学" style="color:#d8b4fe; border-left:3px solid #d8b4fe;">语言文学 ▾</div>
+  <div class="domain-pages" id="语言文学">
+    <a href="语言文学.json" style="border-left:3px solid #d8b4fe; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="金融" style="color:#a3e635; border-left:3px solid #a3e635;">金融 ▾</div>
+  <div class="domain-pages" id="金融">
+    <a href="金融.json" style="border-left:3px solid #a3e635; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(208篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="雅思" style="color:#22d3ee; border-left:3px solid #22d3ee;">雅思 ▾</div>
+  <div class="domain-pages" id="雅思">
+    <a href="雅思.json" style="border-left:3px solid #22d3ee; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(511篇)</span></a>
+  </div>
+
+    <script>
+    document.querySelectorAll('.domain-header').forEach(function(h){
+      h.addEventListener('click', function(){
+        var t = document.getElementById(this.dataset.target);
+        t.style.display = t.style.display==='none' ? 'block' : 'none';
+        this.innerHTML = this.innerHTML.replace(/[▾▸]/, t.style.display==='none'?'▸':'▾');
+      });
+    });
+    </script>
+    
+</div>
+<button id="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">☰</button>
+
+<div id="header">
+  <h1>📚 教育 · 财商教育</h1>
+  <div id="search-wrap">
+    <input id="search-box" type="text" placeholder="🔍 搜索书名/概念...">
+    <div id="search-results"></div>
+  </div>
+  <div class="stats">
+    <span id="node-count">0</span> 节点 ·
+    <span id="link-count">0</span> 连接
+  </div>
+  <div class="ctrls">
+    <button class="btn" id="btn-toggle-concept">隐藏概念</button>
+    <button class="btn" id="btn-reset">重置视图</button>
+  </div>
+</div>
+
+<div id="graph"></div>
+<div id="tooltip"></div>
+
+<!-- 右侧详情面板 -->
+<div id="detail-panel">
+  <div id="detail-header">
+    <h2 id="detail-title"></h2>
+    <button id="detail-close" onclick="closeDetail()">✕</button>
+  </div>
+  <div id="detail-body"></div>
+</div>
+
+<script>
+var NODES = [{"id": "财富四象限 (ESBI).md", "label": "财富四象限 (ESBI)", "title": "财富四象限 (ESBI)", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念：本课程的核心概念是财商教育，即一套与学校传统教育不同的、关于财富创造和管理的知识体系。它强调，富人与穷人、中产阶级之间的根本差异，不在于赚多少钱，而在于思维方式和使用的“财富语言”。不同群体（如数学家与消防员、富人与穷人）之间存在由专业知识和思维模式造成的“隐形隔离带”。要成为富人，必须学习并掌握富人的“专属语言”——即财务词汇和财商知识。语言塑造思维：课程借由“数学家救火”的笑话，揭示了底层逻辑：你使用的词汇和语言体系，决定了你看待问题和解决问题的方式", "keywords": ["知识壁垒构建阶层", "可执行的行动步骤", "绘制个人财务报表", "与其他领域的联系", "建立财务词汇库", "语言塑造思维", "方法论提炼", "认知心理学"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第7课 有钱人的大脑里面原来是这样"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/财富四象限 (ESBI).md"}, {"id": "财务语言.md", "label": "财务语言", "title": "财务语言", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "信息不对称与信息解读能力：财富机会往往隐藏在少数人掌握的信息和特定的“语言”（术语、逻辑）中。仅仅知道信息（如“战争结果”）还不够，关键在于如何利用“内部逻辑”解读和操作信息。财务语言：每个财富领域（股市、房产、风投）都有一套独特的词汇和底层逻辑。富人通过学习特定领域的“语言”和“逻辑”，主动扩展自己的认知边界，从而看到普通人看不到的“钱景”。原因：不懂财务语言和领域逻辑 → 结果：听不懂消息，看不到机会", "keywords": ["以小博大与行动勇气", "认知决定财富边界", "可执行的行动步骤", "与其他领域的联系", "聚焦与不平衡", "语言学习领域", "核心概念", "财务语言"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第11课 学会用富人的眼光赚自己的钱"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/财务语言.md"}, {"id": "财务词汇.md", "label": "财务词汇", "title": "财务词汇", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "阶层隐形隔离带：不同群体（如穷人与富人）之间存在无形的隔阂，主要体现在专业知识和思维方式上。富人专属语言：富人阶层内部使用的一套特定财务词汇和逻辑体系，是区分圈内圈外人的关键标志。财商教育基础：掌握财务知识是财商教育的起点，而财务知识由一系列“财务词汇”构成。原因：不懂财务词汇，就无法读懂财务报表，无法判断一个项目的真实价值。富人通过“财务报表”诊断一家公司的“财务健康”状况，并找出问题（如现金流断裂）和机会（如被低估的资产）", "keywords": ["相关笔记", "原因", "财务词", "信息与认知不对称", "语言是权力的工具", "阶层隐形隔离带", "富人专属语言", "财商教育基础"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第7课 有钱人的大脑里面原来是这样(1)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/财务词汇.md"}, {"id": "财富四象限（ESBI）.md", "label": "财富四象限（ESBI）", "title": "财富四象限（ESBI）", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念：财富四象限（ESBI）。罗伯特·清崎根据人们获取收入的方式，将所有人划分为四个象限，代表了不同的财富创造模式。这不仅是职业分类，更是思维方式的分类。财富流向不均衡：95%的人（E和S象限）通过主动劳动获取收入，而5%的人（B和I象限）通过系统和资产获得被动收入，掌握了绝大部分财富。思维隔离：不同象限的人思维方式截然不同，这种思维差异导致了“两种世界的隔离”", "keywords": ["相关笔记", "财富流向不均衡", "财务自由的关键", "恐惧与无知", "思维隔离", "线性思维", "杠杆思维", "教育导向"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第5课 钱流向了谁？两种世界的隔离"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/财富四象限（ESBI）.md"}, {"id": "被动收入.md", "label": "被动收入", "title": "被动收入", "type": "book", "degree": 2, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念： 通过模拟现实生活的“现金流游戏”（又称“老鼠赛跑”），学习并实践富人思维，尤其是理解金钱运动的规律，最终目标是实现财务自由。穷人与中产的困境： 大多数人陷入“老鼠赛跑”的循环——为钱工作，收入用于支付账单，没有资产积累，无法实现财富增长。富人的秘密： 富人掌握金钱运动的规律，懂得如何利用资产（而非负债）来创造被动收入，从而跳出“老鼠赛跑”的圈子，进入财富快车道。游戏是高效的学习工具： 现金流游戏不仅仅是娱乐，它通过模拟真实财务决策（如投资、失业、额外支出）并强制玩家填。结果： 能够识别并把握投资机会，逐步积累资产，获得被动收入，最终跳出“老鼠赛跑”，进入“快车道”", "keywords": ["现金流游", "流游戏"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第10课 想玩转富人思维？教你这样玩"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/被动收入.md"}, {"id": "货币思维.md", "label": "货币思维", "title": "货币思维", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念：富人创造并出售资产（如股票），而穷人和中产阶级则购买这些资产。财富的核心差异不在于“买”，而在于“卖”——卖的是你自己创造的、能代表价值的“货币”。主要论点：股市中95%的人是穷人，是因为他们扮演了“买家”的角色。原因：穷人和中产阶级接受的教育是“为钱工作”，他们通过出卖时间、体力或技能换取薪水，然后用薪水去购买他人的资产（股票）。穷人和中产阶级则努力成为“点钞机”（高薪打工者、优秀投资者），为“印钞机”服务或购买其产品", "keywords": ["关键术语解释", "方法论提炼", "核心概念", "主要论点", "底层逻辑", "因果关系", "穷人和中产", "人和中产阶"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第4课 富人都在卖的东西偏偏你在买"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/货币思维.md"}, {"id": "资产创造.md", "label": "资产创造", "title": "资产创造", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念：富人创造并出售资产（如股票），而穷人和中产阶级则购买这些资产。财富的核心差异不在于“买”，而在于“卖”——卖的是你自己创造的、能代表价值的“货币”。主要论点：股市中95%的人是穷人，是因为他们扮演了“买家”的角色。原因：穷人和中产阶级接受的教育是“为钱工作”，他们通过出卖时间、体力或技能换取薪水，然后用薪水去购买他人的资产（股票）。穷人和中产阶级则努力成为“点钞机”（高薪打工者、优秀投资者），为“印钞机”服务或购买其产品", "keywords": ["关键术语解释", "方法论提炼", "核心概念", "主要论点", "底层逻辑", "因果关系", "穷人和中产", "人和中产阶"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第4课 富人都在卖的东西偏偏你在买"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/资产创造.md"}, {"id": "机会识别.md", "label": "机会识别", "title": "机会识别", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "财富语言：指在特定财富领域（如股票、房地产、投资）中，用于沟通、分析和决策的专业词汇、逻辑和规则。财务素养：理解并运用基本财务知识的能力，是掌握“财富语言”的基础。机会识别：在掌握领域语言后，能够发现圈外人看不到的潜在盈利点。罗斯柴尔德的案例完美展示了如何利用“制造恐慌”来获得巨额利润。找一个你感兴趣的经典投资案例（如课程中的罗斯柴尔德，或巴菲特投资可口可乐）", "keywords": ["信息不对称与认知差", "心理博弈与市场情绪", "复利效应与突破点", "可执行的行动步骤", "与其他领域的联系", "聚焦与不平衡", "选定一个领域", "核心概念"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第11课 学会用富人的眼光赚自己的钱(1)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/机会识别.md"}, {"id": "财务自由.md", "label": "财务自由", "title": "财务自由", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "指认识、创造和管理财富的能力，核心是理解金钱的流动逻辑，而非仅仅依靠体力或脑力劳动挣钱。本课旨在通过对比“富爸爸”和“穷爸爸”的思维模式，开启财商启蒙。思维决定阶层：穷人和富人的根本差异在于金钱观和财富观。认知决定行为，行为决定结果：对金钱的认知（如“钱是坏的”或“钱是好的”）会直接驱动一个人的行为（如“安稳工作”或“冒险创业”），最终导致截然不同的财务结果。固定型思维 vs. 成长型思维：穷爸爸认为失败是灾难性的（固定型思维），而富爸爸认为失败是成长的机会（成长型思维）", "keywords": ["失败是财富的催化剂", "学校教育存在盲区", "思维决定阶层", "核心概念", "主要论点", "富爸爸", "穷爸爸", "型思维"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第1课 想做有钱人，看看富爸爸的金钱观"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/财务自由.md"}, {"id": "财务知识.md", "label": "财务知识", "title": "财务知识", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念：本课程的核心概念是财商教育，即一套与学校传统教育不同的、关于财富创造和管理的知识体系。它强调，富人与穷人、中产阶级之间的根本差异，不在于赚多少钱，而在于思维方式和使用的“财富语言”。不同群体（如数学家与消防员、富人与穷人）之间存在由专业知识和思维模式造成的“隐形隔离带”。语言塑造思维：课程借由“数学家救火”的笑话，揭示了底层逻辑：你使用的词汇和语言体系，决定了你看待问题和解决问题的方式。富人通过掌握这套“官方通用语言”（如银行家看重的现金流），形成了对穷人和中产阶级的知识优势", "keywords": ["知识壁垒构建阶层", "可执行的行动步骤", "绘制个人财务报表", "与其他领域的联系", "建立财务词汇库", "语言塑造思维", "方法论提炼", "认知心理学"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第7课 有钱人的大脑里面原来是这样"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/财务知识.md"}, {"id": "聚焦与不平衡.md", "label": "聚焦与不平衡", "title": "聚焦与不平衡", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "信息不对称与信息解读能力：财富机会往往隐藏在少数人掌握的信息和特定的“语言”（术语、逻辑）中。仅仅知道信息（如“战争结果”）还不够，关键在于如何利用“内部逻辑”解读和操作信息。财务语言：每个财富领域（股市、房产、风投）都有一套独特的词汇和底层逻辑。聚焦与不平衡：追求财富增长需要高度专注和集中火力，而不是追求生活或投资的“平衡”。原因：不懂财务语言和领域逻辑 → 结果：听不懂消息，看不到机会", "keywords": ["以小博大与行动勇气", "认知决定财富边界", "可执行的行动步骤", "与其他领域的联系", "聚焦与不平衡", "语言学习领域", "核心概念", "财务语言"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第11课 学会用富人的眼光赚自己的钱"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/聚焦与不平衡.md"}, {"id": "信息不对称.md", "label": "信息不对称", "title": "信息不对称", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "信息不对称与信息解读能力：财富机会往往隐藏在少数人掌握的信息和特定的“语言”（术语、逻辑）中。仅仅知道信息（如“战争结果”）还不够，关键在于如何利用“内部逻辑”解读和操作信息。财务语言：每个财富领域（股市、房产、风投）都有一套独特的词汇和底层逻辑。富人通过学习特定领域的“语言”和“逻辑”，主动扩展自己的认知边界，从而看到普通人看不到的“钱景”。原因：不懂财务语言和领域逻辑 → 结果：听不懂消息，看不到机会", "keywords": ["以小博大与行动勇气", "认知决定财富边界", "可执行的行动步骤", "与其他领域的联系", "聚焦与不平衡", "语言学习领域", "核心概念", "财务语言"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第11课 学会用富人的眼光赚自己的钱"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/信息不对称.md"}, {"id": "底层逻辑.md", "label": "底层逻辑", "title": "底层逻辑", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "信息不对称与信息解读能力：财富机会往往隐藏在少数人掌握的信息和特定的“语言”（术语、逻辑）中。仅仅知道信息（如“战争结果”）还不够，关键在于如何利用“内部逻辑”解读和操作信息。财务语言：每个财富领域（股市、房产、风投）都有一套独特的词汇和底层逻辑。富人通过学习特定领域的“语言”和“逻辑”，主动扩展自己的认知边界，从而看到普通人看不到的“钱景”。原因：不懂财务语言和领域逻辑 → 结果：听不懂消息，看不到机会", "keywords": ["以小博大与行动勇气", "认知决定财富边界", "可执行的行动步骤", "与其他领域的联系", "聚焦与不平衡", "语言学习领域", "核心概念", "财务语言"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第11课 学会用富人的眼光赚自己的钱"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/底层逻辑.md"}, {"id": "财商.md", "label": "财商", "title": "财商", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "指认识、创造和管理财富的能力，核心是理解金钱的流动逻辑，而非仅仅依靠体力或脑力劳动挣钱。本课旨在通过对比“富爸爸”和“穷爸爸”的思维模式，开启财商启蒙。思维决定阶层：穷人和富人的根本差异在于金钱观和财富观。认知决定行为，行为决定结果：对金钱的认知（如“钱是坏的”或“钱是好的”）会直接驱动一个人的行为（如“安稳工作”或“冒险创业”），最终导致截然不同的财务结果。固定型思维 vs. 成长型思维：穷爸爸认为失败是灾难性的（固定型思维），而富爸爸认为失败是成长的机会（成长型思维）", "keywords": ["失败是财富的催化剂", "学校教育存在盲区", "思维决定阶层", "核心概念", "主要论点", "富爸爸", "穷爸爸", "型思维"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第1课 想做有钱人，看看富爸爸的金钱观"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/财商.md"}, {"id": "主动收入.md", "label": "主动收入", "title": "主动收入", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念：财富四象限（ESBI）。罗伯特·清崎根据人们获取收入的方式，将所有人划分为四个象限，代表了不同的财富创造模式。这不仅是职业分类，更是思维方式的分类。财富流向不均衡：95%的人（E和S象限）通过主动劳动获取收入，而5%的人（B和I象限）通过系统和资产获得被动收入，掌握了绝大部分财富。时间杠杆：B象限使用“他人的时间”（员工），I象限使用资本的时间（复利）", "keywords": ["财富流向不均衡", "财务自由的关键", "恐惧与无知", "思维隔离", "线性思维", "杠杆思维", "教育导向", "认知局限"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第5课 钱流向了谁？两种世界的隔离"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/主动收入.md"}, {"id": "货币化思维.md", "label": "货币化思维", "title": "货币化思维", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念：富人创造并出售资产（如股票），而穷人和中产阶级则购买这些资产。财富的核心差异不在于“买”，而在于“卖”——卖的是你自己创造的、能代表价值的“货币”。主要论点：股市中95%的人是穷人，是因为他们扮演了“买家”的角色。原因：穷人和中产阶级接受的教育是“为钱工作”，他们通过出卖时间、体力或技能换取薪水，然后用薪水去购买他人的资产（股票）。穷人和中产阶级则努力成为“点钞机”（高薪打工者、优秀投资者），为“印钞机”服务或购买其产品", "keywords": ["关键术语解释", "方法论提炼", "核心概念", "主要论点", "底层逻辑", "因果关系", "穷人和中产", "人和中产阶"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第4课 富人都在卖的东西偏偏你在买"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/货币化思维.md"}, {"id": "复利效应.md", "label": "复利效应", "title": "复利效应", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "本课的核心并非泛指所有教育，而是特指关于金钱、财富创造与管理的教育。它区别于传统的学术教育或职业技能教育，重点在于培养对金钱的认知、驾驭和增值能力。主要论点：富人思维的核心差异在于教育焦点。因果关系：早期财商教育的“复利效应”。富爸爸的财商教育，则强调在不确定性中学习、成长和创造，更接近“成长型思维”", "keywords": ["财商教", "商教育", "根本区别", "因果链", "原因", "对比", "型思维", "复利效"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第2课 想稳拥财富，这样的财商教育才是秘笈(1)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/复利效应.md"}, {"id": "系统拥有者.md", "label": "系统拥有者", "title": "系统拥有者", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "财商教育 (Financial Intelligence Education)：区别于传统学校教育，专注于教授如何理解金钱、管理金钱、创造财富和让钱生钱的知识与技能。穷爸爸 vs. 富爸爸：两种截然不同的财富思维和教育方式的象征。穷爸爸代表“为钱工作”的雇员思维，富爸爸代表“让钱为我工作”的投资者/企业家思维。财富思维 (Wealth Mindset)：一种看待金钱、风险和机遇的特定方式，是富人区别于穷人的根本。与“成长型思维” (Growth Mindset)：财商教育是成长型思维在财务领域的具体应用", "keywords": ["立即开始阅读财务报表", "传统教育的局限性", "可执行的行动步骤", "与其他领域的联系", "游戏规则差异", "风险认知转变", "实践式学习法", "方法论提炼"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第2课 想稳拥财富，这样的财商教育才是秘笈"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/系统拥有者.md"}, {"id": "财富阶层.md", "label": "财富阶层", "title": "财富阶层", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念：富人创造并出售资产（如股票），而穷人和中产阶级则购买这些资产。财富的核心差异不在于“买”，而在于“卖”——卖的是你自己创造的、能代表价值的“货币”。主要论点：股市中95%的人是穷人，是因为他们扮演了“买家”的角色。原因：穷人和中产阶级接受的教育是“为钱工作”，他们通过出卖时间、体力或技能换取薪水，然后用薪水去购买他人的资产（股票）。穷人和中产阶级则努力成为“点钞机”（高薪打工者、优秀投资者），为“印钞机”服务或购买其产品", "keywords": ["关键术语解释", "方法论提炼", "核心概念", "主要论点", "底层逻辑", "因果关系", "穷人和中产", "人和中产阶"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第4课 富人都在卖的东西偏偏你在买"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/财富阶层.md"}, {"id": "成长型思维.md", "label": "成长型思维", "title": "成长型思维", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "财商 (Financial Intelligence)：理解金钱运作规律并利用它为自己创造财富的能力，是区别于穷人和富人的关键。财务自由 (Financial Freedom)：不再需要为钱而工作，而是资产产生的被动收入足以覆盖日常开支的状态。穷人与富人的金钱观差异：穷人为钱工作，追求稳定；富人的让钱为自己工作，追求资产增长。因果链：错误的金钱观 → 错误的决策（如安稳工作）→ 财务困境（贫穷）→ 强化错误观念（金钱是坏的）→ 恶性循环。穷爸爸的思维是典型的“固定型思维”（害怕失败，认为能力是天生的），而富爸爸的思维是成长型（将失败视为学习机会）", "keywords": ["风险与收益的辩证关系", "金钱的中性本质", "建立风险预算", "观念审查", "资产清单", "小步试错", "熵增定律", "企业管理"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第1课 想做有钱人，看看富爸爸的金钱观(1)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/成长型思维.md"}, {"id": "阶层隐形隔离带.md", "label": "阶层隐形隔离带", "title": "阶层隐形隔离带", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "阶层隐形隔离带：不同群体（如穷人与富人）之间存在无形的隔阂，主要体现在专业知识和思维方式上。富人专属语言：富人阶层内部使用的一套特定财务词汇和逻辑体系，是区分圈内圈外人的关键标志。财商教育基础：掌握财务知识是财商教育的起点，而财务知识由一系列“财务词汇”构成。信息与认知不对称：富人圈子里的“常识”（如财务报表分析）在穷人听来如同天书。原因：不懂财务词汇，就无法读懂财务报表，无法判断一个项目的真实价值", "keywords": ["原因", "财务词汇", "信息与认知不对称", "语言是权力的工具", "阶层隐形隔离带", "富人专属语言", "财商教育基础", "财务报"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第7课 有钱人的大脑里面原来是这样(1)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/阶层隐形隔离带.md"}, {"id": "杠杆思维.md", "label": "杠杆思维", "title": "杠杆思维", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念：财富四象限（ESBI）。罗伯特·清崎根据人们获取收入的方式，将所有人划分为四个象限，代表了不同的财富创造模式。这不仅是职业分类，更是思维方式的分类。财富流向不均衡：95%的人（E和S象限）通过主动劳动获取收入，而5%的人（B和I象限）通过系统和资产获得被动收入，掌握了绝大部分财富。思维隔离：不同象限的人思维方式截然不同，这种思维差异导致了“两种世界的隔离”", "keywords": ["财富流向不均衡", "财务自由的关键", "恐惧与无知", "思维隔离", "线性思维", "杠杆思维", "教育导向", "认知局限"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第5课 钱流向了谁？两种世界的隔离"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/杠杆思维.md"}, {"id": "试错学习.md", "label": "试错学习", "title": "试错学习", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "本课的核心并非泛指所有教育，而是特指关于金钱、财富创造与管理的教育。它区别于传统的学术教育或职业技能教育，重点在于培养对金钱的认知、驾驭和增值能力。主要论点：富人思维的核心差异在于教育焦点。因果链：穷人思维（追求稳定） → 教育重点（写好简历、找好工作） → 行为（为钱工作、依赖工资） → 结果（陷入“老鼠赛跑”的循环，难以积累资产）。富爸爸的财商教育，则强调在不确定性中学习、成长和创造，更接近“成长型思维”", "keywords": ["财商教", "商教育", "根本区别", "因果链", "原因", "对比", "型思维", "人思维"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第2课 想稳拥财富，这样的财商教育才是秘笈(1)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/试错学习.md"}, {"id": "财务报表.md", "label": "财务报表", "title": "财务报表", "type": "book", "degree": 2, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念： 通过模拟现实生活的“现金流游戏”（又称“老鼠赛跑”），学习并实践富人思维，尤其是理解金钱运动的规律，最终目标是实现财务自由。穷人与中产的困境： 大多数人陷入“老鼠赛跑”的循环——为钱工作，收入用于支付账单，没有资产积累，无法实现财富增长。富人的秘密： 富人掌握金钱运动的规律，懂得如何利用资产（而非负债）来创造被动收入，从而跳出“老鼠赛跑”的圈子，进入财富快车道。游戏是高效的学习工具： 现金流游戏不仅仅是娱乐，它通过模拟真实财务决策（如投资、失业、额外支出）并强制玩家填。结果： 能够识别并把握投资机会，逐步积累资产，获得被动收入，最终跳出“老鼠赛跑”，进入“快车道”", "keywords": ["现金流游", "流游戏"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第10课 想玩转富人思维？教你这样玩"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/财务报表.md"}, {"id": "快车道.md", "label": "快车道", "title": "快车道", "type": "book", "degree": 2, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念： 通过模拟现实生活的“现金流游戏”（又称“老鼠赛跑”），学习并实践富人思维，尤其是理解金钱运动的规律，最终目标是实现财务自由。穷人与中产的困境： 大多数人陷入“老鼠赛跑”的循环——为钱工作，收入用于支付账单，没有资产积累，无法实现财富增长。富人的秘密： 富人掌握金钱运动的规律，懂得如何利用资产（而非负债）来创造被动收入，从而跳出“老鼠赛跑”的圈子，进入财富快车道。游戏是高效的学习工具： 现金流游戏不仅仅是娱乐，它通过模拟真实财务决策（如投资、失业、额外支出）并强制玩家填。结果： 能够识别并把握投资机会，逐步积累资产，获得被动收入，最终跳出“老鼠赛跑”，进入“快车道”", "keywords": ["现金流游", "流游戏"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第10课 想玩转富人思维？教你这样玩"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/快车道.md"}, {"id": "以小博大.md", "label": "以小博大", "title": "以小博大", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "信息不对称与信息解读能力：财富机会往往隐藏在少数人掌握的信息和特定的“语言”（术语、逻辑）中。仅仅知道信息（如“战争结果”）还不够，关键在于如何利用“内部逻辑”解读和操作信息。财务语言：每个财富领域（股市、房产、风投）都有一套独特的词汇和底层逻辑。富人通过学习特定领域的“语言”和“逻辑”，主动扩展自己的认知边界，从而看到普通人看不到的“钱景”。原因：不懂财务语言和领域逻辑 → 结果：听不懂消息，看不到机会", "keywords": ["以小博大与行动勇气", "认知决定财富边界", "可执行的行动步骤", "与其他领域的联系", "聚焦与不平衡", "语言学习领域", "核心概念", "财务语言"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第11课 学会用富人的眼光赚自己的钱"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/以小博大.md"}, {"id": "ESBI四象限.md", "label": "ESBI四象限", "title": "ESBI四象限", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念：财富四象限（ESBI）。罗伯特·清崎根据人们获取收入的方式，将所有人划分为四个象限，代表了不同的财富创造模式。这不仅是职业分类，更是思维方式的分类。财富流向不均衡：95%的人（E和S象限）通过主动劳动获取收入，而5%的人（B和I象限）通过系统和资产获得被动收入，掌握了绝大部分财富。思维隔离：不同象限的人思维方式截然不同，这种思维差异导致了“两种世界的隔离”", "keywords": ["财富流向不均衡", "财务自由的关键", "恐惧与无知", "思维隔离", "线性思维", "杠杆思维", "教育导向", "认知局限"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第5课 钱流向了谁？两种世界的隔离"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/ESBI四象限.md"}, {"id": "卖与买.md", "label": "卖与买", "title": "卖与买", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念：富人创造并出售资产（如股票），而穷人和中产阶级则购买这些资产。财富的核心差异不在于“买”，而在于“卖”——卖的是你自己创造的、能代表价值的“货币”。主要论点：股市中95%的人是穷人，是因为他们扮演了“买家”的角色。原因：穷人和中产阶级接受的教育是“为钱工作”，他们通过出卖时间、体力或技能换取薪水，然后用薪水去购买他人的资产（股票）。穷人和中产阶级则努力成为“点钞机”（高薪打工者、优秀投资者），为“印钞机”服务或购买其产品", "keywords": ["关键术语解释", "方法论提炼", "核心概念", "主要论点", "底层逻辑", "因果关系", "穷人和中产", "人和中产阶"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第4课 富人都在卖的东西偏偏你在买"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/卖与买.md"}, {"id": "现金流.md", "label": "现金流", "title": "现金流", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念：本课程的核心概念是财商教育，即一套与学校传统教育不同的、关于财富创造和管理的知识体系。它强调，富人与穷人、中产阶级之间的根本差异，不在于赚多少钱，而在于思维方式和使用的“财富语言”。不同群体（如数学家与消防员、富人与穷人）之间存在由专业知识和思维模式造成的“隐形隔离带”。要成为富人，必须学习并掌握富人的“专属语言”——即财务词汇和财商知识。富人通过掌握这套“官方通用语言”（如银行家看重的现金流），形成了对穷人和中产阶级的知识优势", "keywords": ["知识壁垒构建阶层", "可执行的行动步骤", "绘制个人财务报表", "与其他领域的联系", "建立财务词汇库", "语言塑造思维", "方法论提炼", "认知心理学"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第7课 有钱人的大脑里面原来是这样"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/现金流.md"}, {"id": "资产 vs. 负债.md", "label": "资产 vs. 负债", "title": "资产 vs. 负债", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念：本课程的核心概念是财商教育，即一套与学校传统教育不同的、关于财富创造和管理的知识体系。它强调，富人与穷人、中产阶级之间的根本差异，不在于赚多少钱，而在于思维方式和使用的“财富语言”。不同群体（如数学家与消防员、富人与穷人）之间存在由专业知识和思维模式造成的“隐形隔离带”。要成为富人，必须学习并掌握富人的“专属语言”——即财务词汇和财商知识。富人通过掌握这套“官方通用语言”（如银行家看重的现金流），形成了对穷人和中产阶级的知识优势", "keywords": ["知识壁垒构建阶层", "可执行的行动步骤", "绘制个人财务报表", "与其他领域的联系", "建立财务词汇库", "语言塑造思维", "方法论提炼", "认知心理学"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第7课 有钱人的大脑里面原来是这样"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/资产 vs. 负债.md"}, {"id": "富人专属语言.md", "label": "富人专属语言", "title": "富人专属语言", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "阶层隐形隔离带：不同群体（如穷人与富人）之间存在无形的隔阂，主要体现在专业知识和思维方式上。富人专属语言：富人阶层内部使用的一套特定财务词汇和逻辑体系，是区分圈内圈外人的关键标志。财商教育基础：掌握财务知识是财商教育的起点，而财务知识由一系列“财务词汇”构成。穷人与富人之间的最大差异，不在于智商或努力，而在于是否掌握了“财富世界”的专属语言和思维方式。原因：不懂财务词汇，就无法读懂财务报表，无法判断一个项目的真实价值", "keywords": ["原因", "财务词汇", "信息与认知不对称", "语言是权力的工具", "阶层隐形隔离带", "富人专属语言", "财商教育基础", "财务报"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第7课 有钱人的大脑里面原来是这样(1)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/富人专属语言.md"}, {"id": "卖与买的思维转换.md", "label": "卖与买的思维转换", "title": "卖与买的思维转换", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念：富人创造并出售资产（如股票），而穷人和中产阶级则购买这些资产。财富的核心差异不在于“买”，而在于“卖”——卖的是你自己创造的、能代表价值的“货币”。主要论点：股市中95%的人是穷人，是因为他们扮演了“买家”的角色。原因：穷人和中产阶级接受的教育是“为钱工作”，他们通过出卖时间、体力或技能换取薪水，然后用薪水去购买他人的资产（股票）。穷人和中产阶级则努力成为“点钞机”（高薪打工者、优秀投资者），为“印钞机”服务或购买其产品", "keywords": ["关键术语解释", "方法论提炼", "核心概念", "主要论点", "底层逻辑", "因果关系", "穷人和中产", "人和中产阶"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第4课 富人都在卖的东西偏偏你在买"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/卖与买的思维转换.md"}, {"id": "现金流象限.md", "label": "现金流象限", "title": "现金流象限", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念：现金流象限 (CASHFLOW Quadrant)。罗伯特·清崎将所有人根据收入来源和思维模式划分为四个象限：E（雇员）、S（自由职业者/小企业主）、B（大企业家）、I（投资者）。前两个象限属于主动收入者，后两个象限属于被动收入者。世界上95%的人（E和S象限）靠主动收入生活，他们无法停止工作，一旦停止，收入便中断。主动收入者和被动收入者之间存在着巨大的“隔离”，前者的思维和努力方式，很难自然跨", "keywords": ["收入模式的本质差异", "象限跨越意识", "方法论提炼", "核心概念", "主要论点", "底层逻辑", "因果关系", "被动收入"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第5课 钱流向了谁？两种世界的隔离(1)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/现金流象限.md"}, {"id": "资产.md", "label": "资产", "title": "资产", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念：现金流象限 (CASHFLOW Quadrant)。罗伯特·清崎将所有人根据收入来源和思维模式划分为四个象限：E（雇员）、S（自由职业者/小企业主）、B（大企业家）、I（投资者）。前两个象限属于主动收入者，后两个象限属于被动收入者。世界上95%的人（E和S象限）靠主动收入生活，他们无法停止工作，一旦停止，收入便中断。主动收入者和被动收入者之间存在着巨大的“隔离”，前者的思维和努力方式，很难自然跨", "keywords": ["收入模式的本质差异", "象限跨越意识", "方法论提炼", "核心概念", "主要论点", "底层逻辑", "因果关系", "被动收入"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第5课 钱流向了谁？两种世界的隔离(1)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/资产.md"}, {"id": "资产与负债.md", "label": "资产与负债", "title": "资产与负债", "type": "book", "degree": 2, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念： 通过模拟现实生活的“现金流游戏”（又称“老鼠赛跑”），学习并实践富人思维，尤其是理解金钱运动的规律，最终目标是实现财务自由。穷人与中产的困境： 大多数人陷入“老鼠赛跑”的循环——为钱工作，收入用于支付账单，没有资产积累，无法实现财富增长。富人的秘密： 富人掌握金钱运动的规律，懂得如何利用资产（而非负债）来创造被动收入，从而跳出“老鼠赛跑”的圈子，进入财富快车道。游戏是高效的学习工具： 现金流游戏不仅仅是娱乐，它通过模拟真实财务决策（如投资、失业、额外支出）并强制玩家填。结果： 能够识别并把握投资机会，逐步积累资产，获得被动收入，最终跳出“老鼠赛跑”，进入“快车道”", "keywords": ["现金流游", "流游戏"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第10课 想玩转富人思维？教你这样玩"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/资产与负债.md"}, {"id": "货币化.md", "label": "货币化", "title": "货币化", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念：富人创造并出售资产（如股票），而穷人和中产阶级则购买这些资产。财富的核心差异不在于“买”，而在于“卖”——卖的是你自己创造的、能代表价值的“货币”。主要论点：股市中95%的人是穷人，是因为他们扮演了“买家”的角色。原因：穷人和中产阶级接受的教育是“为钱工作”，他们通过出卖时间、体力或技能换取薪水，然后用薪水去购买他人的资产（股票）。穷人和中产阶级则努力成为“点钞机”（高薪打工者、优秀投资者），为“印钞机”服务或购买其产品", "keywords": ["关键术语解释", "方法论提炼", "核心概念", "主要论点", "底层逻辑", "因果关系", "穷人和中产", "人和中产阶"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第4课 富人都在卖的东西偏偏你在买"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/货币化.md"}, {"id": "富人思维.md", "label": "富人思维", "title": "富人思维", "type": "book", "degree": 2, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念： 通过模拟现实世界的“现金流游戏”（又称“老鼠赛跑”），将枯燥的财商教育变得有趣，从而培养玩家的富人思维和财务智商（FQ），最终实现财务自由。穷人与中产阶级的困境： 大多数人陷入“老鼠赛跑”的循环，即工作-消费-再工作的模式，像仓鼠在滚轮里原地踏步，无法积累财富。富人致富的秘密： 富人拥有进入“快车道”（优质投资项目）的资格，这些项目门槛极高（如法律要求必须是百万富翁），但能带来指数级的财富增长。因为现金流游戏模拟了真实世界的经济行为，并强制玩家填写财务报表，所以玩家能直观地看到自己的财务决策如何影响现金流和资产负债表，从而理解金钱运动的规律。它利用“心流”理论，在游戏中设置明确的目", "keywords": ["现金流游", "流游戏"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第10课 想玩转富人思维？教你这样玩(1)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/富人思维.md"}, {"id": "象限跃迁.md", "label": "象限跃迁", "title": "象限跃迁", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念：财富四象限（ESBI）。罗伯特·清崎根据人们获取收入的方式，将所有人划分为四个象限，代表了不同的财富创造模式。这不仅是职业分类，更是思维方式的分类。财富流向不均衡：95%的人（E和S象限）通过主动劳动获取收入，而5%的人（B和I象限）通过系统和资产获得被动收入，掌握了绝大部分财富。思维隔离：不同象限的人思维方式截然不同，这种思维差异导致了“两种世界的隔离”", "keywords": ["财富流向不均衡", "财务自由的关键", "恐惧与无知", "思维隔离", "线性思维", "杠杆思维", "教育导向", "认知局限"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第5课 钱流向了谁？两种世界的隔离"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/象限跃迁.md"}, {"id": "穷爸爸与富爸爸.md", "label": "穷爸爸与富爸爸", "title": "穷爸爸与富爸爸", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "财商教育 (Financial Intelligence Education)：区别于传统学校教育，专注于教授如何理解金钱、管理金钱、创造财富和让钱生钱的知识与技能。穷爸爸 vs. 富爸爸：两种截然不同的财富思维和教育方式的象征。穷爸爸代表“为钱工作”的雇员思维，富爸爸代表“让钱为我工作”的投资者/企业家思维。财富思维 (Wealth Mindset)：一种看待金钱、风险和机遇的特定方式，是富人区别于穷人的根本。与“成长型思维” (Growth Mindset)：财商教育是成长型思维在财务领域的具体应用", "keywords": ["立即开始阅读财务报表", "传统教育的局限性", "可执行的行动步骤", "与其他领域的联系", "游戏规则差异", "风险认知转变", "实践式学习法", "方法论提炼"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第2课 想稳拥财富，这样的财商教育才是秘笈"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/穷爸爸与富爸爸.md"}, {"id": "老鼠赛跑.md", "label": "老鼠赛跑", "title": "老鼠赛跑", "type": "book", "degree": 2, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念： 通过模拟现实生活的“现金流游戏”（又称“老鼠赛跑”），学习并实践富人思维，尤其是理解金钱运动的规律，最终目标是实现财务自由。穷人与中产的困境： 大多数人陷入“老鼠赛跑”的循环——为钱工作，收入用于支付账单，没有资产积累，无法实现财富增长。富人的秘密： 富人掌握金钱运动的规律，懂得如何利用资产（而非负债）来创造被动收入，从而跳出“老鼠赛跑”的圈子，进入财富快车道。游戏是高效的学习工具： 现金流游戏不仅仅是娱乐，它通过模拟真实财务决策（如投资、失业、额外支出）并强制玩家填。结果： 能够识别并把握投资机会，逐步积累资产，获得被动收入，最终跳出“老鼠赛跑”，进入“快车道”", "keywords": ["现金流", "老鼠赛跑"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第10课 想玩转富人思维？教你这样玩"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/老鼠赛跑.md"}, {"id": "生产者思维.md", "label": "生产者思维", "title": "生产者思维", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念：富人创造并出售资产（如股票），而穷人和中产阶级则购买这些资产。财富的核心差异不在于“买”，而在于“卖”——卖的是你自己创造的、能代表价值的“货币”。主要论点：股市中95%的人是穷人，是因为他们扮演了“买家”的角色。原因：穷人和中产阶级接受的教育是“为钱工作”，他们通过出卖时间、体力或技能换取薪水，然后用薪水去购买他人的资产（股票）。穷人和中产阶级则努力成为“点钞机”（高薪打工者、优秀投资者），为“印钞机”服务或购买其产品", "keywords": ["关键术语解释", "方法论提炼", "核心概念", "主要论点", "底层逻辑", "因果关系", "穷人和中产", "人和中产阶"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第4课 富人都在卖的东西偏偏你在买"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/生产者思维.md"}, {"id": "财商教育.md", "label": "财商教育", "title": "财商教育", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "财商教育 (Financial Intelligence Education)：区别于传统学校教育，专注于教授如何理解金钱、管理金钱、创造财富和让钱生钱的知识与技能。穷爸爸 vs. 富爸爸：两种截然不同的财富思维和教育方式的象征。穷爸爸代表“为钱工作”的雇员思维，富爸爸代表“让钱为我工作”的投资者/企业家思维。财富思维 (Wealth Mindset)：一种看待金钱、风险和机遇的特定方式，是富人区别于穷人的根本。与“成长型思维” (Growth Mindset)：财商教育是成长型思维在财务领域的具体应用", "keywords": ["立即开始阅读财务报表", "传统教育的局限性", "可执行的行动步骤", "与其他领域的联系", "游戏规则差异", "风险认知转变", "实践式学习法", "方法论提炼"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第2课 想稳拥财富，这样的财商教育才是秘笈"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/财商教育.md"}, {"id": "财富四象限.md", "label": "财富四象限", "title": "财富四象限", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "阶层隐形隔离带：不同群体（如穷人与富人）之间存在无形的隔阂，主要体现在专业知识和思维方式上。富人专属语言：富人阶层内部使用的一套特定财务词汇和逻辑体系，是区分圈内圈外人的关键标志。财商教育基础：掌握财务知识是财商教育的起点，而财务知识由一系列“财务词汇”构成。信息与认知不对称：富人圈子里的“常识”（如财务报表分析）在穷人听来如同天书。原因：不懂财务词汇，就无法读懂财务报表，无法判断一个项目的真实价值", "keywords": ["原因", "财务词汇", "信息与认知不对称", "语言是权力的工具", "阶层隐形隔离带", "富人专属语言", "财商教育基础", "财富四"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第7课 有钱人的大脑里面原来是这样(1)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/财富四象限.md"}, {"id": "杠杆原理.md", "label": "杠杆原理", "title": "杠杆原理", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "财商教育 (Financial Intelligence Education)：区别于传统学校教育，专注于教授如何理解金钱、管理金钱、创造财富和让钱生钱的知识与技能。穷爸爸 vs. 富爸爸：两种截然不同的财富思维和教育方式的象征。穷爸爸代表“为钱工作”的雇员思维，富爸爸代表“让钱为我工作”的投资者/企业家思维。财富思维 (Wealth Mindset)：一种看待金钱、风险和机遇的特定方式，是富人区别于穷人的根本。与“成长型思维” (Growth Mindset)：财商教育是成长型思维在财务领域的具体应用", "keywords": ["立即开始阅读财务报表", "传统教育的局限性", "可执行的行动步骤", "与其他领域的联系", "游戏规则差异", "风险认知转变", "实践式学习法", "方法论提炼"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第2课 想稳拥财富，这样的财商教育才是秘笈"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/杠杆原理.md"}, {"id": "反向操作.md", "label": "反向操作", "title": "反向操作", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "财富语言：指在特定财富领域（如股票、房地产、投资）中，用于沟通、分析和决策的专业词汇、逻辑和规则。财务素养：理解并运用基本财务知识的能力，是掌握“财富语言”的基础。机会识别：在掌握领域语言后，能够发现圈外人看不到的潜在盈利点。罗斯柴尔德的案例完美展示了如何利用“制造恐慌”来获得巨额利润。找一个你感兴趣的经典投资案例（如课程中的罗斯柴尔德，或巴菲特投资可口可乐）", "keywords": ["信息不对称与认知差", "心理博弈与市场情绪", "复利效应与突破点", "可执行的行动步骤", "与其他领域的联系", "聚焦与不平衡", "选定一个领域", "核心概念"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第11课 学会用富人的眼光赚自己的钱(1)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/反向操作.md"}, {"id": "财富语言.md", "label": "财富语言", "title": "财富语言", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "财富语言：指在特定财富领域（如股票、房地产、投资）中，用于沟通、分析和决策的专业词汇、逻辑和规则。财务素养：理解并运用基本财务知识的能力，是掌握“财富语言”的基础。机会识别：在掌握领域语言后，能够发现圈外人看不到的潜在盈利点。罗斯柴尔德的案例完美展示了如何利用“制造恐慌”来获得巨额利润。找一个你感兴趣的经典投资案例（如课程中的罗斯柴尔德，或巴菲特投资可口可乐）", "keywords": ["信息不对称与认知差", "心理博弈与市场情绪", "复利效应与突破点", "可执行的行动步骤", "与其他领域的联系", "聚焦与不平衡", "选定一个领域", "核心概念"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第11课 学会用富人的眼光赚自己的钱(1)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/财富语言.md"}, {"id": "财富思维.md", "label": "财富思维", "title": "财富思维", "type": "book", "degree": 8, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "财商教育 (Financial Intelligence Education)：区别于传统学校教育，专注于教授如何理解金钱、管理金钱、创造财富和让钱生钱的知识与技能。穷爸爸 vs. 富爸爸：两种截然不同的财富思维和教育方式的象征。穷爸爸代表“为钱工作”的雇员思维，富爸爸代表“让钱为我工作”的投资者/企业家思维。财富思维 (Wealth Mindset)：一种看待金钱、风险和机遇的特定方式，是富人区别于穷人的根本。与“成长型思维” (Growth Mindset)：财商教育是成长型思维在财务领域的具体应用", "keywords": ["立即开始阅读财务报表", "传统教育的局限性", "可执行的行动步骤", "与其他领域的联系", "游戏规则差异", "风险认知转变", "实践式学习法", "方法论提炼"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第2课 想稳拥财富，这样的财商教育才是秘笈"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/财富思维.md"}, {"id": "现金流游戏.md", "label": "现金流游戏", "title": "现金流游戏", "type": "book", "degree": 2, "cluster": "财商教育", "domain": "教育", "sub_domain": "财商教育", "summary": "核心概念： 通过模拟现实世界的“现金流游戏”（又称“老鼠赛跑”），将枯燥的财商教育变得有趣，从而培养玩家的富人思维和财务智商（FQ），最终实现财务自由。穷人与中产阶级的困境： 大多数人陷入“老鼠赛跑”的循环，即工作-消费-再工作的模式，像仓鼠在滚轮里原地踏步，无法积累财富。富人致富的秘密： 富人拥有进入“快车道”（优质投资项目）的资格，这些项目门槛极高（如法律要求必须是百万富翁），但能带来指数级的财富增长。因为现金流游戏模拟了真实世界的经济行为，并强制玩家填写财务报表，所以玩家能直观地看到自己的财务决策如何影响现金流和资产负债表，从而理解金钱运动的规律。它利用“心流”理论，在游戏中设置明确的目", "keywords": ["现金流游", "流游戏"], "tags": ["domain/教育", "sub_domain/财商教育", "type/concept", "source/第10课 想玩转富人思维？教你这样玩(1)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/教育/财商教育/现金流游戏.md"}];
+var LINKS = [{"source": "财富四象限 (ESBI).md", "target": "财务语言.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财富四象限 (ESBI).md", "target": "机会识别.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财富四象限 (ESBI).md", "target": "财务知识.md", "value": 8, "shared": ["认知心理学", "建立财务词汇库", "可执行的行动步骤", "知识壁垒构建阶层", "绘制个人财务报表"]}, {"source": "财富四象限 (ESBI).md", "target": "聚焦与不平衡.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财富四象限 (ESBI).md", "target": "信息不对称.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财富四象限 (ESBI).md", "target": "底层逻辑.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财富四象限 (ESBI).md", "target": "系统拥有者.md", "value": 3, "shared": ["可执行的行动步骤", "与其他领域的联系", "方法论提炼"]}, {"source": "财富四象限 (ESBI).md", "target": "以小博大.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财富四象限 (ESBI).md", "target": "现金流.md", "value": 8, "shared": ["认知心理学", "建立财务词汇库", "可执行的行动步骤", "知识壁垒构建阶层", "绘制个人财务报表"]}, {"source": "财富四象限 (ESBI).md", "target": "资产 vs. 负债.md", "value": 8, "shared": ["认知心理学", "建立财务词汇库", "可执行的行动步骤", "知识壁垒构建阶层", "绘制个人财务报表"]}, {"source": "财富四象限 (ESBI).md", "target": "穷爸爸与富爸爸.md", "value": 3, "shared": ["可执行的行动步骤", "与其他领域的联系", "方法论提炼"]}, {"source": "财富四象限 (ESBI).md", "target": "财商教育.md", "value": 3, "shared": ["可执行的行动步骤", "与其他领域的联系", "方法论提炼"]}, {"source": "财富四象限 (ESBI).md", "target": "杠杆原理.md", "value": 3, "shared": ["可执行的行动步骤", "与其他领域的联系", "方法论提炼"]}, {"source": "财富四象限 (ESBI).md", "target": "反向操作.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财富四象限 (ESBI).md", "target": "财富语言.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财富四象限 (ESBI).md", "target": "财富思维.md", "value": 3, "shared": ["可执行的行动步骤", "与其他领域的联系", "方法论提炼"]}, {"source": "财务语言.md", "target": "机会识别.md", "value": 4, "shared": ["聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务语言.md", "target": "财务知识.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务语言.md", "target": "聚焦与不平衡.md", "value": 8, "shared": ["认知决定财富边界", "聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务语言.md", "target": "信息不对称.md", "value": 8, "shared": ["认知决定财富边界", "聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务语言.md", "target": "底层逻辑.md", "value": 8, "shared": ["认知决定财富边界", "聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务语言.md", "target": "系统拥有者.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务语言.md", "target": "以小博大.md", "value": 8, "shared": ["认知决定财富边界", "聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务语言.md", "target": "现金流.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务语言.md", "target": "资产 vs. 负债.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务语言.md", "target": "穷爸爸与富爸爸.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务语言.md", "target": "财商教育.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务语言.md", "target": "杠杆原理.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务语言.md", "target": "反向操作.md", "value": 4, "shared": ["聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务语言.md", "target": "财富语言.md", "value": 4, "shared": ["聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务语言.md", "target": "财富思维.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务词汇.md", "target": "阶层隐形隔离带.md", "value": 6, "shared": ["阶层隐形隔离带", "信息与认知不对称", "富人专属语言", "原因", "语言是权力的工具"]}, {"source": "财务词汇.md", "target": "富人专属语言.md", "value": 6, "shared": ["阶层隐形隔离带", "信息与认知不对称", "富人专属语言", "原因", "语言是权力的工具"]}, {"source": "财务词汇.md", "target": "财富四象限.md", "value": 6, "shared": ["阶层隐形隔离带", "信息与认知不对称", "富人专属语言", "原因", "语言是权力的工具"]}, {"source": "财富四象限（ESBI）.md", "target": "主动收入.md", "value": 7, "shared": ["财富流向不均衡", "财务自由的关键", "杠杆思维", "恐惧与无知", "线性思维"]}, {"source": "财富四象限（ESBI）.md", "target": "杠杆思维.md", "value": 7, "shared": ["财富流向不均衡", "财务自由的关键", "杠杆思维", "恐惧与无知", "线性思维"]}, {"source": "财富四象限（ESBI）.md", "target": "ESBI四象限.md", "value": 7, "shared": ["财富流向不均衡", "财务自由的关键", "杠杆思维", "恐惧与无知", "线性思维"]}, {"source": "财富四象限（ESBI）.md", "target": "象限跃迁.md", "value": 7, "shared": ["财富流向不均衡", "财务自由的关键", "杠杆思维", "恐惧与无知", "线性思维"]}, {"source": "被动收入.md", "target": "财务报表.md", "value": 2, "shared": ["现金流游", "流游戏"]}, {"source": "被动收入.md", "target": "快车道.md", "value": 2, "shared": ["现金流游", "流游戏"]}, {"source": "被动收入.md", "target": "资产与负债.md", "value": 2, "shared": ["现金流游", "流游戏"]}, {"source": "被动收入.md", "target": "富人思维.md", "value": 2, "shared": ["现金流游", "流游戏"]}, {"source": "被动收入.md", "target": "现金流游戏.md", "value": 2, "shared": ["现金流游", "流游戏"]}, {"source": "货币思维.md", "target": "资产创造.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "货币思维.md", "target": "财务自由.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "货币思维.md", "target": "财商.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "货币思维.md", "target": "货币化思维.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "货币思维.md", "target": "财富阶层.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "货币思维.md", "target": "卖与买.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "货币思维.md", "target": "卖与买的思维转换.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "货币思维.md", "target": "现金流象限.md", "value": 5, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "方法论提炼"]}, {"source": "货币思维.md", "target": "资产.md", "value": 5, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "方法论提炼"]}, {"source": "货币思维.md", "target": "货币化.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "货币思维.md", "target": "生产者思维.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "资产创造.md", "target": "财务自由.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "资产创造.md", "target": "财商.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "资产创造.md", "target": "货币化思维.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "资产创造.md", "target": "财富阶层.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "资产创造.md", "target": "卖与买.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "资产创造.md", "target": "卖与买的思维转换.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "资产创造.md", "target": "现金流象限.md", "value": 5, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "方法论提炼"]}, {"source": "资产创造.md", "target": "资产.md", "value": 5, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "方法论提炼"]}, {"source": "资产创造.md", "target": "货币化.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "资产创造.md", "target": "生产者思维.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "机会识别.md", "target": "财务知识.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "机会识别.md", "target": "聚焦与不平衡.md", "value": 4, "shared": ["聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "机会识别.md", "target": "信息不对称.md", "value": 4, "shared": ["聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "机会识别.md", "target": "底层逻辑.md", "value": 4, "shared": ["聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "机会识别.md", "target": "系统拥有者.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "机会识别.md", "target": "以小博大.md", "value": 4, "shared": ["聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "机会识别.md", "target": "现金流.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "机会识别.md", "target": "资产 vs. 负债.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "机会识别.md", "target": "穷爸爸与富爸爸.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "机会识别.md", "target": "财商教育.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "机会识别.md", "target": "杠杆原理.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "机会识别.md", "target": "反向操作.md", "value": 8, "shared": ["心理博弈与市场情绪", "核心概念", "聚焦与不平衡", "可执行的行动步骤", "选定一个领域"]}, {"source": "机会识别.md", "target": "财富语言.md", "value": 8, "shared": ["心理博弈与市场情绪", "核心概念", "聚焦与不平衡", "可执行的行动步骤", "选定一个领域"]}, {"source": "机会识别.md", "target": "财富思维.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务自由.md", "target": "财商.md", "value": 8, "shared": ["富爸爸", "主要论点", "核心概念", "思维决定阶层", "穷爸爸"]}, {"source": "财务自由.md", "target": "货币化思维.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "财务自由.md", "target": "财富阶层.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "财务自由.md", "target": "卖与买.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "财务自由.md", "target": "卖与买的思维转换.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "财务自由.md", "target": "现金流象限.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "财务自由.md", "target": "资产.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "财务自由.md", "target": "货币化.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "财务自由.md", "target": "生产者思维.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "财务知识.md", "target": "聚焦与不平衡.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务知识.md", "target": "信息不对称.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务知识.md", "target": "底层逻辑.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务知识.md", "target": "系统拥有者.md", "value": 3, "shared": ["可执行的行动步骤", "与其他领域的联系", "方法论提炼"]}, {"source": "财务知识.md", "target": "以小博大.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务知识.md", "target": "现金流.md", "value": 8, "shared": ["认知心理学", "建立财务词汇库", "可执行的行动步骤", "知识壁垒构建阶层", "绘制个人财务报表"]}, {"source": "财务知识.md", "target": "资产 vs. 负债.md", "value": 8, "shared": ["认知心理学", "建立财务词汇库", "可执行的行动步骤", "知识壁垒构建阶层", "绘制个人财务报表"]}, {"source": "财务知识.md", "target": "穷爸爸与富爸爸.md", "value": 3, "shared": ["可执行的行动步骤", "与其他领域的联系", "方法论提炼"]}, {"source": "财务知识.md", "target": "财商教育.md", "value": 3, "shared": ["可执行的行动步骤", "与其他领域的联系", "方法论提炼"]}, {"source": "财务知识.md", "target": "杠杆原理.md", "value": 3, "shared": ["可执行的行动步骤", "与其他领域的联系", "方法论提炼"]}, {"source": "财务知识.md", "target": "反向操作.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务知识.md", "target": "财富语言.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财务知识.md", "target": "财富思维.md", "value": 3, "shared": ["可执行的行动步骤", "与其他领域的联系", "方法论提炼"]}, {"source": "聚焦与不平衡.md", "target": "信息不对称.md", "value": 8, "shared": ["认知决定财富边界", "聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "聚焦与不平衡.md", "target": "底层逻辑.md", "value": 8, "shared": ["认知决定财富边界", "聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "聚焦与不平衡.md", "target": "系统拥有者.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "聚焦与不平衡.md", "target": "以小博大.md", "value": 8, "shared": ["认知决定财富边界", "聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "聚焦与不平衡.md", "target": "现金流.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "聚焦与不平衡.md", "target": "资产 vs. 负债.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "聚焦与不平衡.md", "target": "穷爸爸与富爸爸.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "聚焦与不平衡.md", "target": "财商教育.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "聚焦与不平衡.md", "target": "杠杆原理.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "聚焦与不平衡.md", "target": "反向操作.md", "value": 4, "shared": ["聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "聚焦与不平衡.md", "target": "财富语言.md", "value": 4, "shared": ["聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "聚焦与不平衡.md", "target": "财富思维.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "信息不对称.md", "target": "底层逻辑.md", "value": 8, "shared": ["认知决定财富边界", "聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "信息不对称.md", "target": "系统拥有者.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "信息不对称.md", "target": "以小博大.md", "value": 8, "shared": ["认知决定财富边界", "聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "信息不对称.md", "target": "现金流.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "信息不对称.md", "target": "资产 vs. 负债.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "信息不对称.md", "target": "穷爸爸与富爸爸.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "信息不对称.md", "target": "财商教育.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "信息不对称.md", "target": "杠杆原理.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "信息不对称.md", "target": "反向操作.md", "value": 4, "shared": ["聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "信息不对称.md", "target": "财富语言.md", "value": 4, "shared": ["聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "信息不对称.md", "target": "财富思维.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "底层逻辑.md", "target": "系统拥有者.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "底层逻辑.md", "target": "以小博大.md", "value": 8, "shared": ["认知决定财富边界", "聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "底层逻辑.md", "target": "现金流.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "底层逻辑.md", "target": "资产 vs. 负债.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "底层逻辑.md", "target": "穷爸爸与富爸爸.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "底层逻辑.md", "target": "财商教育.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "底层逻辑.md", "target": "杠杆原理.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "底层逻辑.md", "target": "反向操作.md", "value": 4, "shared": ["聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "底层逻辑.md", "target": "财富语言.md", "value": 4, "shared": ["聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "底层逻辑.md", "target": "财富思维.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财商.md", "target": "货币化思维.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "财商.md", "target": "财富阶层.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "财商.md", "target": "卖与买.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "财商.md", "target": "卖与买的思维转换.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "财商.md", "target": "现金流象限.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "财商.md", "target": "资产.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "财商.md", "target": "货币化.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "财商.md", "target": "生产者思维.md", "value": 2, "shared": ["核心概念", "主要论点"]}, {"source": "主动收入.md", "target": "杠杆思维.md", "value": 8, "shared": ["财富流向不均衡", "财务自由的关键", "杠杆思维", "认知局限", "恐惧与无知"]}, {"source": "主动收入.md", "target": "ESBI四象限.md", "value": 8, "shared": ["财富流向不均衡", "财务自由的关键", "杠杆思维", "认知局限", "恐惧与无知"]}, {"source": "主动收入.md", "target": "象限跃迁.md", "value": 8, "shared": ["财富流向不均衡", "财务自由的关键", "杠杆思维", "认知局限", "恐惧与无知"]}, {"source": "货币化思维.md", "target": "财富阶层.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "货币化思维.md", "target": "卖与买.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "货币化思维.md", "target": "卖与买的思维转换.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "货币化思维.md", "target": "现金流象限.md", "value": 5, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "方法论提炼"]}, {"source": "货币化思维.md", "target": "资产.md", "value": 5, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "方法论提炼"]}, {"source": "货币化思维.md", "target": "货币化.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "货币化思维.md", "target": "生产者思维.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "复利效应.md", "target": "试错学习.md", "value": 7, "shared": ["财商教", "原因", "型思维", "根本区别", "商教育"]}, {"source": "系统拥有者.md", "target": "以小博大.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "系统拥有者.md", "target": "现金流.md", "value": 3, "shared": ["可执行的行动步骤", "与其他领域的联系", "方法论提炼"]}, {"source": "系统拥有者.md", "target": "资产 vs. 负债.md", "value": 3, "shared": ["可执行的行动步骤", "与其他领域的联系", "方法论提炼"]}, {"source": "系统拥有者.md", "target": "穷爸爸与富爸爸.md", "value": 8, "shared": ["立即开始阅读财务报表", "可执行的行动步骤", "实践式学习法", "游戏规则差异", "与其他领域的联系"]}, {"source": "系统拥有者.md", "target": "财商教育.md", "value": 8, "shared": ["立即开始阅读财务报表", "可执行的行动步骤", "实践式学习法", "游戏规则差异", "与其他领域的联系"]}, {"source": "系统拥有者.md", "target": "杠杆原理.md", "value": 8, "shared": ["立即开始阅读财务报表", "可执行的行动步骤", "实践式学习法", "游戏规则差异", "与其他领域的联系"]}, {"source": "系统拥有者.md", "target": "反向操作.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "系统拥有者.md", "target": "财富语言.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "系统拥有者.md", "target": "财富思维.md", "value": 8, "shared": ["立即开始阅读财务报表", "可执行的行动步骤", "实践式学习法", "游戏规则差异", "与其他领域的联系"]}, {"source": "财富阶层.md", "target": "卖与买.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "财富阶层.md", "target": "卖与买的思维转换.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "财富阶层.md", "target": "现金流象限.md", "value": 5, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "方法论提炼"]}, {"source": "财富阶层.md", "target": "资产.md", "value": 5, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "方法论提炼"]}, {"source": "财富阶层.md", "target": "货币化.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "财富阶层.md", "target": "生产者思维.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "阶层隐形隔离带.md", "target": "富人专属语言.md", "value": 8, "shared": ["阶层隐形隔离带", "信息与认知不对称", "富人专属语言", "原因", "财务报"]}, {"source": "阶层隐形隔离带.md", "target": "财富四象限.md", "value": 7, "shared": ["阶层隐形隔离带", "信息与认知不对称", "富人专属语言", "原因", "财务词汇"]}, {"source": "杠杆思维.md", "target": "ESBI四象限.md", "value": 8, "shared": ["财富流向不均衡", "财务自由的关键", "杠杆思维", "认知局限", "恐惧与无知"]}, {"source": "杠杆思维.md", "target": "象限跃迁.md", "value": 8, "shared": ["财富流向不均衡", "财务自由的关键", "杠杆思维", "认知局限", "恐惧与无知"]}, {"source": "财务报表.md", "target": "快车道.md", "value": 2, "shared": ["现金流游", "流游戏"]}, {"source": "财务报表.md", "target": "资产与负债.md", "value": 2, "shared": ["现金流游", "流游戏"]}, {"source": "财务报表.md", "target": "富人思维.md", "value": 2, "shared": ["现金流游", "流游戏"]}, {"source": "财务报表.md", "target": "现金流游戏.md", "value": 2, "shared": ["现金流游", "流游戏"]}, {"source": "快车道.md", "target": "资产与负债.md", "value": 2, "shared": ["现金流游", "流游戏"]}, {"source": "快车道.md", "target": "富人思维.md", "value": 2, "shared": ["现金流游", "流游戏"]}, {"source": "快车道.md", "target": "现金流游戏.md", "value": 2, "shared": ["现金流游", "流游戏"]}, {"source": "以小博大.md", "target": "现金流.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "以小博大.md", "target": "资产 vs. 负债.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "以小博大.md", "target": "穷爸爸与富爸爸.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "以小博大.md", "target": "财商教育.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "以小博大.md", "target": "杠杆原理.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "以小博大.md", "target": "反向操作.md", "value": 4, "shared": ["聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "以小博大.md", "target": "财富语言.md", "value": 4, "shared": ["聚焦与不平衡", "核心概念", "可执行的行动步骤", "与其他领域的联系"]}, {"source": "以小博大.md", "target": "财富思维.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "ESBI四象限.md", "target": "象限跃迁.md", "value": 8, "shared": ["财富流向不均衡", "财务自由的关键", "杠杆思维", "认知局限", "恐惧与无知"]}, {"source": "卖与买.md", "target": "卖与买的思维转换.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "卖与买.md", "target": "现金流象限.md", "value": 5, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "方法论提炼"]}, {"source": "卖与买.md", "target": "资产.md", "value": 5, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "方法论提炼"]}, {"source": "卖与买.md", "target": "货币化.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "卖与买.md", "target": "生产者思维.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "现金流.md", "target": "资产 vs. 负债.md", "value": 8, "shared": ["认知心理学", "建立财务词汇库", "可执行的行动步骤", "知识壁垒构建阶层", "绘制个人财务报表"]}, {"source": "现金流.md", "target": "穷爸爸与富爸爸.md", "value": 3, "shared": ["可执行的行动步骤", "与其他领域的联系", "方法论提炼"]}, {"source": "现金流.md", "target": "财商教育.md", "value": 3, "shared": ["可执行的行动步骤", "与其他领域的联系", "方法论提炼"]}, {"source": "现金流.md", "target": "杠杆原理.md", "value": 3, "shared": ["可执行的行动步骤", "与其他领域的联系", "方法论提炼"]}, {"source": "现金流.md", "target": "反向操作.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "现金流.md", "target": "财富语言.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "现金流.md", "target": "财富思维.md", "value": 3, "shared": ["可执行的行动步骤", "与其他领域的联系", "方法论提炼"]}, {"source": "资产 vs. 负债.md", "target": "穷爸爸与富爸爸.md", "value": 3, "shared": ["可执行的行动步骤", "与其他领域的联系", "方法论提炼"]}, {"source": "资产 vs. 负债.md", "target": "财商教育.md", "value": 3, "shared": ["可执行的行动步骤", "与其他领域的联系", "方法论提炼"]}, {"source": "资产 vs. 负债.md", "target": "杠杆原理.md", "value": 3, "shared": ["可执行的行动步骤", "与其他领域的联系", "方法论提炼"]}, {"source": "资产 vs. 负债.md", "target": "反向操作.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "资产 vs. 负债.md", "target": "财富语言.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "资产 vs. 负债.md", "target": "财富思维.md", "value": 3, "shared": ["可执行的行动步骤", "与其他领域的联系", "方法论提炼"]}, {"source": "富人专属语言.md", "target": "财富四象限.md", "value": 7, "shared": ["阶层隐形隔离带", "信息与认知不对称", "富人专属语言", "原因", "财务词汇"]}, {"source": "卖与买的思维转换.md", "target": "现金流象限.md", "value": 5, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "方法论提炼"]}, {"source": "卖与买的思维转换.md", "target": "资产.md", "value": 5, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "方法论提炼"]}, {"source": "卖与买的思维转换.md", "target": "货币化.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "卖与买的思维转换.md", "target": "生产者思维.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "现金流象限.md", "target": "资产.md", "value": 8, "shared": ["象限跨越意识", "主要论点", "核心概念", "被动收入", "收入模式的本质差异"]}, {"source": "现金流象限.md", "target": "货币化.md", "value": 5, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "方法论提炼"]}, {"source": "现金流象限.md", "target": "生产者思维.md", "value": 5, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "方法论提炼"]}, {"source": "资产.md", "target": "货币化.md", "value": 5, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "方法论提炼"]}, {"source": "资产.md", "target": "生产者思维.md", "value": 5, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "方法论提炼"]}, {"source": "资产与负债.md", "target": "富人思维.md", "value": 2, "shared": ["现金流游", "流游戏"]}, {"source": "资产与负债.md", "target": "现金流游戏.md", "value": 2, "shared": ["现金流游", "流游戏"]}, {"source": "货币化.md", "target": "生产者思维.md", "value": 8, "shared": ["主要论点", "核心概念", "因果关系", "底层逻辑", "关键术语解释"]}, {"source": "富人思维.md", "target": "现金流游戏.md", "value": 2, "shared": ["现金流游", "流游戏"]}, {"source": "穷爸爸与富爸爸.md", "target": "财商教育.md", "value": 8, "shared": ["立即开始阅读财务报表", "可执行的行动步骤", "实践式学习法", "游戏规则差异", "与其他领域的联系"]}, {"source": "穷爸爸与富爸爸.md", "target": "杠杆原理.md", "value": 8, "shared": ["立即开始阅读财务报表", "可执行的行动步骤", "实践式学习法", "游戏规则差异", "与其他领域的联系"]}, {"source": "穷爸爸与富爸爸.md", "target": "反向操作.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "穷爸爸与富爸爸.md", "target": "财富语言.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "穷爸爸与富爸爸.md", "target": "财富思维.md", "value": 8, "shared": ["立即开始阅读财务报表", "可执行的行动步骤", "实践式学习法", "游戏规则差异", "与其他领域的联系"]}, {"source": "财商教育.md", "target": "杠杆原理.md", "value": 8, "shared": ["立即开始阅读财务报表", "可执行的行动步骤", "实践式学习法", "游戏规则差异", "与其他领域的联系"]}, {"source": "财商教育.md", "target": "反向操作.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财商教育.md", "target": "财富语言.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财商教育.md", "target": "财富思维.md", "value": 8, "shared": ["立即开始阅读财务报表", "可执行的行动步骤", "实践式学习法", "游戏规则差异", "与其他领域的联系"]}, {"source": "杠杆原理.md", "target": "反向操作.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "杠杆原理.md", "target": "财富语言.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "杠杆原理.md", "target": "财富思维.md", "value": 8, "shared": ["立即开始阅读财务报表", "可执行的行动步骤", "实践式学习法", "游戏规则差异", "与其他领域的联系"]}, {"source": "反向操作.md", "target": "财富语言.md", "value": 8, "shared": ["心理博弈与市场情绪", "核心概念", "聚焦与不平衡", "可执行的行动步骤", "选定一个领域"]}, {"source": "反向操作.md", "target": "财富思维.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}, {"source": "财富语言.md", "target": "财富思维.md", "value": 2, "shared": ["可执行的行动步骤", "与其他领域的联系"]}];
+var CLUSTER_COLORS = {"财商教育": "#ec4899"};
+var SEARCH_DATA = [{"id": "财富四象限 (ESBI).md", "label": "财富四象限 (ESBI)"}, {"id": "财务语言.md", "label": "财务语言"}, {"id": "财务词汇.md", "label": "财务词汇"}, {"id": "财富四象限（ESBI）.md", "label": "财富四象限（ESBI）"}, {"id": "被动收入.md", "label": "被动收入"}, {"id": "货币思维.md", "label": "货币思维"}, {"id": "资产创造.md", "label": "资产创造"}, {"id": "机会识别.md", "label": "机会识别"}, {"id": "财务自由.md", "label": "财务自由"}, {"id": "财务知识.md", "label": "财务知识"}, {"id": "聚焦与不平衡.md", "label": "聚焦与不平衡"}, {"id": "信息不对称.md", "label": "信息不对称"}, {"id": "底层逻辑.md", "label": "底层逻辑"}, {"id": "财商.md", "label": "财商"}, {"id": "主动收入.md", "label": "主动收入"}, {"id": "货币化思维.md", "label": "货币化思维"}, {"id": "复利效应.md", "label": "复利效应"}, {"id": "系统拥有者.md", "label": "系统拥有者"}, {"id": "财富阶层.md", "label": "财富阶层"}, {"id": "成长型思维.md", "label": "成长型思维"}, {"id": "阶层隐形隔离带.md", "label": "阶层隐形隔离带"}, {"id": "杠杆思维.md", "label": "杠杆思维"}, {"id": "试错学习.md", "label": "试错学习"}, {"id": "财务报表.md", "label": "财务报表"}, {"id": "快车道.md", "label": "快车道"}, {"id": "以小博大.md", "label": "以小博大"}, {"id": "ESBI四象限.md", "label": "ESBI四象限"}, {"id": "卖与买.md", "label": "卖与买"}, {"id": "现金流.md", "label": "现金流"}, {"id": "资产 vs. 负债.md", "label": "资产 vs. 负债"}, {"id": "富人专属语言.md", "label": "富人专属语言"}, {"id": "卖与买的思维转换.md", "label": "卖与买的思维转换"}, {"id": "现金流象限.md", "label": "现金流象限"}, {"id": "资产.md", "label": "资产"}, {"id": "资产与负债.md", "label": "资产与负债"}, {"id": "货币化.md", "label": "货币化"}, {"id": "富人思维.md", "label": "富人思维"}, {"id": "象限跃迁.md", "label": "象限跃迁"}, {"id": "穷爸爸与富爸爸.md", "label": "穷爸爸与富爸爸"}, {"id": "老鼠赛跑.md", "label": "老鼠赛跑"}, {"id": "生产者思维.md", "label": "生产者思维"}, {"id": "财商教育.md", "label": "财商教育"}, {"id": "财富四象限.md", "label": "财富四象限"}, {"id": "杠杆原理.md", "label": "杠杆原理"}, {"id": "反向操作.md", "label": "反向操作"}, {"id": "财富语言.md", "label": "财富语言"}, {"id": "财富思维.md", "label": "财富思维"}, {"id": "现金流游戏.md", "label": "现金流游戏"}];
+var CONCEPT_SEARCH = [];
+
+
+/* ---- 搜索 ---- */
+var searchBox = document.getElementById("search-box");
+var searchResults = document.getElementById("search-results");
+
+searchBox.addEventListener("input", function(){
+  var q = this.value.trim().toLowerCase();
+  if(!q) { searchResults.style.display="none"; return; }
+  var combined = SEARCH_DATA.concat(CONCEPT_SEARCH.map(function(c){ return {id:c,label:c,type:"concept"}; }));
+  var matches = combined.filter(function(d){ return d.label.toLowerCase().indexOf(q)>-1; }).slice(0,12);
+  if(!matches.length) { searchResults.style.display="none"; return; }
+  searchResults.innerHTML = matches.map(function(d){
+    return '<div class="sri" data-id="'+d.id+'">'+d.label+'</div>';
+  }).join("");
+  searchResults.style.display="block";
+});
+
+searchResults.addEventListener("click", function(e){
+  var el = e.target.closest(".sri");
+  if(!el) return;
+  highlightNode(el.getAttribute("data-id"));
+  searchResults.style.display="none";
+  searchBox.value="";
+});
+
+function highlightNode(id){
+  svg.selectAll(".node").classed("highlight", function(d){ return d.id===id; });
+  svg.selectAll(".link").classed("highlight", function(d){
+    return d.source.id===id || d.target.id===id;
+  });
+  var nd = nodeMap.get(id);
+  if(!nd) return;
+  var t = d3.zoomTransform(svg.node());
+  var x = -nd.x*t.k + width/2;
+  var y = -nd.y*t.k + height/2;
+  svg.transition().duration(600).call(zoom.transform, d3.zoomIdentity.translate(x,y).scale(t.k));
+}
+
+/* ---- 详情面板 ---- */
+function showDetail(d){
+  var panel = document.getElementById("detail-panel");
+  var title = document.getElementById("detail-title");
+  var body  = document.getElementById("detail-body");
+
+  title.textContent = (d.title || d.label || d.id || "").replace(/\.md$/, "");
+
+  var html = "";
+
+  /* 元信息 */
+  html += '<div class="section"><div class="meta-row"><span class="meta-label">类型</span><span>' + (d.type==="concept" ? "💡 概念" : "📖 笔记") + '</span></div>';
+  if(d.domain)   html += '<div class="meta-row"><span class="meta-label">领域</span><span>' + d.domain + '</span></div>';
+  if(d.cluster) html += '<div class="meta-row"><span class="meta-label">聚类</span><span>' + d.cluster + '</span></div>';
+  if(d.degree !== undefined) html += '<div class="meta-row"><span class="meta-label">连通度</span><span>' + d.degree + '</span></div>';
+  html += '</div>';
+
+  /* 摘要 */
+  if(d.summary){
+    html += '<div class="section"><div class="section-title">📝 摘要</div><div class="summary">' + escapeHtml(d.summary.slice(0,500)) + (d.summary.length>500 ? "..." : "") + '</div></div>';
+  }
+
+  /* 关键词 */
+  if(d.keywords && d.keywords.length){
+    html += '<div class="section"><div class="section-title">🔑 关键词</div>';
+    d.keywords.forEach(function(kw){ html += '<span class="keyword">' + escapeHtml(kw) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 标签 */
+  if(d.tags && d.tags.length){
+    html += '<div class="section"><div class="section-title">🏷️ 标签</div>';
+    d.tags.forEach(function(tg){ html += '<span class="tag">' + escapeHtml(tg) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 打开原文件：用 Obsidian URI 协议，避免浏览器 file:// 限制 */
+  if(d.path){
+    var obsidianUrl = "obsidian://open?path=" + encodeURIComponent(d.path);
+    html += '<div class="section"><a class="open-link" href="' + obsidianUrl + '">📂 在 Obsidian 中打开</a></div>';
+  }
+
+  body.innerHTML = html;
+  panel.classList.add("open");
+}
+
+function closeDetail(){
+  document.getElementById("detail-panel").classList.remove("open");
+}
+
+function escapeHtml(s){
+  if(!s) return "";
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ---- D3 力导向图 ---- */
+var width  = window.innerWidth;
+var height = window.innerHeight - 48;
+var svg = d3.select("#graph").append("svg").attr("width",width).attr("height",height);
+var g = svg.append("g");
+var zoom = d3.zoom().scaleExtent([0.05,5]).on("zoom", function(e){ g.attr("transform", e.transform); });
+svg.call(zoom);
+
+var simulation = d3.forceSimulation(NODES)
+  .force("link",    d3.forceLink(LINKS).id(function(d){ return d.id; }).distance(90))
+  .force("charge",  d3.forceManyBody().strength(-220))
+  .force("center",  d3.forceCenter(width/2, height/2))
+  .force("collision", d3.forceCollide(30))
+  .force("x",       d3.forceX(width/2).strength(0.06))
+  .force("y",       d3.forceY(height/2).strength(0.06));
+
+var link = g.append("g").attr("class","links").selectAll("line")
+  .data(LINKS).join("line")
+  .attr("class", function(d){ return "link" + ((d.type==="book-book") ? " link-book" : ""); });
+
+var node = g.append("g").attr("class","nodes").selectAll("g")
+  .data(NODES).join("g")
+  .attr("class","node")
+  .attr("data-id", function(d){ return d.id; })
+  .call(d3.drag()
+    .on("start", function(event,d){ if(!event.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+    .on("drag",  function(event,d){ d.fx=event.x; d.fy=event.y; })
+    .on("end",   function(event,d){ if(!event.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+node.append("circle")
+  .attr("r", function(d){ return d.type==="book" ? 5+Math.sqrt(d.degree||1)*1.5 : 7; })
+  .attr("fill", function(d){ return d.type==="book" ? (CLUSTER_COLORS[d.cluster]||"#94a3b8") : "#ec4899"; })
+  .attr("stroke", function(d){ return d.type==="book" ? "#0f172a" : "#d97706"; })
+  .on("mouseover", function(event,d){
+    var html = d.type==="book"
+      ? "<strong>📖 "+d.label+"</strong><br>连通度:"+d.degree+"<br>聚类:"+(d.cluster||"未分类")
+      : "<strong>💡 "+d.concept+"</strong><br>关联:"+d.book_count+" 篇";
+    d3.select("#tooltip").html(html).style("opacity",1)
+      .style("left",(event.pageX+12)+"px").style("top",(event.pageY-8)+"px");
+  })
+  .on("mouseout", function(){ d3.select("#tooltip").style("opacity",0); })
+  .on("click", function(event,d){
+    event.stopPropagation();
+    showDetail(d);
+  });
+
+node.append("text").attr("dx",11).attr("dy","0.35em").text(function(d){ return d.label; });
+
+var nodeMap = new Map();
+simulation.on("tick", function(){
+  link
+    .attr("x1", function(d){ return d.source.x; })
+    .attr("y1", function(d){ return d.source.y; })
+    .attr("x2", function(d){ return d.target.x; })
+    .attr("y2", function(d){ return d.target.y; });
+  node.attr("transform", function(d){
+    nodeMap.set(d.id, d);
+    return "translate("+d.x+","+d.y+")";
+  });
+});
+
+/* ---- 图例 ---- */
+var legendItems = d3.select("#legend").append("div").style("font-weight","bold").style("margin-bottom","8px").text("🎨 聚类").node().parentNode;
+Object.entries(CLUSTER_COLORS).forEach(function(entry){
+  var li = d3.select(legendItems).append("div").attr("class","li");
+  li.append("span").attr("class","ld").style("background",entry[1]);
+  li.append("span").text(entry[0]);
+});
+
+/* ---- 按钮 ---- */
+var conceptVisible = true;
+d3.select("#btn-toggle-concept").on("click", function(){
+  conceptVisible = !conceptVisible;
+  svg.selectAll(".node").filter(function(d){ return d.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  svg.selectAll(".link").filter(function(d){ return d.source.type==="concept"||d.target.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  d3.select(this).text(conceptVisible?"隐藏概念":"显示概念").classed("active",!conceptVisible);
+});
+d3.select("#btn-reset").on("click", function(){
+  closeDetail();
+  svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+});
+
+svg.on("click", function(){ searchResults.style.display="none"; });
+document.addEventListener("click", function(e){
+  if(!document.getElementById("detail-panel").contains(e.target) && !e.target.closest(".node")){
+    closeDetail();
+  }
+});
+
+/* 更新统计 */
+d3.select("#node-count").text(NODES.length);
+d3.select("#link-count").text(LINKS.length);
+</script>
+</body>
+</html>

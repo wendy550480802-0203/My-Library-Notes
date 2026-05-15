@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>历史 - 世界史 - 知识图谱</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#0f172a; color:#e2e8f0; overflow:hidden; }
+
+/* 侧边栏 */
+#sidebar { position:fixed; left:0; top:0; width:220px; height:100vh; background:#1e293b; border-right:1px solid #334155; overflow-y:auto; z-index:50; transition:transform 0.3s; font-size:12px; }
+#sidebar.collapsed { transform:translateX(-220px); }
+#sidebar h2 { font-size:13px; padding:12px 14px 8px; color:#94a3b8; border-bottom:1px solid #334155; }
+#sidebar .domain-header { padding:7px 14px; cursor:pointer; font-weight:600; border-bottom:1px solid #1a2332; transition:background 0.15s; user-select:none; }
+#sidebar .domain-header:hover { background:#334155; }
+#sidebar .domain-pages { display:none; }
+#sidebar .domain-pages a { display:block; padding:5px 14px 5px 24px; color:#cbd5e1; text-decoration:none; border-bottom:1px solid #1a2332; transition:background 0.15s; font-size:11px; }
+#sidebar .domain-pages a:hover { background:#334155; color:#fff; }
+#sidebar .domain-pages a.active { font-weight:600; }
+#sidebar a.active { background:#06b6d4; color:#0f172a; }
+#sidebar-toggle { position:fixed; left:8px; top:56px; z-index:60; background:#334155; border:1px solid #475569; color:#e2e8f0; border-radius:6px; padding:4px 7px; cursor:pointer; font-size:13px; transition:left 0.3s; }
+#sidebar:not(.collapsed) ~ #sidebar-toggle { left:228px; }
+
+/* 右侧详情面板 */
+#detail-panel { position:fixed; top:0; right:-420px; width:400px; height:100vh; background:#1e293b; border-left:1px solid #334155; z-index:55; transition:right 0.3s; display:flex; flex-direction:column; }
+#detail-panel.open { right:0; }
+#detail-header { padding:14px 16px; border-bottom:1px solid #334155; display:flex; align-items:flex-start; gap:10px; }
+#detail-header h2 { flex:1; font-size:14px; line-height:1.4; margin:0; word-break:break-all; }
+#detail-close { background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer; padding:0 4px; line-height:1; }
+#detail-close:hover { color:#fff; }
+#detail-body { flex:1; overflow-y:auto; padding:16px; font-size:13px; line-height:1.7; }
+#detail-body .section { margin-bottom:16px; }
+#detail-body .section-title { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+#detail-body .tag { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#334155; border-radius:4px; font-size:11px; color:#cbd5e1; }
+#detail-body .keyword { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#06b6d422; border:1px solid #06b6d466; border-radius:4px; font-size:11px; color:#e2e8f0; }
+#detail-body .summary { color:#cbd5e1; white-space:pre-wrap; }
+#detail-body .open-link { display:inline-block; margin-top:12px; padding:6px 14px; background:#06b6d4; color:#0f172a; border-radius:6px; text-decoration:none; font-size:12px; font-weight:600; }
+#detail-body .open-link:hover { opacity:0.85; }
+#detail-body .meta-row { display:flex; gap:12px; margin-bottom:8px; font-size:12px; }
+#detail-body .meta-label { color:#94a3b8; min-width:60px; }
+#detail-body .connected-list { list-style:none; padding:0; }
+#detail-body .connected-list li { padding:4px 0; border-bottom:1px solid #1a2332; font-size:12px; cursor:pointer; }
+#detail-body .connected-list li:hover { color:#06b6d4; }
+
+#header { padding:10px 20px 10px 50px; background:#1e293b; border-bottom:1px solid #334155; display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-left:200px; transition:margin-left 0.3s; }
+#sidebar.collapsed ~ #header { margin-left:0; }
+#header h1 { margin:0; font-size:17px; color:#06b6d4; white-space:nowrap; }
+#search-wrap { position:relative; }
+#search-box { width:220px; padding:5px 10px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#e2e8f0; font-size:13px; }
+#search-results { position:absolute; top:32px; left:0; width:260px; max-height:300px; overflow-y:auto; background:#1e293b; border:1px solid #475569; border-radius:6px; display:none; z-index:100; }
+.sri { padding:7px 10px; cursor:pointer; font-size:12px; border-bottom:1px solid #334155; }
+.sri:hover { background:#334155; }
+.stats { font-size:12px; color:#94a3b8; white-space:nowrap; }
+.ctrls { display:flex; gap:6px; margin-left:auto; }
+.btn { padding:5px 12px; border-radius:6px; border:1px solid #475569; background:#334155; color:#e2e8f0; cursor:pointer; font-size:12px; }
+.btn:hover { background:#475569; }
+.btn.active { background:#06b6d4; color:#0f172a; border-color:#06b6d4; }
+#legend { position:absolute; top:52px; left:220px; background:#1e293b; border:1px solid #475569; border-radius:8px; padding:10px 14px; font-size:12px; z-index:10; }
+.li { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+.ld { width:10px; height:10px; border-radius:50%; }
+#tooltip { position:absolute; padding:8px 12px; background:#1e293b; border:1px solid #475569; border-radius:8px; font-size:12px; pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:100; box-shadow:0 4px 20px rgba(0,0,0,0.5); max-width:320px; }
+#graph { width:calc(100vw - 200px); height:calc(100vh - 48px); margin-left:200px; transition:width 0.3s, margin-left 0.3s; }
+#sidebar.collapsed ~ #graph { margin-left:0; width:100vw; }
+#detail-panel.open ~ #graph { width:calc(100vw - 200px - 400px); }
+.link { stroke:#475569; stroke-opacity:0.3; }
+.link-book { stroke-opacity:0.12; }
+.node circle { cursor:pointer; stroke-width:1.5; }
+.node text { fill:#e2e8f0; font-size:10px; pointer-events:none; }
+.highlight circle { stroke:#fff !important; stroke-width:2.5px; }
+.highlight text { fill:#fff; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>📚 藏书阁 · 知识图谱</h2>
+  <div class="domain-header" data-target="IT" style="color:#67e8f9; border-left:3px solid #67e8f9;">IT ▾</div>
+  <div class="domain-pages" id="IT">
+    <a href="IT.json" style="border-left:3px solid #67e8f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(225篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="个人成长" style="color:#fb923c; border-left:3px solid #fb923c;">个人成长 ▾</div>
+  <div class="domain-pages" id="个人成长">
+    <a href="个人成长.json" style="border-left:3px solid #fb923c; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(461篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="产品" style="color:#a855f7; border-left:3px solid #a855f7;">产品 ▾</div>
+  <div class="domain-pages" id="产品">
+    <a href="产品_(其他).json" style="border-left:3px solid #a855f7; padding-left:18px;">(其他) <span style="font-size:10px;color:#64748b;">(553篇)</span></a>
+    <a href="产品_产品思维.json" style="border-left:3px solid #a855f7; padding-left:18px;">产品思维 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="产品_小程序生态.json" style="border-left:3px solid #a855f7; padding-left:18px;">小程序生态 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="产品_用户增长.json" style="border-left:3px solid #a855f7; padding-left:18px;">用户增长 <span style="font-size:10px;color:#64748b;">(49篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="会计" style="color:#86efac; border-left:3px solid #86efac;">会计 ▾</div>
+  <div class="domain-pages" id="会计">
+    <a href="会计.json" style="border-left:3px solid #86efac; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(67篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="健康" style="color:#34d399; border-left:3px solid #34d399;">健康 ▾</div>
+  <div class="domain-pages" id="健康">
+    <a href="健康.json" style="border-left:3px solid #34d399; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(284篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="写作" style="color:#c084fc; border-left:3px solid #c084fc;">写作 ▾</div>
+  <div class="domain-pages" id="写作">
+    <a href="写作.json" style="border-left:3px solid #c084fc; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(238篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="历史" style="color:#06b6d4; border-left:3px solid #06b6d4;">历史 ▾</div>
+  <div class="domain-pages" id="历史">
+    <a href="历史_(其他)_part1.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part2.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part3.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part4.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part5.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(541篇)</span></a>
+    <a href="历史_世界史.json" class="active" style="border-left:3px solid #06b6d4; padding-left:18px;">世界史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="历史_中国历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国历史 <span style="font-size:10px;color:#64748b;">(96篇)</span></a>
+    <a href="历史_中国古代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国古代文学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="历史_中国现代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国现代文学 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="历史_中国近代史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国近代史 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="历史_人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">人物传记 <span style="font-size:10px;color:#64748b;">(143篇)</span></a>
+    <a href="历史_军事历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">军事历史 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="历史_历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史 <span style="font-size:10px;color:#64748b;">(538篇)</span></a>
+    <a href="历史_历史与政治.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史与政治 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史人物传记 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="历史_历史学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史学 <span style="font-size:10px;color:#64748b;">(189篇)</span></a>
+    <a href="历史_历史小说.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史小说 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史研究.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史研究 <span style="font-size:10px;color:#64748b;">(162篇)</span></a>
+    <a href="历史_思想史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">思想史 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="历史_文学与历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">文学与历史 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="历史_科技史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">科技史 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="历史_艺术史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">艺术史 <span style="font-size:10px;color:#64748b;">(83篇)</span></a>
+    <a href="历史_西方哲学史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">西方哲学史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="哲学" style="color:#14b8a6; border-left:3px solid #14b8a6;">哲学 ▾</div>
+  <div class="domain-pages" id="哲学">
+    <a href="哲学_(其他)_part1.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="哲学_(其他)_part2.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(272篇)</span></a>
+    <a href="哲学_中国哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">中国哲学 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="哲学_人生哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">人生哲学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="哲学_哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">哲学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+    <a href="哲学_政治哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">政治哲学 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="哲学_生活哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">生活哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+    <a href="哲学_社会哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">社会哲学 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="哲学_科学哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">科学哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="商业" style="color:#10b981; border-left:3px solid #10b981;">商业 ▾</div>
+  <div class="domain-pages" id="商业">
+    <a href="商业_(其他)_part1.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（1/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part2.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（2/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part3.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（3/3） <span style="font-size:10px;color:#64748b;">(391篇)</span></a>
+    <a href="商业_企业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">企业管理 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="商业_健康管理.json" style="border-left:3px solid #10b981; padding-left:18px;">健康管理 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="商业_创业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">创业管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业战略.json" style="border-left:3px solid #10b981; padding-left:18px;">商业战略 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">商业管理 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="商业_投资理财.json" style="border-left:3px solid #10b981; padding-left:18px;">投资理财 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_知识管理.json" style="border-left:3px solid #10b981; padding-left:18px;">知识管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_管理.json" style="border-left:3px solid #10b981; padding-left:18px;">管理 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_组织管理.json" style="border-left:3px solid #10b981; padding-left:18px;">组织管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_经济学.json" style="border-left:3px solid #10b981; padding-left:18px;">经济学 <span style="font-size:10px;color:#64748b;">(74篇)</span></a>
+    <a href="商业_金融投资.json" style="border-left:3px solid #10b981; padding-left:18px;">金融投资 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="商业_领导力.json" style="border-left:3px solid #10b981; padding-left:18px;">领导力 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="图书馆学" style="color:#5eead4; border-left:3px solid #5eead4;">图书馆学 ▾</div>
+  <div class="domain-pages" id="图书馆学">
+    <a href="图书馆学.json" style="border-left:3px solid #5eead4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(23篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="宗教" style="color:#c4b5fd; border-left:3px solid #c4b5fd;">宗教 ▾</div>
+  <div class="domain-pages" id="宗教">
+    <a href="宗教.json" style="border-left:3px solid #c4b5fd; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(19篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="心理学" style="color:#f59e0b; border-left:3px solid #f59e0b;">心理学 ▾</div>
+  <div class="domain-pages" id="心理学">
+    <a href="心理学_(其他)_part1.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（1/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part2.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（2/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part3.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（3/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part4.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（4/4） <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="心理学_个人成长与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">个人成长与心理学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理健康.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理健康 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理学 <span style="font-size:10px;color:#64748b;">(239篇)</span></a>
+    <a href="心理学_教育心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">教育心理学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="心理学_文学与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">文学与心理学 <span style="font-size:10px;color:#64748b;">(119篇)</span></a>
+    <a href="心理学_沟通技巧.json" style="border-left:3px solid #f59e0b; padding-left:18px;">沟通技巧 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="心理学_社会心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">社会心理学 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+    <a href="心理学_认知心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知心理学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="心理学_认知科学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知科学 <span style="font-size:10px;color:#64748b;">(39篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="房地产" style="color:#6ee7b7; border-left:3px solid #6ee7b7;">房地产 ▾</div>
+  <div class="domain-pages" id="房地产">
+    <a href="房地产.json" style="border-left:3px solid #6ee7b7; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(12篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="政治" style="color:#fbbf24; border-left:3px solid #fbbf24;">政治 ▾</div>
+  <div class="domain-pages" id="政治">
+    <a href="政治.json" style="border-left:3px solid #fbbf24; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(253篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="教育" style="color:#ec4899; border-left:3px solid #ec4899;">教育 ▾</div>
+  <div class="domain-pages" id="教育">
+    <a href="教育_(其他)_part1.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="教育_(其他)_part2.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(382篇)</span></a>
+    <a href="教育_个人成长.json" style="border-left:3px solid #ec4899; padding-left:18px;">个人成长 <span style="font-size:10px;color:#64748b;">(250篇)</span></a>
+    <a href="教育_儿童教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">儿童教育 <span style="font-size:10px;color:#64748b;">(62篇)</span></a>
+    <a href="教育_家庭教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">家庭教育 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="教育_教育理念.json" style="border-left:3px solid #ec4899; padding-left:18px;">教育理念 <span style="font-size:10px;color:#64748b;">(68篇)</span></a>
+    <a href="教育_财商教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">财商教育 <span style="font-size:10px;color:#64748b;">(48篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="文学" style="color:#8b5cf6; border-left:3px solid #8b5cf6;">文学 ▾</div>
+  <div class="domain-pages" id="文学">
+    <a href="文学_(其他)_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_中国古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">中国古典文学 <span style="font-size:10px;color:#64748b;">(112篇)</span></a>
+    <a href="文学_儿童文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">儿童文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">古典文学 <span style="font-size:10px;color:#64748b;">(92篇)</span></a>
+    <a href="文学_奇幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">奇幻文学 <span style="font-size:10px;color:#64748b;">(51篇)</span></a>
+    <a href="文学_女性主义文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">女性主义文学 <span style="font-size:10px;color:#64748b;">(38篇)</span></a>
+    <a href="文学_悬疑小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">悬疑小说分析 <span style="font-size:10px;color:#64748b;">(52篇)</span></a>
+    <a href="文学_推理小说.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="文学_推理小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说分析 <span style="font-size:10px;color:#64748b;">(126篇)</span></a>
+    <a href="文学_推理文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理文学 <span style="font-size:10px;color:#64748b;">(35篇)</span></a>
+    <a href="文学_文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学 <span style="font-size:10px;color:#64748b;">(223篇)</span></a>
+    <a href="文学_文学与个人成长.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与个人成长 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="文学_文学与人生哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与人生哲学 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="文学_文学与哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与哲学 <span style="font-size:10px;color:#64748b;">(303篇)</span></a>
+    <a href="文学_文学与社会学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与社会学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="文学_文学分析_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（1/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（2/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（3/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（4/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（5/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part6.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（6/6） <span style="font-size:10px;color:#64748b;">(254篇)</span></a>
+    <a href="文学_文学批评.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学批评 <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="文学_文学理论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学理论 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_文学研究.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学研究 <span style="font-size:10px;color:#64748b;">(84篇)</span></a>
+    <a href="文学_文学经典.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学经典 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="文学_文学解读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学解读 <span style="font-size:10px;color:#64748b;">(40篇)</span></a>
+    <a href="文学_文学评论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学评论 <span style="font-size:10px;color:#64748b;">(482篇)</span></a>
+    <a href="文学_文学赏析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学赏析 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="文学_文学鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学鉴赏 <span style="font-size:10px;color:#64748b;">(82篇)</span></a>
+    <a href="文学_文学阅读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学阅读 <span style="font-size:10px;color:#64748b;">(78篇)</span></a>
+    <a href="文学_旅行文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">旅行文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_日本文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">日本文学 <span style="font-size:10px;color:#64748b;">(98篇)</span></a>
+    <a href="文学_武侠文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">武侠文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_科幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学 <span style="font-size:10px;color:#64748b;">(175篇)</span></a>
+    <a href="文学_科幻文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学分析 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="文学_网络文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">网络文学分析 <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_艺术鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">艺术鉴赏 <span style="font-size:10px;color:#64748b;">(44篇)</span></a>
+    <a href="文学_非虚构文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">非虚构文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="时尚生活" style="color:#f9a8d4; border-left:3px solid #f9a8d4;">时尚生活 ▾</div>
+  <div class="domain-pages" id="时尚生活">
+    <a href="时尚生活.json" style="border-left:3px solid #f9a8d4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(71篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="未知" style="color:#94a3b8; border-left:3px solid #94a3b8;">未知 ▾</div>
+  <div class="domain-pages" id="未知">
+    <a href="未知.json" style="border-left:3px solid #94a3b8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(16篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="法学" style="color:#fcd34d; border-left:3px solid #fcd34d;">法学 ▾</div>
+  <div class="domain-pages" id="法学">
+    <a href="法学.json" style="border-left:3px solid #fcd34d; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="社会学" style="color:#6366f1; border-left:3px solid #6366f1;">社会学 ▾</div>
+  <div class="domain-pages" id="社会学">
+    <a href="社会学_(其他)_part1.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="社会学_(其他)_part2.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(484篇)</span></a>
+    <a href="社会学_文化研究.json" style="border-left:3px solid #6366f1; padding-left:18px;">文化研究 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="社会学_社会学.json" style="border-left:3px solid #6366f1; padding-left:18px;">社会学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="科学" style="color:#f97316; border-left:3px solid #f97316;">科学 ▾</div>
+  <div class="domain-pages" id="科学">
+    <a href="科学_(其他)_part1.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="科学_(其他)_part2.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(116篇)</span></a>
+    <a href="科学_医学人文.json" style="border-left:3px solid #f97316; padding-left:18px;">医学人文 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="科学_神经科学.json" style="border-left:3px solid #f97316; padding-left:18px;">神经科学 <span style="font-size:10px;color:#64748b;">(56篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="编程" style="color:#818cf8; border-left:3px solid #818cf8;">编程 ▾</div>
+  <div class="domain-pages" id="编程">
+    <a href="编程.json" style="border-left:3px solid #818cf8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(151篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="艺术" style="color:#e879f9; border-left:3px solid #e879f9;">艺术 ▾</div>
+  <div class="domain-pages" id="艺术">
+    <a href="艺术.json" style="border-left:3px solid #e879f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(365篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="英语" style="color:#f472b6; border-left:3px solid #f472b6;">英语 ▾</div>
+  <div class="domain-pages" id="英语">
+    <a href="英语.json" style="border-left:3px solid #f472b6; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(209篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="语言文学" style="color:#d8b4fe; border-left:3px solid #d8b4fe;">语言文学 ▾</div>
+  <div class="domain-pages" id="语言文学">
+    <a href="语言文学.json" style="border-left:3px solid #d8b4fe; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="金融" style="color:#a3e635; border-left:3px solid #a3e635;">金融 ▾</div>
+  <div class="domain-pages" id="金融">
+    <a href="金融.json" style="border-left:3px solid #a3e635; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(208篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="雅思" style="color:#22d3ee; border-left:3px solid #22d3ee;">雅思 ▾</div>
+  <div class="domain-pages" id="雅思">
+    <a href="雅思.json" style="border-left:3px solid #22d3ee; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(511篇)</span></a>
+  </div>
+
+    <script>
+    document.querySelectorAll('.domain-header').forEach(function(h){
+      h.addEventListener('click', function(){
+        var t = document.getElementById(this.dataset.target);
+        t.style.display = t.style.display==='none' ? 'block' : 'none';
+        this.innerHTML = this.innerHTML.replace(/[▾▸]/, t.style.display==='none'?'▸':'▾');
+      });
+    });
+    </script>
+    
+</div>
+<button id="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">☰</button>
+
+<div id="header">
+  <h1>📚 历史 · 世界史</h1>
+  <div id="search-wrap">
+    <input id="search-box" type="text" placeholder="🔍 搜索书名/概念...">
+    <div id="search-results"></div>
+  </div>
+  <div class="stats">
+    <span id="node-count">0</span> 节点 ·
+    <span id="link-count">0</span> 连接
+  </div>
+  <div class="ctrls">
+    <button class="btn" id="btn-toggle-concept">隐藏概念</button>
+    <button class="btn" id="btn-reset">重置视图</button>
+  </div>
+</div>
+
+<div id="graph"></div>
+<div id="tooltip"></div>
+
+<!-- 右侧详情面板 -->
+<div id="detail-panel">
+  <div id="detail-header">
+    <h2 id="detail-title"></h2>
+    <button id="detail-close" onclick="closeDetail()">✕</button>
+  </div>
+  <div id="detail-body"></div>
+</div>
+
+<script>
+var NODES = [{"id": "海洋体系.md", "label": "海洋体系", "title": "海洋体系", "type": "book", "degree": 4, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "作者：未知（根据内容推断为西方学者，对全球史、海洋史有深入研究）。主题领域：世界史、海洋史、全球史、地缘政治、文明比较研究。海洋史（Maritime History）：一种以海洋及其相关活动（如航行、贸易、战争、移民）为核心视角，研究人类事务的跨学科领域。批判 “欧洲中心论” 是建立 “海洋体系” 研究路径的前提。对比与批判：通过对比“欧洲中心论”与“海洋体系”路径，批判前者", "keywords": ["相关笔记", "海洋史", "完整标题", "是建立"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/海洋与文明_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/海洋体系.md"}, {"id": "季风系统.md", "label": "季风系统", "title": "季风系统", "type": "book", "degree": 2, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "书名：季风帝国：印度洋及其入侵者的历史。核心主题：本书以印度洋为舞台，跨越千年，讲述了从古代阿拉伯航海家、中国郑和船队，到葡萄牙、荷兰、英国等欧洲殖民者如何利用季风系统，逐步入侵并改变印度洋沿岸地区（特别是东非、阿拉伯、印度）的贸易、宗教与政治格局的历史。适合人群：对世界史、海洋史、殖民史、非洲史、亚洲史感兴趣的读者；希望理解全球化早期进程与东西方关系演变的人士。在16世纪葡萄牙人绕过好望角之前，印度洋沿岸的文明（如波斯、阿拉伯、印度、中国）通过海上丝绸之路进行着活跃的贸易。从阿拉伯商人利用季风建立贸易网络，到葡萄牙人通过技术（大炮、航海术）克服地理障碍，再到19世纪欧洲探险家深入内陆，人类通", "keywords": ["相关笔记", "印度洋"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/季风帝国：印度洋及其入侵者的历史"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/季风系统.md"}, {"id": "欧洲殖民入侵.md", "label": "欧洲殖民入侵", "title": "欧洲殖民入侵", "type": "book", "degree": 2, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "书名：季风帝国：印度洋及其入侵者的历史。核心主题：本书以印度洋为舞台，跨越千年，讲述了从古代阿拉伯航海家、中国郑和船队，到葡萄牙、荷兰、英国等欧洲殖民者如何利用季风系统，逐步入侵并改变印度洋沿岸地区（特别是东非、阿拉伯、印度）的贸易、宗教与政治格局的历史。适合人群：对世界史、海洋史、殖民史、非洲史、亚洲史感兴趣的读者；希望理解全球化早期进程与东西方关系演变的人士。在16世纪葡萄牙人绕过好望角之前，印度洋沿岸的文明（如波斯、阿拉伯、印度、中国）通过海上丝绸之路进行着活跃的贸易。从阿拉伯商人利用季风建立贸易网络，到葡萄牙人通过技术（大炮、航海术）克服地理障碍，再到19世纪欧洲探险家深入内陆，人类通", "keywords": ["相关笔记", "印度洋"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/季风帝国：印度洋及其入侵者的历史"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/欧洲殖民入侵.md"}, {"id": "探索与牺牲.md", "label": "探索与牺牲", "title": "探索与牺牲", "type": "book", "degree": 6, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "核心主题：本书讲述了15世纪末，葡萄牙这个欧洲小国如何凭借国家意志、航海技术、宗教热忱和对财富的渴望，在“航海家恩里克”及其后继者若昂二世的领导下，沿着非洲西海岸一步步南下，最终叩开通往东方印度的大门，从而开启全球帝国时代的故事。适合人群：对世界史、大航海时代、欧洲扩张史感兴趣的读者；喜欢阅读关于冒险、探索和国家战略的叙事性非虚构作品的读者；希望了解全球化起源的读者。要点1：葡萄牙帝国崛起的核心驱动力——国家主导、多方利益交织的“印度计划”。葡萄牙的探险并非民间自发，而是由王室（特别是若昂二世）精心策划和资助的国家工程。其动机复杂且深刻：经济上，渴望绕过伊斯兰世界的贸易垄断，直接获取非洲的黄金", "keywords": ["相关笔记", "葡萄牙", "卡拉维尔帆船", "经济上", "宗教上", "政治上"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/征服者：葡萄牙帝国崛起"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/探索与牺牲.md"}, {"id": "地理决定论.md", "label": "地理决定论", "title": "地理决定论", "type": "book", "degree": 4, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "书名：季风帝国：印度洋及其入侵者的历史。核心主题：本书以印度洋为舞台，跨越千年，讲述了从古代阿拉伯航海家、中国郑和船队，到葡萄牙、荷兰、英国等欧洲殖民者如何利用季风系统，逐步入侵并改变印度洋沿岸地区（特别是东非、阿拉伯、印度）的贸易、宗教与政治格局的历史。适合人群：对世界史、海洋史、殖民史、非洲史、亚洲史感兴趣的读者；希望理解全球化早期进程与东西方关系演变的人士。在16世纪葡萄牙人绕过好望角之前，印度洋沿岸的文明（如波斯、阿拉伯、印度、中国）通过海上丝绸之路进行着活跃的贸易。从阿拉伯商人利用季风建立贸易网络，到葡萄牙人通过技术（大炮、航海术）克服地理障碍，再到19世纪欧洲探险家深入内陆，人类通", "keywords": ["印度洋", "阿拉伯", "入侵者", "葡萄牙"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/季风帝国：印度洋及其入侵者的历史"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/地理决定论.md"}, {"id": "历史分期.md", "label": "历史分期", "title": "历史分期", "type": "book", "degree": 2, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "书名：大英帝国的崛起与衰落：震撼人心的大英帝国全历史，北大博雅讲席教授钱乘旦倾情推荐。核心主题：本书以叙事性通史的形式，追溯了大英帝国从1600年至1998年近四百年的兴衰历程，探讨了其扩张、统治、影响及最终解体的内在逻辑，尤其聚焦于英国价值观（如自由、宪政）如何最终成为帝国瓦解的“催化剂”。适合人群：对世界史、帝国史、英国史感兴趣的普通读者；希望了解现代世界格局形成根源的思考者；以及寻求理解“全球化”与“殖民主义”遗产的学生和研究者。代序中引用作者观点指出，无论是好是坏，现代后帝国主义世界正是帝国时代的产物，英国将其价值观、政治制度和语言（英语）带到了全球各地。学习“悖论”思维：英帝国因其所", "keywords": ["价值观", "大英帝国"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/大英帝国的崛起与衰落：震撼人心的大英帝国全历史，北大博雅讲席教授钱乘旦倾情推荐！"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/历史分期.md"}, {"id": "季风海域.md", "label": "季风海域", "title": "季风海域", "type": "book", "degree": 4, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "作者：未知（根据内容推断为西方学者，对全球史、海洋史有深入研究）。主题领域：世界史、海洋史、全球史、地缘政治、文明比较研究。海洋史（Maritime History）：一种以海洋及其相关活动（如航行、贸易、战争、移民）为核心视角，研究人类事务的跨学科领域。“海商复合体” 是欧洲历史的一个特定现象，而 “季风海域” 下的印度洋贸易网络则展示了另一种非国家主导、更基于商业和文化的海洋互动模式。对比与批判：通过对比“欧洲中心论”与“海洋体系”路径，批判前者", "keywords": ["海洋史", "完整标题", "是建立", "海洋体系"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/海洋与文明_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/季风海域.md"}, {"id": "若昂二世.md", "label": "若昂二世", "title": "若昂二世", "type": "book", "degree": 6, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "核心主题：本书讲述了15世纪末，葡萄牙这个欧洲小国如何凭借国家意志、航海技术、宗教热忱和对财富的渴望，在“航海家恩里克”及其后继者若昂二世的领导下，沿着非洲西海岸一步步南下，最终叩开通往东方印度的大门，从而开启全球帝国时代的故事。适合人群：对世界史、大航海时代、欧洲扩张史感兴趣的读者；喜欢阅读关于冒险、探索和国家战略的叙事性非虚构作品的读者；希望了解全球化起源的读者。要点1：葡萄牙帝国崛起的核心驱动力——国家主导、多方利益交织的“印度计划”。葡萄牙的探险并非民间自发，而是由王室（特别是若昂二世）精心策划和资助的国家工程。建立自己的“科学委员会”：若昂二世在决策前，会召集天文学家、数学家等专家进", "keywords": ["葡萄牙", "卡拉维尔帆船", "经济上", "宗教上", "政治上", "若昂二世"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/征服者：葡萄牙帝国崛起"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/若昂二世.md"}, {"id": "印度计划.md", "label": "印度计划", "title": "印度计划", "type": "book", "degree": 8, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "核心主题：本书讲述了15世纪末，葡萄牙这个欧洲小国如何凭借国家意志、航海技术、宗教热忱和对财富的渴望，在“航海家恩里克”及其后继者若昂二世的领导下，沿着非洲西海岸一步步南下，最终叩开通往东方印度的大门，从而开启全球帝国时代的故事。适合人群：对世界史、大航海时代、欧洲扩张史感兴趣的读者；喜欢阅读关于冒险、探索和国家战略的叙事性非虚构作品的读者；希望了解全球化起源的读者。要点1：葡萄牙帝国崛起的核心驱动力——国家主导、多方利益交织的“印度计划”。葡萄牙的南下探索并非一蹴而就，而是“一个海岬又一个海岬”的漫长接力。拥抱“接力棒”式的长期主义：葡萄牙的探索是“一个海岬又一个海岬”的漫长过程", "keywords": ["葡萄牙", "卡拉维尔帆船", "经济上", "宗教上", "政治上", "萄牙帝", "牙帝国", "帝国崛"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/征服者：葡萄牙帝国崛起"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/印度计划.md"}, {"id": "大宪章.md", "label": "大宪章", "title": "大宪章", "type": "book", "degree": 2, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "书名：英语民族史（套装共4本）（诺贝尔文学奖得主英国前首相丘吉尔历史巨著）。核心主题：本书以宏大的叙事视角，追溯了英语民族（英国人及其后裔建立的独立国家）从史前时期、罗马行省、中世纪封建时代，直至近现代的历史演进。核心在于揭示其独特的语言、法律、议会制度及民族性格是如何在动荡、征服、融合与抗争中逐步形成的，并探讨了这一过程对世界历史进程的深远影响。丘吉尔将英语民族史描绘成一部“自由”的史诗，但我们也应意识到，这部“自由”史的背后是殖民扩张、奴隶贸易和对其他文明的压迫。从政治学与制度经济学的视角看，英语民族的政治制度（如议会、陪审团、地方自治）并非凭空设计，而是沿着历史路径，在无数次冲突、妥协与", "keywords": ["英语民族", "丘吉尔"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/英语民族史（套装共4本）（诺贝尔文学奖得主英国前首相丘吉尔历史巨著）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/大宪章.md"}, {"id": "国家战略.md", "label": "国家战略", "title": "国家战略", "type": "book", "degree": 8, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "核心主题：本书讲述了15世纪末，葡萄牙这个欧洲小国如何凭借国家意志、航海技术、宗教热忱和对财富的渴望，在“航海家恩里克”及其后继者若昂二世的领导下，沿着非洲西海岸一步步南下，最终叩开通往东方印度的大门，从而开启全球帝国时代的故事。适合人群：对世界史、大航海时代、欧洲扩张史感兴趣的读者；喜欢阅读关于冒险、探索和国家战略的叙事性非虚构作品的读者；希望了解全球化起源的读者。要点1：葡萄牙帝国崛起的核心驱动力——国家主导、多方利益交织的“印度计划”。葡萄牙的南下探索并非一蹴而就，而是“一个海岬又一个海岬”的漫长接力。拥抱“接力棒”式的长期主义：葡萄牙的探索是“一个海岬又一个海岬”的漫长过程", "keywords": ["葡萄牙", "卡拉维尔帆船", "经济上", "宗教上", "政治上", "萄牙帝", "牙帝国", "帝国崛"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/征服者：葡萄牙帝国崛起"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/国家战略.md"}, {"id": "海商复合体.md", "label": "海商复合体", "title": "海商复合体", "type": "book", "degree": 4, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "作者：未知（根据内容推断为西方学者，对全球史、海洋史有深入研究）。主题领域：世界史、海洋史、全球史、地缘政治、文明比较研究。海洋史（Maritime History）：一种以海洋及其相关活动（如航行、贸易、战争、移民）为核心视角，研究人类事务的跨学科领域。批判 “欧洲中心论” 是建立 “海洋体系” 研究路径的前提。对比与批判：通过对比“欧洲中心论”与“海洋体系”路径，批判前者", "keywords": ["海洋史", "完整标题", "是建立", "海洋体系"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/海洋与文明_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/海商复合体.md"}, {"id": "殖民主义遗产.md", "label": "殖民主义遗产", "title": "殖民主义遗产", "type": "book", "degree": 2, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "书名：大英帝国的崛起与衰落：震撼人心的大英帝国全历史，北大博雅讲席教授钱乘旦倾情推荐。核心主题：本书以叙事性通史的形式，追溯了大英帝国从1600年至1998年近四百年的兴衰历程，探讨了其扩张、统治、影响及最终解体的内在逻辑，尤其聚焦于英国价值观（如自由、宪政）如何最终成为帝国瓦解的“催化剂”。适合人群：对世界史、帝国史、英国史感兴趣的普通读者；希望了解现代世界格局形成根源的思考者；以及寻求理解“全球化”与“殖民主义”遗产的学生和研究者。代序中引用作者观点指出，无论是好是坏，现代后帝国主义世界正是帝国时代的产物，英国将其价值观、政治制度和语言（英语）带到了全球各地。学习“悖论”思维：英帝国因其所", "keywords": ["价值观", "大英帝国"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/大英帝国的崛起与衰落：震撼人心的大英帝国全历史，北大博雅讲席教授钱乘旦倾情推荐！"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/殖民主义遗产.md"}, {"id": "欧洲中心论.md", "label": "欧洲中心论", "title": "欧洲中心论", "type": "book", "degree": 5, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "作者：未知（根据内容推断为西方学者，对全球史、海洋史有深入研究）。主题领域：世界史、海洋史、全球史、地缘政治、文明比较研究。海洋史（Maritime History）：一种以海洋及其相关活动（如航行、贸易、战争、移民）为核心视角，研究人类事务的跨学科领域。批判 “欧洲中心论” 是建立 “海洋体系” 研究路径的前提。对比与批判：通过对比“欧洲中心论”与“海洋体系”路径，批判前者", "keywords": ["海洋史", "完整标题", "是建立", "欧洲中心", "洲中心论"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/海洋与文明_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/欧洲中心论.md"}, {"id": "历史催化剂.md", "label": "历史催化剂", "title": "历史催化剂", "type": "book", "degree": 3, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "作者：(英)安德鲁·马尔 著；邢科，汪辉 译。核心主题：本书以“伟人”和关键事件为切入点，探讨人类从史前到现代的历史进程，核心论点是：人类在科技和改造自然方面取得了巨大进步，但政治智慧和道德水平却未能同步提升，理解这一矛盾是理解当今世界的关键。对宏大历史叙事感兴趣，希望快速建立世界史框架的读者。希望从历史中寻找理解当代社会问题（如战争、不平等、政治困境）线索的读者。他认为，历史关注变化，而伟大的变革者（如哥伦布、成吉思汗、希特勒、奥本海默）因其行为产生的巨大影响力，其故事自然比普通人的生平更具历史重要性", "keywords": ["行动建议", "方面取得", "切入点"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/BBC 世界史"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/历史催化剂.md"}, {"id": "印度洋贸易.md", "label": "印度洋贸易", "title": "印度洋贸易", "type": "book", "degree": 4, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "书名：季风帝国：印度洋及其入侵者的历史。核心主题：本书以印度洋为舞台，跨越千年，讲述了从古代阿拉伯航海家、中国郑和船队，到葡萄牙、荷兰、英国等欧洲殖民者如何利用季风系统，逐步入侵并改变印度洋沿岸地区（特别是东非、阿拉伯、印度）的贸易、宗教与政治格局的历史。适合人群：对世界史、海洋史、殖民史、非洲史、亚洲史感兴趣的读者；希望理解全球化早期进程与东西方关系演变的人士。在16世纪葡萄牙人绕过好望角之前，印度洋沿岸的文明（如波斯、阿拉伯、印度、中国）通过海上丝绸之路进行着活跃的贸易。从阿拉伯商人利用季风建立贸易网络，到葡萄牙人通过技术（大炮、航海术）克服地理障碍，再到19世纪欧洲探险家深入内陆，人类通", "keywords": ["印度洋", "阿拉伯", "入侵者", "葡萄牙"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/季风帝国：印度洋及其入侵者的历史"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/印度洋贸易.md"}, {"id": "叙事史学.md", "label": "叙事史学", "title": "叙事史学", "type": "book", "degree": 2, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "书名：大英帝国的崛起与衰落：震撼人心的大英帝国全历史，北大博雅讲席教授钱乘旦倾情推荐。核心主题：本书以叙事性通史的形式，追溯了大英帝国从1600年至1998年近四百年的兴衰历程，探讨了其扩张、统治、影响及最终解体的内在逻辑，尤其聚焦于英国价值观（如自由、宪政）如何最终成为帝国瓦解的“催化剂”。适合人群：对世界史、帝国史、英国史感兴趣的普通读者；希望了解现代世界格局形成根源的思考者；以及寻求理解“全球化”与“殖民主义”遗产的学生和研究者。代序中引用作者观点指出，无论是好是坏，现代后帝国主义世界正是帝国时代的产物，英国将其价值观、政治制度和语言（英语）带到了全球各地。学习“悖论”思维：英帝国因其所", "keywords": ["价值观", "大英帝国"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/大英帝国的崛起与衰落：震撼人心的大英帝国全历史，北大博雅讲席教授钱乘旦倾情推荐！"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/叙事史学.md"}, {"id": "王权博弈.md", "label": "王权博弈", "title": "王权博弈", "type": "book", "degree": 2, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "书名：英语民族史（套装共4本）（诺贝尔文学奖得主英国前首相丘吉尔历史巨著）。核心主题：本书以宏大的叙事视角，追溯了英语民族（英国人及其后裔建立的独立国家）从史前时期、罗马行省、中世纪封建时代，直至近现代的历史演进。核心在于揭示其独特的语言、法律、议会制度及民族性格是如何在动荡、征服、融合与抗争中逐步形成的，并探讨了这一过程对世界历史进程的深远影响。丘吉尔将英语民族史描绘成一部“自由”的史诗，但我们也应意识到，这部“自由”史的背后是殖民扩张、奴隶贸易和对其他文明的压迫。从政治学与制度经济学的视角看，英语民族的政治制度（如议会、陪审团、地方自治）并非凭空设计，而是沿着历史路径，在无数次冲突、妥协与", "keywords": ["英语民族", "丘吉尔"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/英语民族史（套装共4本）（诺贝尔文学奖得主英国前首相丘吉尔历史巨著）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/王权博弈.md"}, {"id": "印度洋贸易圈.md", "label": "印度洋贸易圈", "title": "印度洋贸易圈", "type": "book", "degree": 4, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "书名：季风帝国：印度洋及其入侵者的历史。核心主题：本书以印度洋为舞台，跨越千年，讲述了从古代阿拉伯航海家、中国郑和船队，到葡萄牙、荷兰、英国等欧洲殖民者如何利用季风系统，逐步入侵并改变印度洋沿岸地区（特别是东非、阿拉伯、印度）的贸易、宗教与政治格局的历史。适合人群：对世界史、海洋史、殖民史、非洲史、亚洲史感兴趣的读者；希望理解全球化早期进程与东西方关系演变的人士。在16世纪葡萄牙人绕过好望角之前，印度洋沿岸的文明（如波斯、阿拉伯、印度、中国）通过海上丝绸之路进行着活跃的贸易。从阿拉伯商人利用季风建立贸易网络，到葡萄牙人通过技术（大炮、航海术）克服地理障碍，再到19世纪欧洲探险家深入内陆，人类通", "keywords": ["印度洋", "阿拉伯", "入侵者", "葡萄牙"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/季风帝国：印度洋及其入侵者的历史"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/印度洋贸易圈.md"}, {"id": "海洋史.md", "label": "海洋史", "title": "海洋史", "type": "book", "degree": 4, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "作者：未知（根据内容推断为西方学者，对全球史、海洋史有深入研究）。主题领域：世界史、海洋史、全球史、地缘政治、文明比较研究。海洋史（Maritime History）：一种以海洋及其相关活动（如航行、贸易、战争、移民）为核心视角，研究人类事务的跨学科领域。批判 “欧洲中心论” 是建立 “海洋体系” 研究路径的前提。对比与批判：通过对比“欧洲中心论”与“海洋体系”路径，批判前者", "keywords": ["海洋史", "完整标题", "是建立", "海洋体系"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/海洋与文明_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/海洋史.md"}, {"id": "葡萄牙帝国.md", "label": "葡萄牙帝国", "title": "葡萄牙帝国", "type": "book", "degree": 6, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "核心主题：本书讲述了15世纪末，葡萄牙这个欧洲小国如何凭借国家意志、航海技术、宗教热忱和对财富的渴望，在“航海家恩里克”及其后继者若昂二世的领导下，沿着非洲西海岸一步步南下，最终叩开通往东方印度的大门，从而开启全球帝国时代的故事。适合人群：对世界史、大航海时代、欧洲扩张史感兴趣的读者；喜欢阅读关于冒险、探索和国家战略的叙事性非虚构作品的读者；希望了解全球化起源的读者。要点1：葡萄牙帝国崛起的核心驱动力——国家主导、多方利益交织的“印度计划”。葡萄牙的南下探索并非一蹴而就，而是“一个海岬又一个海岬”的漫长接力。拥抱“接力棒”式的长期主义：葡萄牙的探索是“一个海岬又一个海岬”的漫长过程", "keywords": ["卡拉维尔帆船", "经济上", "宗教上", "政治上", "葡萄牙帝", "牙帝国"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/征服者：葡萄牙帝国崛起"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/葡萄牙帝国.md"}, {"id": "野心与合作.md", "label": "野心与合作", "title": "野心与合作", "type": "book", "degree": 3, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "作者：(英)安德鲁·马尔 著；邢科，汪辉 译。核心主题：本书以“伟人”和关键事件为切入点，探讨人类从史前到现代的历史进程，核心论点是：人类在科技和改造自然方面取得了巨大进步，但政治智慧和道德水平却未能同步提升，理解这一矛盾是理解当今世界的关键。对宏大历史叙事感兴趣，希望快速建立世界史框架的读者。希望从历史中寻找理解当代社会问题（如战争、不平等、政治困境）线索的读者。他认为，历史关注变化，而伟大的变革者（如哥伦布、成吉思汗、希特勒、奥本海默）因其行为产生的巨大影响力，其故事自然比普通人的生平更具历史重要性", "keywords": ["行动建议", "方面取得", "切入点"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/BBC 世界史"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/野心与合作.md"}, {"id": "葡萄牙帝国崛起.md", "label": "葡萄牙帝国崛起", "title": "葡萄牙帝国崛起", "type": "book", "degree": 8, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "核心主题：本书讲述了15世纪末，葡萄牙这个欧洲小国如何凭借国家意志、航海技术、宗教热忱和对财富的渴望，在“航海家恩里克”及其后继者若昂二世的领导下，沿着非洲西海岸一步步南下，最终叩开通往东方印度的大门，从而开启全球帝国时代的故事。适合人群：对世界史、大航海时代、欧洲扩张史感兴趣的读者；喜欢阅读关于冒险、探索和国家战略的叙事性非虚构作品的读者；希望了解全球化起源的读者。要点1：葡萄牙帝国崛起的核心驱动力——国家主导、多方利益交织的“印度计划”。葡萄牙的南下探索并非一蹴而就，而是“一个海岬又一个海岬”的漫长接力。拥抱“接力棒”式的长期主义：葡萄牙的探索是“一个海岬又一个海岬”的漫长过程", "keywords": ["葡萄牙", "卡拉维尔帆船", "经济上", "宗教上", "政治上", "萄牙帝", "牙帝国", "帝国崛"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/征服者：葡萄牙帝国崛起"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/葡萄牙帝国崛起.md"}, {"id": "英语民族形成.md", "label": "英语民族形成", "title": "英语民族形成", "type": "book", "degree": 2, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "书名：英语民族史（套装共4本）（诺贝尔文学奖得主英国前首相丘吉尔历史巨著）。核心主题：本书以宏大的叙事视角，追溯了英语民族（英国人及其后裔建立的独立国家）从史前时期、罗马行省、中世纪封建时代，直至近现代的历史演进。核心在于揭示其独特的语言、法律、议会制度及民族性格是如何在动荡、征服、融合与抗争中逐步形成的，并探讨了这一过程对世界历史进程的深远影响。丘吉尔将英语民族史描绘成一部“自由”的史诗，但我们也应意识到，这部“自由”史的背后是殖民扩张、奴隶贸易和对其他文明的压迫。从政治学与制度经济学的视角看，英语民族的政治制度（如议会、陪审团、地方自治）并非凭空设计，而是沿着历史路径，在无数次冲突、妥协与", "keywords": ["英语民族", "丘吉尔"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/英语民族史（套装共4本）（诺贝尔文学奖得主英国前首相丘吉尔历史巨著）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/英语民族形成.md"}, {"id": "全球化.md", "label": "全球化", "title": "全球化", "type": "book", "degree": 4, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "书名：季风帝国：印度洋及其入侵者的历史。核心主题：本书以印度洋为舞台，跨越千年，讲述了从古代阿拉伯航海家、中国郑和船队，到葡萄牙、荷兰、英国等欧洲殖民者如何利用季风系统，逐步入侵并改变印度洋沿岸地区（特别是东非、阿拉伯、印度）的贸易、宗教与政治格局的历史。适合人群：对世界史、海洋史、殖民史、非洲史、亚洲史感兴趣的读者；希望理解全球化早期进程与东西方关系演变的人士。在16世纪葡萄牙人绕过好望角之前，印度洋沿岸的文明（如波斯、阿拉伯、印度、中国）通过海上丝绸之路进行着活跃的贸易。从阿拉伯商人利用季风建立贸易网络，到葡萄牙人通过技术（大炮、航海术）克服地理障碍，再到19世纪欧洲探险家深入内陆，人类通", "keywords": ["印度洋", "阿拉伯", "入侵者", "葡萄牙"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/季风帝国：印度洋及其入侵者的历史"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/全球化.md"}, {"id": "欧洲殖民.md", "label": "欧洲殖民", "title": "欧洲殖民", "type": "book", "degree": 4, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "书名：季风帝国：印度洋及其入侵者的历史。核心主题：本书以印度洋为舞台，跨越千年，讲述了从古代阿拉伯航海家、中国郑和船队，到葡萄牙、荷兰、英国等欧洲殖民者如何利用季风系统，逐步入侵并改变印度洋沿岸地区（特别是东非、阿拉伯、印度）的贸易、宗教与政治格局的历史。适合人群：对世界史、海洋史、殖民史、非洲史、亚洲史感兴趣的读者；希望理解全球化早期进程与东西方关系演变的人士。在16世纪葡萄牙人绕过好望角之前，印度洋沿岸的文明（如波斯、阿拉伯、印度、中国）通过海上丝绸之路进行着活跃的贸易。从阿拉伯商人利用季风建立贸易网络，到葡萄牙人通过技术（大炮、航海术）克服地理障碍，再到19世纪欧洲探险家深入内陆，人类通", "keywords": ["印度洋", "阿拉伯", "入侵者", "葡萄牙"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/季风帝国：印度洋及其入侵者的历史"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/欧洲殖民.md"}, {"id": "全球化早期进程.md", "label": "全球化早期进程", "title": "全球化早期进程", "type": "book", "degree": 4, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "书名：季风帝国：印度洋及其入侵者的历史。核心主题：本书以印度洋为舞台，跨越千年，讲述了从古代阿拉伯航海家、中国郑和船队，到葡萄牙、荷兰、英国等欧洲殖民者如何利用季风系统，逐步入侵并改变印度洋沿岸地区（特别是东非、阿拉伯、印度）的贸易、宗教与政治格局的历史。适合人群：对世界史、海洋史、殖民史、非洲史、亚洲史感兴趣的读者；希望理解全球化早期进程与东西方关系演变的人士。在16世纪葡萄牙人绕过好望角之前，印度洋沿岸的文明（如波斯、阿拉伯、印度、中国）通过海上丝绸之路进行着活跃的贸易。从阿拉伯商人利用季风建立贸易网络，到葡萄牙人通过技术（大炮、航海术）克服地理障碍，再到19世纪欧洲探险家深入内陆，人类通", "keywords": ["印度洋", "阿拉伯", "入侵者", "葡萄牙"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/季风帝国：印度洋及其入侵者的历史"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/全球化早期进程.md"}, {"id": "大航海时代.md", "label": "大航海时代", "title": "大航海时代", "type": "book", "degree": 8, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "核心主题：本书讲述了15世纪末，葡萄牙这个欧洲小国如何凭借国家意志、航海技术、宗教热忱和对财富的渴望，在“航海家恩里克”及其后继者若昂二世的领导下，沿着非洲西海岸一步步南下，最终叩开通往东方印度的大门，从而开启全球帝国时代的故事。适合人群：对世界史、大航海时代、欧洲扩张史感兴趣的读者；喜欢阅读关于冒险、探索和国家战略的叙事性非虚构作品的读者；希望了解全球化起源的读者。要点1：葡萄牙帝国崛起的核心驱动力——国家主导、多方利益交织的“印度计划”。葡萄牙的南下探索并非一蹴而就，而是“一个海岬又一个海岬”的漫长接力。拥抱“接力棒”式的长期主义：葡萄牙的探索是“一个海岬又一个海岬”的漫长过程", "keywords": ["葡萄牙", "卡拉维尔帆船", "经济上", "宗教上", "政治上", "萄牙帝", "牙帝国", "帝国崛"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/征服者：葡萄牙帝国崛起"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/大航海时代.md"}, {"id": "认知框架.md", "label": "认知框架", "title": "认知框架", "type": "book", "degree": 8, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "核心主题：本书讲述了15世纪末，葡萄牙这个欧洲小国如何凭借国家意志、航海技术、宗教热忱和对财富的渴望，在“航海家恩里克”及其后继者若昂二世的领导下，沿着非洲西海岸一步步南下，最终叩开通往东方印度的大门，从而开启全球帝国时代的故事。适合人群：对世界史、大航海时代、欧洲扩张史感兴趣的读者；喜欢阅读关于冒险、探索和国家战略的叙事性非虚构作品的读者；希望了解全球化起源的读者。要点1：葡萄牙帝国崛起的核心驱动力——国家主导、多方利益交织的“印度计划”。葡萄牙的南下探索并非一蹴而就，而是“一个海岬又一个海岬”的漫长接力。拥抱“接力棒”式的长期主义：葡萄牙的探索是“一个海岬又一个海岬”的漫长过程", "keywords": ["葡萄牙", "卡拉维尔帆船", "经济上", "宗教上", "政治上", "萄牙帝", "牙帝国", "帝国崛"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/征服者：葡萄牙帝国崛起"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/认知框架.md"}, {"id": "殖民主义双重遗产.md", "label": "殖民主义双重遗产", "title": "殖民主义双重遗产", "type": "book", "degree": 4, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "书名：季风帝国：印度洋及其入侵者的历史。核心主题：本书以印度洋为舞台，跨越千年，讲述了从古代阿拉伯航海家、中国郑和船队，到葡萄牙、荷兰、英国等欧洲殖民者如何利用季风系统，逐步入侵并改变印度洋沿岸地区（特别是东非、阿拉伯、印度）的贸易、宗教与政治格局的历史。适合人群：对世界史、海洋史、殖民史、非洲史、亚洲史感兴趣的读者；希望理解全球化早期进程与东西方关系演变的人士。在16世纪葡萄牙人绕过好望角之前，印度洋沿岸的文明（如波斯、阿拉伯、印度、中国）通过海上丝绸之路进行着活跃的贸易。从阿拉伯商人利用季风建立贸易网络，到葡萄牙人通过技术（大炮、航海术）克服地理障碍，再到19世纪欧洲探险家深入内陆，人类通", "keywords": ["印度洋", "阿拉伯", "入侵者", "葡萄牙"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/季风帝国：印度洋及其入侵者的历史"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/殖民主义双重遗产.md"}, {"id": "科技与政治矛盾.md", "label": "科技与政治矛盾", "title": "科技与政治矛盾", "type": "book", "degree": 3, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "作者：(英)安德鲁·马尔 著；邢科，汪辉 译。核心主题：本书以“伟人”和关键事件为切入点，探讨人类从史前到现代的历史进程，核心论点是：人类在科技和改造自然方面取得了巨大进步，但政治智慧和道德水平却未能同步提升，理解这一矛盾是理解当今世界的关键。对宏大历史叙事感兴趣，希望快速建立世界史框架的读者。希望从历史中寻找理解当代社会问题（如战争、不平等、政治困境）线索的读者。他认为，历史关注变化，而伟大的变革者（如哥伦布、成吉思汗、希特勒、奥本海默）因其行为产生的巨大影响力，其故事自然比普通人的生平更具历史重要性", "keywords": ["行动建议", "方面取得", "切入点"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/BBC 世界史"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/科技与政治矛盾.md"}, {"id": "议会制度.md", "label": "议会制度", "title": "议会制度", "type": "book", "degree": 2, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "书名：英语民族史（套装共4本）（诺贝尔文学奖得主英国前首相丘吉尔历史巨著）。核心主题：本书以宏大的叙事视角，追溯了英语民族（英国人及其后裔建立的独立国家）从史前时期、罗马行省、中世纪封建时代，直至近现代的历史演进。核心在于揭示其独特的语言、法律、议会制度及民族性格是如何在动荡、征服、融合与抗争中逐步形成的，并探讨了这一过程对世界历史进程的深远影响。丘吉尔将英语民族史描绘成一部“自由”的史诗，但我们也应意识到，这部“自由”史的背后是殖民扩张、奴隶贸易和对其他文明的压迫。从政治学与制度经济学的视角看，英语民族的政治制度（如议会、陪审团、地方自治）并非凭空设计，而是沿着历史路径，在无数次冲突、妥协与", "keywords": ["英语民族", "丘吉尔"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/英语民族史（套装共4本）（诺贝尔文学奖得主英国前首相丘吉尔历史巨著）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/议会制度.md"}, {"id": "价值观悖论.md", "label": "价值观悖论", "title": "价值观悖论", "type": "book", "degree": 2, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "书名：大英帝国的崛起与衰落：震撼人心的大英帝国全历史，北大博雅讲席教授钱乘旦倾情推荐。核心主题：本书以叙事性通史的形式，追溯了大英帝国从1600年至1998年近四百年的兴衰历程，探讨了其扩张、统治、影响及最终解体的内在逻辑，尤其聚焦于英国价值观（如自由、宪政）如何最终成为帝国瓦解的“催化剂”。适合人群：对世界史、帝国史、英国史感兴趣的普通读者；希望了解现代世界格局形成根源的思考者；以及寻求理解“全球化”与“殖民主义”遗产的学生和研究者。代序中引用作者观点指出，无论是好是坏，现代后帝国主义世界正是帝国时代的产物，英国将其价值观、政治制度和语言（英语）带到了全球各地。学习“悖论”思维：英帝国因其所", "keywords": ["价值观", "大英帝国"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/大英帝国的崛起与衰落：震撼人心的大英帝国全历史，北大博雅讲席教授钱乘旦倾情推荐！"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/价值观悖论.md"}, {"id": "语言认同.md", "label": "语言认同", "title": "语言认同", "type": "book", "degree": 2, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "书名：英语民族史（套装共4本）（诺贝尔文学奖得主英国前首相丘吉尔历史巨著）。核心主题：本书以宏大的叙事视角，追溯了英语民族（英国人及其后裔建立的独立国家）从史前时期、罗马行省、中世纪封建时代，直至近现代的历史演进。核心在于揭示其独特的语言、法律、议会制度及民族性格是如何在动荡、征服、融合与抗争中逐步形成的，并探讨了这一过程对世界历史进程的深远影响。丘吉尔将英语民族史描绘成一部“自由”的史诗，但我们也应意识到，这部“自由”史的背后是殖民扩张、奴隶贸易和对其他文明的压迫。从政治学与制度经济学的视角看，英语民族的政治制度（如议会、陪审团、地方自治）并非凭空设计，而是沿着历史路径，在无数次冲突、妥协与", "keywords": ["英语民族", "丘吉尔"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/英语民族史（套装共4本）（诺贝尔文学奖得主英国前首相丘吉尔历史巨著）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/语言认同.md"}, {"id": "伟人史观.md", "label": "伟人史观", "title": "伟人史观", "type": "book", "degree": 3, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "作者：(英)安德鲁·马尔 著；邢科，汪辉 译。核心主题：本书以“伟人”和关键事件为切入点，探讨人类从史前到现代的历史进程，核心论点是：人类在科技和改造自然方面取得了巨大进步，但政治智慧和道德水平却未能同步提升，理解这一矛盾是理解当今世界的关键。对宏大历史叙事感兴趣，希望快速建立世界史框架的读者。希望从历史中寻找理解当代社会问题（如战争、不平等、政治困境）线索的读者。作者捍卫“伟人史观”的理由，与认知心理学中的“叙事思维”不谋而合", "keywords": ["行动建议", "伟人史观", "切入点"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/BBC 世界史"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/伟人史观.md"}, {"id": "英帝国兴衰.md", "label": "英帝国兴衰", "title": "英帝国兴衰", "type": "book", "degree": 2, "cluster": "世界史", "domain": "历史", "sub_domain": "世界史", "summary": "书名：大英帝国的崛起与衰落：震撼人心的大英帝国全历史，北大博雅讲席教授钱乘旦倾情推荐。核心主题：本书以叙事性通史的形式，追溯了大英帝国从1600年至1998年近四百年的兴衰历程，探讨了其扩张、统治、影响及最终解体的内在逻辑，尤其聚焦于英国价值观（如自由、宪政）如何最终成为帝国瓦解的“催化剂”。适合人群：对世界史、帝国史、英国史感兴趣的普通读者；希望了解现代世界格局形成根源的思考者；以及寻求理解“全球化”与“殖民主义”遗产的学生和研究者。代序中引用作者观点指出，无论是好是坏，现代后帝国主义世界正是帝国时代的产物，英国将其价值观、政治制度和语言（英语）带到了全球各地。学习“悖论”思维：英帝国因其所", "keywords": ["价值观", "大英帝国"], "tags": ["domain/历史", "sub_domain/世界史", "type/concept", "source/大英帝国的崛起与衰落：震撼人心的大英帝国全历史，北大博雅讲席教授钱乘旦倾情推荐！"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/历史/世界史/英帝国兴衰.md"}];
+var LINKS = [{"source": "海洋体系.md", "target": "季风海域.md", "value": 3, "shared": ["是建立", "海洋史", "完整标题"]}, {"source": "海洋体系.md", "target": "海商复合体.md", "value": 3, "shared": ["是建立", "海洋史", "完整标题"]}, {"source": "海洋体系.md", "target": "欧洲中心论.md", "value": 3, "shared": ["是建立", "海洋史", "完整标题"]}, {"source": "海洋体系.md", "target": "海洋史.md", "value": 3, "shared": ["是建立", "海洋史", "完整标题"]}, {"source": "季风系统.md", "target": "欧洲殖民入侵.md", "value": 2, "shared": ["印度洋", "相关笔记"]}, {"source": "探索与牺牲.md", "target": "若昂二世.md", "value": 5, "shared": ["政治上", "葡萄牙", "经济上", "卡拉维尔帆船", "宗教上"]}, {"source": "探索与牺牲.md", "target": "印度计划.md", "value": 5, "shared": ["政治上", "宗教上", "经济上", "卡拉维尔帆船", "葡萄牙"]}, {"source": "探索与牺牲.md", "target": "国家战略.md", "value": 5, "shared": ["政治上", "宗教上", "经济上", "卡拉维尔帆船", "葡萄牙"]}, {"source": "探索与牺牲.md", "target": "葡萄牙帝国.md", "value": 4, "shared": ["政治上", "经济上", "卡拉维尔帆船", "宗教上"]}, {"source": "探索与牺牲.md", "target": "葡萄牙帝国崛起.md", "value": 5, "shared": ["政治上", "宗教上", "经济上", "卡拉维尔帆船", "葡萄牙"]}, {"source": "探索与牺牲.md", "target": "大航海时代.md", "value": 5, "shared": ["政治上", "宗教上", "经济上", "卡拉维尔帆船", "葡萄牙"]}, {"source": "探索与牺牲.md", "target": "认知框架.md", "value": 5, "shared": ["政治上", "宗教上", "经济上", "卡拉维尔帆船", "葡萄牙"]}, {"source": "地理决定论.md", "target": "印度洋贸易.md", "value": 4, "shared": ["入侵者", "印度洋", "阿拉伯", "葡萄牙"]}, {"source": "地理决定论.md", "target": "印度洋贸易圈.md", "value": 4, "shared": ["入侵者", "印度洋", "阿拉伯", "葡萄牙"]}, {"source": "地理决定论.md", "target": "全球化.md", "value": 4, "shared": ["入侵者", "印度洋", "阿拉伯", "葡萄牙"]}, {"source": "地理决定论.md", "target": "欧洲殖民.md", "value": 4, "shared": ["入侵者", "印度洋", "阿拉伯", "葡萄牙"]}, {"source": "地理决定论.md", "target": "全球化早期进程.md", "value": 4, "shared": ["入侵者", "印度洋", "阿拉伯", "葡萄牙"]}, {"source": "地理决定论.md", "target": "殖民主义双重遗产.md", "value": 4, "shared": ["入侵者", "印度洋", "阿拉伯", "葡萄牙"]}, {"source": "历史分期.md", "target": "殖民主义遗产.md", "value": 2, "shared": ["价值观", "大英帝国"]}, {"source": "历史分期.md", "target": "叙事史学.md", "value": 2, "shared": ["价值观", "大英帝国"]}, {"source": "历史分期.md", "target": "价值观悖论.md", "value": 2, "shared": ["价值观", "大英帝国"]}, {"source": "历史分期.md", "target": "英帝国兴衰.md", "value": 2, "shared": ["价值观", "大英帝国"]}, {"source": "季风海域.md", "target": "海商复合体.md", "value": 4, "shared": ["海洋体系", "是建立", "海洋史", "完整标题"]}, {"source": "季风海域.md", "target": "欧洲中心论.md", "value": 3, "shared": ["是建立", "海洋史", "完整标题"]}, {"source": "季风海域.md", "target": "海洋史.md", "value": 4, "shared": ["海洋体系", "是建立", "海洋史", "完整标题"]}, {"source": "若昂二世.md", "target": "印度计划.md", "value": 5, "shared": ["政治上", "葡萄牙", "经济上", "卡拉维尔帆船", "宗教上"]}, {"source": "若昂二世.md", "target": "国家战略.md", "value": 5, "shared": ["政治上", "葡萄牙", "经济上", "卡拉维尔帆船", "宗教上"]}, {"source": "若昂二世.md", "target": "葡萄牙帝国.md", "value": 4, "shared": ["政治上", "经济上", "卡拉维尔帆船", "宗教上"]}, {"source": "若昂二世.md", "target": "葡萄牙帝国崛起.md", "value": 5, "shared": ["政治上", "葡萄牙", "经济上", "卡拉维尔帆船", "宗教上"]}, {"source": "若昂二世.md", "target": "大航海时代.md", "value": 5, "shared": ["政治上", "葡萄牙", "经济上", "卡拉维尔帆船", "宗教上"]}, {"source": "若昂二世.md", "target": "认知框架.md", "value": 5, "shared": ["政治上", "葡萄牙", "经济上", "卡拉维尔帆船", "宗教上"]}, {"source": "印度计划.md", "target": "国家战略.md", "value": 8, "shared": ["卡拉维尔帆船", "政治上", "帝国崛", "宗教上", "经济上"]}, {"source": "印度计划.md", "target": "葡萄牙帝国.md", "value": 5, "shared": ["政治上", "经济上", "牙帝国", "卡拉维尔帆船", "宗教上"]}, {"source": "印度计划.md", "target": "葡萄牙帝国崛起.md", "value": 8, "shared": ["卡拉维尔帆船", "政治上", "帝国崛", "宗教上", "经济上"]}, {"source": "印度计划.md", "target": "大航海时代.md", "value": 8, "shared": ["卡拉维尔帆船", "政治上", "帝国崛", "宗教上", "经济上"]}, {"source": "印度计划.md", "target": "认知框架.md", "value": 8, "shared": ["卡拉维尔帆船", "政治上", "帝国崛", "宗教上", "经济上"]}, {"source": "大宪章.md", "target": "王权博弈.md", "value": 2, "shared": ["英语民族", "丘吉尔"]}, {"source": "大宪章.md", "target": "英语民族形成.md", "value": 2, "shared": ["英语民族", "丘吉尔"]}, {"source": "大宪章.md", "target": "议会制度.md", "value": 2, "shared": ["英语民族", "丘吉尔"]}, {"source": "大宪章.md", "target": "语言认同.md", "value": 2, "shared": ["英语民族", "丘吉尔"]}, {"source": "国家战略.md", "target": "葡萄牙帝国.md", "value": 5, "shared": ["政治上", "经济上", "牙帝国", "卡拉维尔帆船", "宗教上"]}, {"source": "国家战略.md", "target": "葡萄牙帝国崛起.md", "value": 8, "shared": ["卡拉维尔帆船", "政治上", "帝国崛", "宗教上", "经济上"]}, {"source": "国家战略.md", "target": "大航海时代.md", "value": 8, "shared": ["卡拉维尔帆船", "政治上", "帝国崛", "宗教上", "经济上"]}, {"source": "国家战略.md", "target": "认知框架.md", "value": 8, "shared": ["卡拉维尔帆船", "政治上", "帝国崛", "宗教上", "经济上"]}, {"source": "海商复合体.md", "target": "欧洲中心论.md", "value": 3, "shared": ["是建立", "海洋史", "完整标题"]}, {"source": "海商复合体.md", "target": "海洋史.md", "value": 4, "shared": ["海洋体系", "是建立", "海洋史", "完整标题"]}, {"source": "殖民主义遗产.md", "target": "叙事史学.md", "value": 2, "shared": ["价值观", "大英帝国"]}, {"source": "殖民主义遗产.md", "target": "价值观悖论.md", "value": 2, "shared": ["价值观", "大英帝国"]}, {"source": "殖民主义遗产.md", "target": "英帝国兴衰.md", "value": 2, "shared": ["价值观", "大英帝国"]}, {"source": "欧洲中心论.md", "target": "海洋史.md", "value": 3, "shared": ["是建立", "海洋史", "完整标题"]}, {"source": "历史催化剂.md", "target": "野心与合作.md", "value": 3, "shared": ["行动建议", "切入点", "方面取得"]}, {"source": "历史催化剂.md", "target": "科技与政治矛盾.md", "value": 3, "shared": ["行动建议", "切入点", "方面取得"]}, {"source": "历史催化剂.md", "target": "伟人史观.md", "value": 2, "shared": ["行动建议", "切入点"]}, {"source": "印度洋贸易.md", "target": "印度洋贸易圈.md", "value": 4, "shared": ["入侵者", "印度洋", "阿拉伯", "葡萄牙"]}, {"source": "印度洋贸易.md", "target": "全球化.md", "value": 4, "shared": ["入侵者", "印度洋", "阿拉伯", "葡萄牙"]}, {"source": "印度洋贸易.md", "target": "欧洲殖民.md", "value": 4, "shared": ["入侵者", "印度洋", "阿拉伯", "葡萄牙"]}, {"source": "印度洋贸易.md", "target": "全球化早期进程.md", "value": 4, "shared": ["入侵者", "印度洋", "阿拉伯", "葡萄牙"]}, {"source": "印度洋贸易.md", "target": "殖民主义双重遗产.md", "value": 4, "shared": ["入侵者", "印度洋", "阿拉伯", "葡萄牙"]}, {"source": "叙事史学.md", "target": "价值观悖论.md", "value": 2, "shared": ["价值观", "大英帝国"]}, {"source": "叙事史学.md", "target": "英帝国兴衰.md", "value": 2, "shared": ["价值观", "大英帝国"]}, {"source": "王权博弈.md", "target": "英语民族形成.md", "value": 2, "shared": ["英语民族", "丘吉尔"]}, {"source": "王权博弈.md", "target": "议会制度.md", "value": 2, "shared": ["英语民族", "丘吉尔"]}, {"source": "王权博弈.md", "target": "语言认同.md", "value": 2, "shared": ["英语民族", "丘吉尔"]}, {"source": "印度洋贸易圈.md", "target": "全球化.md", "value": 4, "shared": ["入侵者", "印度洋", "阿拉伯", "葡萄牙"]}, {"source": "印度洋贸易圈.md", "target": "欧洲殖民.md", "value": 4, "shared": ["入侵者", "印度洋", "阿拉伯", "葡萄牙"]}, {"source": "印度洋贸易圈.md", "target": "全球化早期进程.md", "value": 4, "shared": ["入侵者", "印度洋", "阿拉伯", "葡萄牙"]}, {"source": "印度洋贸易圈.md", "target": "殖民主义双重遗产.md", "value": 4, "shared": ["入侵者", "印度洋", "阿拉伯", "葡萄牙"]}, {"source": "葡萄牙帝国.md", "target": "葡萄牙帝国崛起.md", "value": 5, "shared": ["政治上", "经济上", "牙帝国", "卡拉维尔帆船", "宗教上"]}, {"source": "葡萄牙帝国.md", "target": "大航海时代.md", "value": 5, "shared": ["政治上", "经济上", "牙帝国", "卡拉维尔帆船", "宗教上"]}, {"source": "葡萄牙帝国.md", "target": "认知框架.md", "value": 5, "shared": ["政治上", "经济上", "牙帝国", "卡拉维尔帆船", "宗教上"]}, {"source": "野心与合作.md", "target": "科技与政治矛盾.md", "value": 3, "shared": ["行动建议", "切入点", "方面取得"]}, {"source": "野心与合作.md", "target": "伟人史观.md", "value": 2, "shared": ["行动建议", "切入点"]}, {"source": "葡萄牙帝国崛起.md", "target": "大航海时代.md", "value": 8, "shared": ["卡拉维尔帆船", "政治上", "帝国崛", "宗教上", "经济上"]}, {"source": "葡萄牙帝国崛起.md", "target": "认知框架.md", "value": 8, "shared": ["卡拉维尔帆船", "政治上", "帝国崛", "宗教上", "经济上"]}, {"source": "英语民族形成.md", "target": "议会制度.md", "value": 2, "shared": ["英语民族", "丘吉尔"]}, {"source": "英语民族形成.md", "target": "语言认同.md", "value": 2, "shared": ["英语民族", "丘吉尔"]}, {"source": "全球化.md", "target": "欧洲殖民.md", "value": 4, "shared": ["入侵者", "印度洋", "阿拉伯", "葡萄牙"]}, {"source": "全球化.md", "target": "全球化早期进程.md", "value": 4, "shared": ["入侵者", "印度洋", "阿拉伯", "葡萄牙"]}, {"source": "全球化.md", "target": "殖民主义双重遗产.md", "value": 4, "shared": ["入侵者", "印度洋", "阿拉伯", "葡萄牙"]}, {"source": "欧洲殖民.md", "target": "全球化早期进程.md", "value": 4, "shared": ["入侵者", "印度洋", "阿拉伯", "葡萄牙"]}, {"source": "欧洲殖民.md", "target": "殖民主义双重遗产.md", "value": 4, "shared": ["入侵者", "印度洋", "阿拉伯", "葡萄牙"]}, {"source": "全球化早期进程.md", "target": "殖民主义双重遗产.md", "value": 4, "shared": ["入侵者", "印度洋", "阿拉伯", "葡萄牙"]}, {"source": "大航海时代.md", "target": "认知框架.md", "value": 8, "shared": ["卡拉维尔帆船", "政治上", "帝国崛", "宗教上", "经济上"]}, {"source": "科技与政治矛盾.md", "target": "伟人史观.md", "value": 2, "shared": ["行动建议", "切入点"]}, {"source": "议会制度.md", "target": "语言认同.md", "value": 2, "shared": ["英语民族", "丘吉尔"]}, {"source": "价值观悖论.md", "target": "英帝国兴衰.md", "value": 2, "shared": ["价值观", "大英帝国"]}];
+var CLUSTER_COLORS = {"世界史": "#06b6d4"};
+var SEARCH_DATA = [{"id": "海洋体系.md", "label": "海洋体系"}, {"id": "季风系统.md", "label": "季风系统"}, {"id": "欧洲殖民入侵.md", "label": "欧洲殖民入侵"}, {"id": "探索与牺牲.md", "label": "探索与牺牲"}, {"id": "地理决定论.md", "label": "地理决定论"}, {"id": "历史分期.md", "label": "历史分期"}, {"id": "季风海域.md", "label": "季风海域"}, {"id": "若昂二世.md", "label": "若昂二世"}, {"id": "印度计划.md", "label": "印度计划"}, {"id": "大宪章.md", "label": "大宪章"}, {"id": "国家战略.md", "label": "国家战略"}, {"id": "海商复合体.md", "label": "海商复合体"}, {"id": "殖民主义遗产.md", "label": "殖民主义遗产"}, {"id": "欧洲中心论.md", "label": "欧洲中心论"}, {"id": "历史催化剂.md", "label": "历史催化剂"}, {"id": "印度洋贸易.md", "label": "印度洋贸易"}, {"id": "叙事史学.md", "label": "叙事史学"}, {"id": "王权博弈.md", "label": "王权博弈"}, {"id": "印度洋贸易圈.md", "label": "印度洋贸易圈"}, {"id": "海洋史.md", "label": "海洋史"}, {"id": "葡萄牙帝国.md", "label": "葡萄牙帝国"}, {"id": "野心与合作.md", "label": "野心与合作"}, {"id": "葡萄牙帝国崛起.md", "label": "葡萄牙帝国崛起"}, {"id": "英语民族形成.md", "label": "英语民族形成"}, {"id": "全球化.md", "label": "全球化"}, {"id": "欧洲殖民.md", "label": "欧洲殖民"}, {"id": "全球化早期进程.md", "label": "全球化早期进程"}, {"id": "大航海时代.md", "label": "大航海时代"}, {"id": "认知框架.md", "label": "认知框架"}, {"id": "殖民主义双重遗产.md", "label": "殖民主义双重遗产"}, {"id": "科技与政治矛盾.md", "label": "科技与政治矛盾"}, {"id": "议会制度.md", "label": "议会制度"}, {"id": "价值观悖论.md", "label": "价值观悖论"}, {"id": "语言认同.md", "label": "语言认同"}, {"id": "伟人史观.md", "label": "伟人史观"}, {"id": "英帝国兴衰.md", "label": "英帝国兴衰"}];
+var CONCEPT_SEARCH = [];
+
+
+/* ---- 搜索 ---- */
+var searchBox = document.getElementById("search-box");
+var searchResults = document.getElementById("search-results");
+
+searchBox.addEventListener("input", function(){
+  var q = this.value.trim().toLowerCase();
+  if(!q) { searchResults.style.display="none"; return; }
+  var combined = SEARCH_DATA.concat(CONCEPT_SEARCH.map(function(c){ return {id:c,label:c,type:"concept"}; }));
+  var matches = combined.filter(function(d){ return d.label.toLowerCase().indexOf(q)>-1; }).slice(0,12);
+  if(!matches.length) { searchResults.style.display="none"; return; }
+  searchResults.innerHTML = matches.map(function(d){
+    return '<div class="sri" data-id="'+d.id+'">'+d.label+'</div>';
+  }).join("");
+  searchResults.style.display="block";
+});
+
+searchResults.addEventListener("click", function(e){
+  var el = e.target.closest(".sri");
+  if(!el) return;
+  highlightNode(el.getAttribute("data-id"));
+  searchResults.style.display="none";
+  searchBox.value="";
+});
+
+function highlightNode(id){
+  svg.selectAll(".node").classed("highlight", function(d){ return d.id===id; });
+  svg.selectAll(".link").classed("highlight", function(d){
+    return d.source.id===id || d.target.id===id;
+  });
+  var nd = nodeMap.get(id);
+  if(!nd) return;
+  var t = d3.zoomTransform(svg.node());
+  var x = -nd.x*t.k + width/2;
+  var y = -nd.y*t.k + height/2;
+  svg.transition().duration(600).call(zoom.transform, d3.zoomIdentity.translate(x,y).scale(t.k));
+}
+
+/* ---- 详情面板 ---- */
+function showDetail(d){
+  var panel = document.getElementById("detail-panel");
+  var title = document.getElementById("detail-title");
+  var body  = document.getElementById("detail-body");
+
+  title.textContent = (d.title || d.label || d.id || "").replace(/\.md$/, "");
+
+  var html = "";
+
+  /* 元信息 */
+  html += '<div class="section"><div class="meta-row"><span class="meta-label">类型</span><span>' + (d.type==="concept" ? "💡 概念" : "📖 笔记") + '</span></div>';
+  if(d.domain)   html += '<div class="meta-row"><span class="meta-label">领域</span><span>' + d.domain + '</span></div>';
+  if(d.cluster) html += '<div class="meta-row"><span class="meta-label">聚类</span><span>' + d.cluster + '</span></div>';
+  if(d.degree !== undefined) html += '<div class="meta-row"><span class="meta-label">连通度</span><span>' + d.degree + '</span></div>';
+  html += '</div>';
+
+  /* 摘要 */
+  if(d.summary){
+    html += '<div class="section"><div class="section-title">📝 摘要</div><div class="summary">' + escapeHtml(d.summary.slice(0,500)) + (d.summary.length>500 ? "..." : "") + '</div></div>';
+  }
+
+  /* 关键词 */
+  if(d.keywords && d.keywords.length){
+    html += '<div class="section"><div class="section-title">🔑 关键词</div>';
+    d.keywords.forEach(function(kw){ html += '<span class="keyword">' + escapeHtml(kw) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 标签 */
+  if(d.tags && d.tags.length){
+    html += '<div class="section"><div class="section-title">🏷️ 标签</div>';
+    d.tags.forEach(function(tg){ html += '<span class="tag">' + escapeHtml(tg) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 打开原文件：用 Obsidian URI 协议，避免浏览器 file:// 限制 */
+  if(d.path){
+    var obsidianUrl = "obsidian://open?path=" + encodeURIComponent(d.path);
+    html += '<div class="section"><a class="open-link" href="' + obsidianUrl + '">📂 在 Obsidian 中打开</a></div>';
+  }
+
+  body.innerHTML = html;
+  panel.classList.add("open");
+}
+
+function closeDetail(){
+  document.getElementById("detail-panel").classList.remove("open");
+}
+
+function escapeHtml(s){
+  if(!s) return "";
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ---- D3 力导向图 ---- */
+var width  = window.innerWidth;
+var height = window.innerHeight - 48;
+var svg = d3.select("#graph").append("svg").attr("width",width).attr("height",height);
+var g = svg.append("g");
+var zoom = d3.zoom().scaleExtent([0.05,5]).on("zoom", function(e){ g.attr("transform", e.transform); });
+svg.call(zoom);
+
+var simulation = d3.forceSimulation(NODES)
+  .force("link",    d3.forceLink(LINKS).id(function(d){ return d.id; }).distance(90))
+  .force("charge",  d3.forceManyBody().strength(-220))
+  .force("center",  d3.forceCenter(width/2, height/2))
+  .force("collision", d3.forceCollide(30))
+  .force("x",       d3.forceX(width/2).strength(0.06))
+  .force("y",       d3.forceY(height/2).strength(0.06));
+
+var link = g.append("g").attr("class","links").selectAll("line")
+  .data(LINKS).join("line")
+  .attr("class", function(d){ return "link" + ((d.type==="book-book") ? " link-book" : ""); });
+
+var node = g.append("g").attr("class","nodes").selectAll("g")
+  .data(NODES).join("g")
+  .attr("class","node")
+  .attr("data-id", function(d){ return d.id; })
+  .call(d3.drag()
+    .on("start", function(event,d){ if(!event.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+    .on("drag",  function(event,d){ d.fx=event.x; d.fy=event.y; })
+    .on("end",   function(event,d){ if(!event.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+node.append("circle")
+  .attr("r", function(d){ return d.type==="book" ? 5+Math.sqrt(d.degree||1)*1.5 : 7; })
+  .attr("fill", function(d){ return d.type==="book" ? (CLUSTER_COLORS[d.cluster]||"#94a3b8") : "#06b6d4"; })
+  .attr("stroke", function(d){ return d.type==="book" ? "#0f172a" : "#d97706"; })
+  .on("mouseover", function(event,d){
+    var html = d.type==="book"
+      ? "<strong>📖 "+d.label+"</strong><br>连通度:"+d.degree+"<br>聚类:"+(d.cluster||"未分类")
+      : "<strong>💡 "+d.concept+"</strong><br>关联:"+d.book_count+" 篇";
+    d3.select("#tooltip").html(html).style("opacity",1)
+      .style("left",(event.pageX+12)+"px").style("top",(event.pageY-8)+"px");
+  })
+  .on("mouseout", function(){ d3.select("#tooltip").style("opacity",0); })
+  .on("click", function(event,d){
+    event.stopPropagation();
+    showDetail(d);
+  });
+
+node.append("text").attr("dx",11).attr("dy","0.35em").text(function(d){ return d.label; });
+
+var nodeMap = new Map();
+simulation.on("tick", function(){
+  link
+    .attr("x1", function(d){ return d.source.x; })
+    .attr("y1", function(d){ return d.source.y; })
+    .attr("x2", function(d){ return d.target.x; })
+    .attr("y2", function(d){ return d.target.y; });
+  node.attr("transform", function(d){
+    nodeMap.set(d.id, d);
+    return "translate("+d.x+","+d.y+")";
+  });
+});
+
+/* ---- 图例 ---- */
+var legendItems = d3.select("#legend").append("div").style("font-weight","bold").style("margin-bottom","8px").text("🎨 聚类").node().parentNode;
+Object.entries(CLUSTER_COLORS).forEach(function(entry){
+  var li = d3.select(legendItems).append("div").attr("class","li");
+  li.append("span").attr("class","ld").style("background",entry[1]);
+  li.append("span").text(entry[0]);
+});
+
+/* ---- 按钮 ---- */
+var conceptVisible = true;
+d3.select("#btn-toggle-concept").on("click", function(){
+  conceptVisible = !conceptVisible;
+  svg.selectAll(".node").filter(function(d){ return d.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  svg.selectAll(".link").filter(function(d){ return d.source.type==="concept"||d.target.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  d3.select(this).text(conceptVisible?"隐藏概念":"显示概念").classed("active",!conceptVisible);
+});
+d3.select("#btn-reset").on("click", function(){
+  closeDetail();
+  svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+});
+
+svg.on("click", function(){ searchResults.style.display="none"; });
+document.addEventListener("click", function(e){
+  if(!document.getElementById("detail-panel").contains(e.target) && !e.target.closest(".node")){
+    closeDetail();
+  }
+});
+
+/* 更新统计 */
+d3.select("#node-count").text(NODES.length);
+d3.select("#link-count").text(LINKS.length);
+</script>
+</body>
+</html>

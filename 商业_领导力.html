@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>商业 - 领导力 - 知识图谱</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#0f172a; color:#e2e8f0; overflow:hidden; }
+
+/* 侧边栏 */
+#sidebar { position:fixed; left:0; top:0; width:220px; height:100vh; background:#1e293b; border-right:1px solid #334155; overflow-y:auto; z-index:50; transition:transform 0.3s; font-size:12px; }
+#sidebar.collapsed { transform:translateX(-220px); }
+#sidebar h2 { font-size:13px; padding:12px 14px 8px; color:#94a3b8; border-bottom:1px solid #334155; }
+#sidebar .domain-header { padding:7px 14px; cursor:pointer; font-weight:600; border-bottom:1px solid #1a2332; transition:background 0.15s; user-select:none; }
+#sidebar .domain-header:hover { background:#334155; }
+#sidebar .domain-pages { display:none; }
+#sidebar .domain-pages a { display:block; padding:5px 14px 5px 24px; color:#cbd5e1; text-decoration:none; border-bottom:1px solid #1a2332; transition:background 0.15s; font-size:11px; }
+#sidebar .domain-pages a:hover { background:#334155; color:#fff; }
+#sidebar .domain-pages a.active { font-weight:600; }
+#sidebar a.active { background:#10b981; color:#0f172a; }
+#sidebar-toggle { position:fixed; left:8px; top:56px; z-index:60; background:#334155; border:1px solid #475569; color:#e2e8f0; border-radius:6px; padding:4px 7px; cursor:pointer; font-size:13px; transition:left 0.3s; }
+#sidebar:not(.collapsed) ~ #sidebar-toggle { left:228px; }
+
+/* 右侧详情面板 */
+#detail-panel { position:fixed; top:0; right:-420px; width:400px; height:100vh; background:#1e293b; border-left:1px solid #334155; z-index:55; transition:right 0.3s; display:flex; flex-direction:column; }
+#detail-panel.open { right:0; }
+#detail-header { padding:14px 16px; border-bottom:1px solid #334155; display:flex; align-items:flex-start; gap:10px; }
+#detail-header h2 { flex:1; font-size:14px; line-height:1.4; margin:0; word-break:break-all; }
+#detail-close { background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer; padding:0 4px; line-height:1; }
+#detail-close:hover { color:#fff; }
+#detail-body { flex:1; overflow-y:auto; padding:16px; font-size:13px; line-height:1.7; }
+#detail-body .section { margin-bottom:16px; }
+#detail-body .section-title { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+#detail-body .tag { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#334155; border-radius:4px; font-size:11px; color:#cbd5e1; }
+#detail-body .keyword { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#10b98122; border:1px solid #10b98166; border-radius:4px; font-size:11px; color:#e2e8f0; }
+#detail-body .summary { color:#cbd5e1; white-space:pre-wrap; }
+#detail-body .open-link { display:inline-block; margin-top:12px; padding:6px 14px; background:#10b981; color:#0f172a; border-radius:6px; text-decoration:none; font-size:12px; font-weight:600; }
+#detail-body .open-link:hover { opacity:0.85; }
+#detail-body .meta-row { display:flex; gap:12px; margin-bottom:8px; font-size:12px; }
+#detail-body .meta-label { color:#94a3b8; min-width:60px; }
+#detail-body .connected-list { list-style:none; padding:0; }
+#detail-body .connected-list li { padding:4px 0; border-bottom:1px solid #1a2332; font-size:12px; cursor:pointer; }
+#detail-body .connected-list li:hover { color:#10b981; }
+
+#header { padding:10px 20px 10px 50px; background:#1e293b; border-bottom:1px solid #334155; display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-left:200px; transition:margin-left 0.3s; }
+#sidebar.collapsed ~ #header { margin-left:0; }
+#header h1 { margin:0; font-size:17px; color:#10b981; white-space:nowrap; }
+#search-wrap { position:relative; }
+#search-box { width:220px; padding:5px 10px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#e2e8f0; font-size:13px; }
+#search-results { position:absolute; top:32px; left:0; width:260px; max-height:300px; overflow-y:auto; background:#1e293b; border:1px solid #475569; border-radius:6px; display:none; z-index:100; }
+.sri { padding:7px 10px; cursor:pointer; font-size:12px; border-bottom:1px solid #334155; }
+.sri:hover { background:#334155; }
+.stats { font-size:12px; color:#94a3b8; white-space:nowrap; }
+.ctrls { display:flex; gap:6px; margin-left:auto; }
+.btn { padding:5px 12px; border-radius:6px; border:1px solid #475569; background:#334155; color:#e2e8f0; cursor:pointer; font-size:12px; }
+.btn:hover { background:#475569; }
+.btn.active { background:#10b981; color:#0f172a; border-color:#10b981; }
+#legend { position:absolute; top:52px; left:220px; background:#1e293b; border:1px solid #475569; border-radius:8px; padding:10px 14px; font-size:12px; z-index:10; }
+.li { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+.ld { width:10px; height:10px; border-radius:50%; }
+#tooltip { position:absolute; padding:8px 12px; background:#1e293b; border:1px solid #475569; border-radius:8px; font-size:12px; pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:100; box-shadow:0 4px 20px rgba(0,0,0,0.5); max-width:320px; }
+#graph { width:calc(100vw - 200px); height:calc(100vh - 48px); margin-left:200px; transition:width 0.3s, margin-left 0.3s; }
+#sidebar.collapsed ~ #graph { margin-left:0; width:100vw; }
+#detail-panel.open ~ #graph { width:calc(100vw - 200px - 400px); }
+.link { stroke:#475569; stroke-opacity:0.3; }
+.link-book { stroke-opacity:0.12; }
+.node circle { cursor:pointer; stroke-width:1.5; }
+.node text { fill:#e2e8f0; font-size:10px; pointer-events:none; }
+.highlight circle { stroke:#fff !important; stroke-width:2.5px; }
+.highlight text { fill:#fff; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>📚 藏书阁 · 知识图谱</h2>
+  <div class="domain-header" data-target="IT" style="color:#67e8f9; border-left:3px solid #67e8f9;">IT ▾</div>
+  <div class="domain-pages" id="IT">
+    <a href="IT.json" style="border-left:3px solid #67e8f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(225篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="个人成长" style="color:#fb923c; border-left:3px solid #fb923c;">个人成长 ▾</div>
+  <div class="domain-pages" id="个人成长">
+    <a href="个人成长.json" style="border-left:3px solid #fb923c; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(461篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="产品" style="color:#a855f7; border-left:3px solid #a855f7;">产品 ▾</div>
+  <div class="domain-pages" id="产品">
+    <a href="产品_(其他).json" style="border-left:3px solid #a855f7; padding-left:18px;">(其他) <span style="font-size:10px;color:#64748b;">(553篇)</span></a>
+    <a href="产品_产品思维.json" style="border-left:3px solid #a855f7; padding-left:18px;">产品思维 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="产品_小程序生态.json" style="border-left:3px solid #a855f7; padding-left:18px;">小程序生态 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="产品_用户增长.json" style="border-left:3px solid #a855f7; padding-left:18px;">用户增长 <span style="font-size:10px;color:#64748b;">(49篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="会计" style="color:#86efac; border-left:3px solid #86efac;">会计 ▾</div>
+  <div class="domain-pages" id="会计">
+    <a href="会计.json" style="border-left:3px solid #86efac; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(67篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="健康" style="color:#34d399; border-left:3px solid #34d399;">健康 ▾</div>
+  <div class="domain-pages" id="健康">
+    <a href="健康.json" style="border-left:3px solid #34d399; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(284篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="写作" style="color:#c084fc; border-left:3px solid #c084fc;">写作 ▾</div>
+  <div class="domain-pages" id="写作">
+    <a href="写作.json" style="border-left:3px solid #c084fc; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(238篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="历史" style="color:#06b6d4; border-left:3px solid #06b6d4;">历史 ▾</div>
+  <div class="domain-pages" id="历史">
+    <a href="历史_(其他)_part1.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part2.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part3.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part4.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part5.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(541篇)</span></a>
+    <a href="历史_世界史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">世界史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="历史_中国历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国历史 <span style="font-size:10px;color:#64748b;">(96篇)</span></a>
+    <a href="历史_中国古代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国古代文学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="历史_中国现代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国现代文学 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="历史_中国近代史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国近代史 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="历史_人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">人物传记 <span style="font-size:10px;color:#64748b;">(143篇)</span></a>
+    <a href="历史_军事历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">军事历史 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="历史_历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史 <span style="font-size:10px;color:#64748b;">(538篇)</span></a>
+    <a href="历史_历史与政治.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史与政治 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史人物传记 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="历史_历史学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史学 <span style="font-size:10px;color:#64748b;">(189篇)</span></a>
+    <a href="历史_历史小说.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史小说 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史研究.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史研究 <span style="font-size:10px;color:#64748b;">(162篇)</span></a>
+    <a href="历史_思想史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">思想史 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="历史_文学与历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">文学与历史 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="历史_科技史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">科技史 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="历史_艺术史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">艺术史 <span style="font-size:10px;color:#64748b;">(83篇)</span></a>
+    <a href="历史_西方哲学史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">西方哲学史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="哲学" style="color:#14b8a6; border-left:3px solid #14b8a6;">哲学 ▾</div>
+  <div class="domain-pages" id="哲学">
+    <a href="哲学_(其他)_part1.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="哲学_(其他)_part2.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(272篇)</span></a>
+    <a href="哲学_中国哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">中国哲学 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="哲学_人生哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">人生哲学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="哲学_哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">哲学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+    <a href="哲学_政治哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">政治哲学 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="哲学_生活哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">生活哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+    <a href="哲学_社会哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">社会哲学 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="哲学_科学哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">科学哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="商业" style="color:#10b981; border-left:3px solid #10b981;">商业 ▾</div>
+  <div class="domain-pages" id="商业">
+    <a href="商业_(其他)_part1.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（1/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part2.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（2/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part3.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（3/3） <span style="font-size:10px;color:#64748b;">(391篇)</span></a>
+    <a href="商业_企业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">企业管理 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="商业_健康管理.json" style="border-left:3px solid #10b981; padding-left:18px;">健康管理 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="商业_创业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">创业管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业战略.json" style="border-left:3px solid #10b981; padding-left:18px;">商业战略 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">商业管理 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="商业_投资理财.json" style="border-left:3px solid #10b981; padding-left:18px;">投资理财 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_知识管理.json" style="border-left:3px solid #10b981; padding-left:18px;">知识管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_管理.json" style="border-left:3px solid #10b981; padding-left:18px;">管理 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_组织管理.json" style="border-left:3px solid #10b981; padding-left:18px;">组织管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_经济学.json" style="border-left:3px solid #10b981; padding-left:18px;">经济学 <span style="font-size:10px;color:#64748b;">(74篇)</span></a>
+    <a href="商业_金融投资.json" style="border-left:3px solid #10b981; padding-left:18px;">金融投资 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="商业_领导力.json" class="active" style="border-left:3px solid #10b981; padding-left:18px;">领导力 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="图书馆学" style="color:#5eead4; border-left:3px solid #5eead4;">图书馆学 ▾</div>
+  <div class="domain-pages" id="图书馆学">
+    <a href="图书馆学.json" style="border-left:3px solid #5eead4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(23篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="宗教" style="color:#c4b5fd; border-left:3px solid #c4b5fd;">宗教 ▾</div>
+  <div class="domain-pages" id="宗教">
+    <a href="宗教.json" style="border-left:3px solid #c4b5fd; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(19篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="心理学" style="color:#f59e0b; border-left:3px solid #f59e0b;">心理学 ▾</div>
+  <div class="domain-pages" id="心理学">
+    <a href="心理学_(其他)_part1.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（1/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part2.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（2/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part3.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（3/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part4.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（4/4） <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="心理学_个人成长与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">个人成长与心理学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理健康.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理健康 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理学 <span style="font-size:10px;color:#64748b;">(239篇)</span></a>
+    <a href="心理学_教育心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">教育心理学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="心理学_文学与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">文学与心理学 <span style="font-size:10px;color:#64748b;">(119篇)</span></a>
+    <a href="心理学_沟通技巧.json" style="border-left:3px solid #f59e0b; padding-left:18px;">沟通技巧 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="心理学_社会心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">社会心理学 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+    <a href="心理学_认知心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知心理学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="心理学_认知科学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知科学 <span style="font-size:10px;color:#64748b;">(39篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="房地产" style="color:#6ee7b7; border-left:3px solid #6ee7b7;">房地产 ▾</div>
+  <div class="domain-pages" id="房地产">
+    <a href="房地产.json" style="border-left:3px solid #6ee7b7; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(12篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="政治" style="color:#fbbf24; border-left:3px solid #fbbf24;">政治 ▾</div>
+  <div class="domain-pages" id="政治">
+    <a href="政治.json" style="border-left:3px solid #fbbf24; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(253篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="教育" style="color:#ec4899; border-left:3px solid #ec4899;">教育 ▾</div>
+  <div class="domain-pages" id="教育">
+    <a href="教育_(其他)_part1.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="教育_(其他)_part2.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(382篇)</span></a>
+    <a href="教育_个人成长.json" style="border-left:3px solid #ec4899; padding-left:18px;">个人成长 <span style="font-size:10px;color:#64748b;">(250篇)</span></a>
+    <a href="教育_儿童教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">儿童教育 <span style="font-size:10px;color:#64748b;">(62篇)</span></a>
+    <a href="教育_家庭教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">家庭教育 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="教育_教育理念.json" style="border-left:3px solid #ec4899; padding-left:18px;">教育理念 <span style="font-size:10px;color:#64748b;">(68篇)</span></a>
+    <a href="教育_财商教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">财商教育 <span style="font-size:10px;color:#64748b;">(48篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="文学" style="color:#8b5cf6; border-left:3px solid #8b5cf6;">文学 ▾</div>
+  <div class="domain-pages" id="文学">
+    <a href="文学_(其他)_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_中国古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">中国古典文学 <span style="font-size:10px;color:#64748b;">(112篇)</span></a>
+    <a href="文学_儿童文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">儿童文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">古典文学 <span style="font-size:10px;color:#64748b;">(92篇)</span></a>
+    <a href="文学_奇幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">奇幻文学 <span style="font-size:10px;color:#64748b;">(51篇)</span></a>
+    <a href="文学_女性主义文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">女性主义文学 <span style="font-size:10px;color:#64748b;">(38篇)</span></a>
+    <a href="文学_悬疑小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">悬疑小说分析 <span style="font-size:10px;color:#64748b;">(52篇)</span></a>
+    <a href="文学_推理小说.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="文学_推理小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说分析 <span style="font-size:10px;color:#64748b;">(126篇)</span></a>
+    <a href="文学_推理文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理文学 <span style="font-size:10px;color:#64748b;">(35篇)</span></a>
+    <a href="文学_文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学 <span style="font-size:10px;color:#64748b;">(223篇)</span></a>
+    <a href="文学_文学与个人成长.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与个人成长 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="文学_文学与人生哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与人生哲学 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="文学_文学与哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与哲学 <span style="font-size:10px;color:#64748b;">(303篇)</span></a>
+    <a href="文学_文学与社会学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与社会学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="文学_文学分析_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（1/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（2/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（3/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（4/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（5/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part6.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（6/6） <span style="font-size:10px;color:#64748b;">(254篇)</span></a>
+    <a href="文学_文学批评.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学批评 <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="文学_文学理论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学理论 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_文学研究.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学研究 <span style="font-size:10px;color:#64748b;">(84篇)</span></a>
+    <a href="文学_文学经典.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学经典 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="文学_文学解读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学解读 <span style="font-size:10px;color:#64748b;">(40篇)</span></a>
+    <a href="文学_文学评论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学评论 <span style="font-size:10px;color:#64748b;">(482篇)</span></a>
+    <a href="文学_文学赏析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学赏析 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="文学_文学鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学鉴赏 <span style="font-size:10px;color:#64748b;">(82篇)</span></a>
+    <a href="文学_文学阅读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学阅读 <span style="font-size:10px;color:#64748b;">(78篇)</span></a>
+    <a href="文学_旅行文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">旅行文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_日本文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">日本文学 <span style="font-size:10px;color:#64748b;">(98篇)</span></a>
+    <a href="文学_武侠文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">武侠文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_科幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学 <span style="font-size:10px;color:#64748b;">(175篇)</span></a>
+    <a href="文学_科幻文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学分析 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="文学_网络文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">网络文学分析 <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_艺术鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">艺术鉴赏 <span style="font-size:10px;color:#64748b;">(44篇)</span></a>
+    <a href="文学_非虚构文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">非虚构文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="时尚生活" style="color:#f9a8d4; border-left:3px solid #f9a8d4;">时尚生活 ▾</div>
+  <div class="domain-pages" id="时尚生活">
+    <a href="时尚生活.json" style="border-left:3px solid #f9a8d4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(71篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="未知" style="color:#94a3b8; border-left:3px solid #94a3b8;">未知 ▾</div>
+  <div class="domain-pages" id="未知">
+    <a href="未知.json" style="border-left:3px solid #94a3b8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(16篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="法学" style="color:#fcd34d; border-left:3px solid #fcd34d;">法学 ▾</div>
+  <div class="domain-pages" id="法学">
+    <a href="法学.json" style="border-left:3px solid #fcd34d; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="社会学" style="color:#6366f1; border-left:3px solid #6366f1;">社会学 ▾</div>
+  <div class="domain-pages" id="社会学">
+    <a href="社会学_(其他)_part1.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="社会学_(其他)_part2.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(484篇)</span></a>
+    <a href="社会学_文化研究.json" style="border-left:3px solid #6366f1; padding-left:18px;">文化研究 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="社会学_社会学.json" style="border-left:3px solid #6366f1; padding-left:18px;">社会学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="科学" style="color:#f97316; border-left:3px solid #f97316;">科学 ▾</div>
+  <div class="domain-pages" id="科学">
+    <a href="科学_(其他)_part1.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="科学_(其他)_part2.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(116篇)</span></a>
+    <a href="科学_医学人文.json" style="border-left:3px solid #f97316; padding-left:18px;">医学人文 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="科学_神经科学.json" style="border-left:3px solid #f97316; padding-left:18px;">神经科学 <span style="font-size:10px;color:#64748b;">(56篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="编程" style="color:#818cf8; border-left:3px solid #818cf8;">编程 ▾</div>
+  <div class="domain-pages" id="编程">
+    <a href="编程.json" style="border-left:3px solid #818cf8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(151篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="艺术" style="color:#e879f9; border-left:3px solid #e879f9;">艺术 ▾</div>
+  <div class="domain-pages" id="艺术">
+    <a href="艺术.json" style="border-left:3px solid #e879f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(365篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="英语" style="color:#f472b6; border-left:3px solid #f472b6;">英语 ▾</div>
+  <div class="domain-pages" id="英语">
+    <a href="英语.json" style="border-left:3px solid #f472b6; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(209篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="语言文学" style="color:#d8b4fe; border-left:3px solid #d8b4fe;">语言文学 ▾</div>
+  <div class="domain-pages" id="语言文学">
+    <a href="语言文学.json" style="border-left:3px solid #d8b4fe; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="金融" style="color:#a3e635; border-left:3px solid #a3e635;">金融 ▾</div>
+  <div class="domain-pages" id="金融">
+    <a href="金融.json" style="border-left:3px solid #a3e635; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(208篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="雅思" style="color:#22d3ee; border-left:3px solid #22d3ee;">雅思 ▾</div>
+  <div class="domain-pages" id="雅思">
+    <a href="雅思.json" style="border-left:3px solid #22d3ee; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(511篇)</span></a>
+  </div>
+
+    <script>
+    document.querySelectorAll('.domain-header').forEach(function(h){
+      h.addEventListener('click', function(){
+        var t = document.getElementById(this.dataset.target);
+        t.style.display = t.style.display==='none' ? 'block' : 'none';
+        this.innerHTML = this.innerHTML.replace(/[▾▸]/, t.style.display==='none'?'▸':'▾');
+      });
+    });
+    </script>
+    
+</div>
+<button id="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">☰</button>
+
+<div id="header">
+  <h1>📚 商业 · 领导力</h1>
+  <div id="search-wrap">
+    <input id="search-box" type="text" placeholder="🔍 搜索书名/概念...">
+    <div id="search-results"></div>
+  </div>
+  <div class="stats">
+    <span id="node-count">0</span> 节点 ·
+    <span id="link-count">0</span> 连接
+  </div>
+  <div class="ctrls">
+    <button class="btn" id="btn-toggle-concept">隐藏概念</button>
+    <button class="btn" id="btn-reset">重置视图</button>
+  </div>
+</div>
+
+<div id="graph"></div>
+<div id="tooltip"></div>
+
+<!-- 右侧详情面板 -->
+<div id="detail-panel">
+  <div id="detail-header">
+    <h2 id="detail-title"></h2>
+    <button id="detail-close" onclick="closeDetail()">✕</button>
+  </div>
+  <div id="detail-body"></div>
+</div>
+
+<script>
+var NODES = [{"id": "执行力=领导力.md", "label": "执行力=领导力", "title": "执行力=领导力", "type": "book", "degree": 8, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "传统观念认为领导力是一种天赋、气质或多年经验的产物，无法传授。本书的核心论点恰恰相反：领导力并非玄学，而是一系列可标准化、可工具化、可传授的步骤和方法。像西方公司一样，我们可以将领导力拆解为“第一步、第二步、第三步”，让普通人也能学会并运用。行动步骤一：从“布置工作说五遍”开始。“布置工作说五遍” vs. 费曼学习法：两者都强调“以教代学”", "keywords": ["相关笔记", "执行力", "与教育领域的联系", "与市场营销的联系", "应用场景", "行动清单", "第一遍", "第二遍"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/1210可复制的领导力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/执行力=领导力.md"}, {"id": "核心任务.md", "label": "核心任务", "title": "核心任务", "type": "book", "degree": 2, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "作者：（德）施普伦格　著　张凌萱　译。核心主题：本书旨在回归领导力的“根源”（Radikal），通过考古学式的方法，探讨领导工作的核心任务与永恒本质，而非提供流行风格或管理技巧。核心问题是：如果领导是某个问题的答案，那么这个问题是什么。适合人群：希望摆脱管理时尚与浮于表面的领导力技巧，寻求领导工作本质与核心任务的企业中高层管理者；对组织行为学、领导力哲学感兴趣的读者。作者认为，领导者需要从对“手段”的迷恋转向对“目的”的思考，关注那些被忽略的、决定组织存续的核心任务", "keywords": ["相关笔记", "领导者"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力的五项修炼"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/核心任务.md"}, {"id": "正念领导力.md", "label": "正念领导力", "title": "正念领导力", "type": "book", "degree": 2, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：胜出：非掠夺社交智慧与共享式领导力。核心主题：通过观察和学习马这种非掠夺性、高度社会化的动物的行为模式，揭示一种超越传统权力斗争的社交智慧与领导力，引导读者发展出更具协作性、共情力和适应性的“共享式领导力”。适合人群：企业管理者、团队领导者、创业者、心理咨询师、教育工作者，以及所有希望提升人际沟通能力、领导效能和内在韧性的人。要点1：非掠夺性视角——一种全新的领导力范式。与“掠夺性”领导（强调控制、竞争、等级压迫）不同，非掠夺性领导力源自对马等非掠夺动物的观察", "keywords": ["相关笔记", "非掠夺"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/胜出：非掠夺社交智慧与共享式领导力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/正念领导力.md"}, {"id": "全方位领导.md", "label": "全方位领导", "title": "全方位领导", "type": "book", "degree": 8, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：中层领导力（共三册） Anthology。作者：（美）约翰•C.麦克斯维尔。核心主题：本书核心在于打破“只有高层才能领导”的迷思，系统性地教授处于企业任何层级（特别是中层）的人如何通过提升自身影响力，实现对上司、同事和下属的全方位领导。他引入了“五层领导力”模型（职位、认同、绩效、人才培养、人格魅力）来说明，即使处于最底层（职位层），也可以通过建立信任（认同层）、做出贡献（绩效层）和培养他人（人才培养层）来提升自己的影响力。作者总结了中层领导者常见的7个思维陷阱，这些误区是阻碍其发挥领导力的主要障碍", "keywords": ["相关笔记", "破罐子破摔误区", "经验不足误区", "目的地误区", "影响力误区", "职位误区", "自由误区", "潜力误区"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/中层领导力（共三册） Anthology"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/全方位领导.md"}, {"id": "Cynefin框架.md", "label": "Cynefin框架", "title": "Cynefin框架", "type": "book", "degree": 2, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "作者：（新西兰）珍妮弗·加维·伯格，（新西兰）基斯·约翰斯顿。核心主题：在VUCA（波动性、不确定性、复杂性、模糊性）日益加剧的世界中，领导者如何通过培养新的思维习惯，从“简化问题”转向“驾驭复杂性”，从而更有效地应对挑战、引领组织。适合人群：面临复杂管理困境的中高层管理者、团队领导者；希望提升应对不确定性和模糊性能力的职场人士；对系统性思维和领导力理论感兴趣的读者。认知闭合需求高的人倾向于快速寻求确定的答案，厌恶模糊和不确定性。深度洞察在于：真正的领导力成长，需要领导者识别并管理自己内心的“认知闭合需求”，学会与不确定性共处，而不是被焦虑驱使去寻求虚假的确定感", "keywords": ["相关笔记", "领导者"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力思维"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/Cynefin框架.md"}, {"id": "多元视角.md", "label": "多元视角", "title": "多元视角", "type": "book", "degree": 6, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：领导力思维（可复制的领导力转型关键。作者：（新西兰）珍妮弗•加维•伯格，（新西兰）基斯•约翰斯顿。核心主题：在VUCA（波动性、不确定性、复杂性、模糊性）日益加剧的时代，领导者需要从“关注最可能发生的事情”转向“关注可能发生的事情”，通过培养三种思维习惯（多角度提问、了解多元视角、用多元视角看问题），掌握倾听、反馈、同理心等工具，以更复杂、更灵活的方式应对复杂挑战，实现个人与团队的共同成长。思维习惯二：了解多元视角——主动寻找并理解与自己观点不同的利益相关者（如员工、客户、社区、媒体）的视角，而非只关注内部或熟悉的观点。思维习惯三：用多元视角看问题——将不同视角整合起来", "keywords": ["相关笔记", "做法", "核心观点", "多元视", "案例", "工具"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力思维（可复制的领导力转型关键！）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/多元视角.md"}, {"id": "游戏化组织.md", "label": "游戏化组织", "title": "游戏化组织", "type": "book", "degree": 2, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "这一层帮您抓住核心，知道这本书在说什么。核心概念：领导力不是天赋，而是一系列可复制、可学习、可标准化的工具。樊登老师直接挑战了中国人“领导力是天生的”、“是打拼出来的”传统观念。这一层帮您理解背后的逻辑，知道为什么行得通。这一层帮您落地，知道明天开始怎么做", "keywords": ["这一层帮", "层帮您"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/01什么是领导力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/游戏化组织.md"}, {"id": "可能思维.md", "label": "可能思维", "title": "可能思维", "type": "book", "degree": 6, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：领导力思维（可复制的领导力转型关键。作者：（新西兰）珍妮弗•加维•伯格，（新西兰）基斯•约翰斯顿。核心主题：在VUCA（波动性、不确定性、复杂性、模糊性）日益加剧的时代，领导者需要从“关注最可能发生的事情”转向“关注可能发生的事情”，通过培养三种思维习惯（多角度提问、了解多元视角、用多元视角看问题），掌握倾听、反馈、同理心等工具，以更复杂、更灵活的方式应对复杂挑战，实现个人与团队的共同成长。适合人群：面临复杂局面、感到压力倍增的中高层管理者；希望提升应对不确定性能力的领导者；对领导力转型和思维模式升级感兴趣的职场人士。思维习惯二：了解多元视角——主动寻找并理解与自己观点不同的利益相关者（", "keywords": ["做法", "核心观点", "思维习惯", "最可能", "案例", "工具"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力思维（可复制的领导力转型关键！）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/可能思维.md"}, {"id": "共享式领导力.md", "label": "共享式领导力", "title": "共享式领导力", "type": "book", "degree": 4, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：胜出：非掠夺社交智慧与共享式领导力。核心主题：通过观察和学习马这种非掠夺性、高度社会化的动物的行为模式，揭示一种超越传统权力斗争的社交智慧与领导力，引导读者发展出更具协作性、共情力和适应性的“共享式领导力”。适合人群：企业管理者、团队领导者、创业者、心理咨询师、教育工作者，以及所有希望提升人际沟通能力、领导效能和内在韧性的人。要点1：非掠夺性视角——一种全新的领导力范式。与“掠夺性”领导（强调控制、竞争、等级压迫）不同，非掠夺性领导力源自对马等非掠夺动物的观察", "keywords": ["非掠夺", "共享式", "享式领", "式领导"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/胜出：非掠夺社交智慧与共享式领导力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/共享式领导力.md"}, {"id": "反馈机制.md", "label": "反馈机制", "title": "反馈机制", "type": "book", "degree": 2, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "作者：（新西兰）珍妮弗·加维·伯格，（新西兰）基斯·约翰斯顿。核心主题：在VUCA（波动性、不确定性、复杂性、模糊性）日益加剧的世界中，领导者如何通过培养新的思维习惯，从“简化问题”转向“驾驭复杂性”，从而更有效地应对挑战、引领组织。适合人群：面临复杂管理困境的中高层管理者、团队领导者；希望提升应对不确定性和模糊性能力的职场人士；对系统性思维和领导力理论感兴趣的读者。书中强调领导者要“忍受模糊性”，这与心理学中的“认知闭合需求”（Need for Cognitive Closure）形成强烈对比。深度洞察在于：真正的领导力成长，需要领导者识别并管理自己内心的“认知闭合需求”，学会与不确定性共处", "keywords": ["领导者", "不确定性"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力思维"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/反馈机制.md"}, {"id": "影响策略.md", "label": "影响策略", "title": "影响策略", "type": "book", "degree": 3, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：横向领导力：不是主管，如何带人成事。核心主题：本书旨在教授没有正式职权的普通员工，如何通过培养个人技能、明确合作目标并运用“提问、作答、行动”等参与式领导方法，横向影响同事，从而改善团队合作，共同高效地完成艰巨任务。适合人群：任何在团队中感到合作低效、渴望改变但缺乏正式领导权力的成员，如项目经理、跨部门协作者、团队成员、新晋员工等。要点1：横向领导力的核心是“影响”而非“命令”。横向领导力的本质是作为团队普通一员，通过个人能力、清晰的目标和巧妙的影响策略，促使他人自愿、主动地改善行为", "keywords": ["横向领导", "向领导力", "个人技能有限"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/横向领导力：不是主管，如何带人成事？"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/影响策略.md"}, {"id": "心理安全.md", "label": "心理安全", "title": "心理安全", "type": "book", "degree": 2, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "核心概念： 本书的核心不是教你如何“处理危机”，而是教你如何 “带领团队走出困境”。它研究的不是公关危机，而是团队在极端、绝望、资源匮乏的情况下，如何生存下来并最终获胜的领导力。其本质是 “逆境领导力” 或 “绝境领导力”。心理安全是创新的土壤： 为什么“功和文化”有效。例如，“让团队成为明星”对应了“不抛弃、不放弃”的连队精神；“功和文化”对应了美军“事后复盘（AAR）”制度，鼓励士兵在行动后坦诚讨论成败；“评估风险，驶入风暴”则对应了特种部队“先敌发现、先敌打击”的进攻性思维", "keywords": ["心理安全", "团队成"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/0211危机领导力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/心理安全.md"}, {"id": "互动技能.md", "label": "互动技能", "title": "互动技能", "type": "book", "degree": 6, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：领导力的精进：新手领导如何带出一支高绩效团队。作者：[美]泰茜·白翰姆，睿奇·威林思。核心主题：本书基于DDI（智睿咨询）40余年全球实践经验，旨在帮助首次担任领导者的新手，从“优秀员工”转型为“催化剂型领导者”，通过掌握核心互动技能和领导技能，激发团队潜能，实现高绩效。要点2：催化剂型领导者的定义与特质。书中提供了“催化剂型领导者自我评估表”（工具2.1），帮助读者定位自身水平", "keywords": ["核心内容", "领导者", "具体做法", "催化剂", "化剂型", "剂型领"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力的精进：新手领导如何带出一支高绩效团队"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/互动技能.md"}, {"id": "利他慷慨.md", "label": "利他慷慨", "title": "利他慷慨", "type": "book", "degree": 4, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：Trillion Dollar Coach。核心主题：揭示传奇教练比尔·坎贝尔（Bill Campbell）如何通过“先人后事、以人为本”的教练式领导力，在硅谷打造了价值万亿美元的团队文化，并提炼出可复制的管理原则。适合人群：所有希望从“管理者”成长为“领导者”的企业高管、团队负责人、创业者，以及对领导力、团队建设和个人成长感兴趣的任何人。比尔·坎贝尔并非技术出身，而是一名橄榄球教练转型的销售，但他却成为乔布斯、谷歌创始人的核心顾问。比尔的核心工作方法是建立一种绝对安全的心理环境（即“信任信封”），让团队成员敢于坦诚沟通、暴露缺点、提出挑战", "keywords": ["教练式", "管理者", "橄榄球", "坎贝尔"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/Trillion Dollar Coach"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/利他慷慨.md"}, {"id": "系统性领导.md", "label": "系统性领导", "title": "系统性领导", "type": "book", "degree": 4, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "作者：（德）施普伦格　著　张凌萱　译。核心主题：本书旨在回归领导力的“根源”（Radikal），通过考古学式的方法，探讨领导工作的核心任务与永恒本质，而非提供流行风格或管理技巧。核心问题是：如果领导是某个问题的答案，那么这个问题是什么。适合人群：希望摆脱管理时尚与浮于表面的领导力技巧，寻求领导工作本质与核心任务的企业中高层管理者；对组织行为学、领导力哲学感兴趣的读者。要点2：领导者并非因其“领导工作”而被雇用，而是因为“成功”", "keywords": ["领导者", "领导工", "导工作", "核心任"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力的五项修炼"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/系统性领导.md"}, {"id": "反馈思维.md", "label": "反馈思维", "title": "反馈思维", "type": "book", "degree": 6, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：领导力思维（可复制的领导力转型关键。作者：（新西兰）珍妮弗•加维•伯格，（新西兰）基斯•约翰斯顿。核心主题：在VUCA（波动性、不确定性、复杂性、模糊性）日益加剧的时代，领导者需要从“关注最可能发生的事情”转向“关注可能发生的事情”，通过培养三种思维习惯（多角度提问、了解多元视角、用多元视角看问题），掌握倾听、反馈、同理心等工具，以更复杂、更灵活的方式应对复杂挑战，实现个人与团队的共同成长。适合人群：面临复杂局面、感到压力倍增的中高层管理者；希望提升应对不确定性能力的领导者；对领导力转型和思维模式升级感兴趣的职场人士。思维习惯二：了解多元视角——主动寻找并理解与自己观点不同的利益相关者（", "keywords": ["做法", "核心观点", "思维习惯", "最可能", "案例", "工具"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力思维（可复制的领导力转型关键！）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/反馈思维.md"}, {"id": "沟通视窗.md", "label": "沟通视窗", "title": "沟通视窗", "type": "book", "degree": 8, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "传统观念认为领导力是一种天赋、气质或多年经验的产物，无法传授。本书的核心论点恰恰相反：领导力并非玄学，而是一系列可标准化、可工具化、可传授的步骤和方法。像西方公司一样，我们可以将领导力拆解为“第一步、第二步、第三步”，让普通人也能学会并运用。关键论点一：执行力是伪命题，员工的执行力等于领导的领导力。西方（柏拉图、苏格拉底为代表）：重视逻辑和“三段论”，擅长将复杂事物拆解成可复制的步骤", "keywords": ["与教育领域的联系", "与市场营销的联系", "应用场景", "行动清单", "第一遍", "第二遍", "第三遍", "第四遍"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/1210可复制的领导力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/沟通视窗.md"}, {"id": "合作改善.md", "label": "合作改善", "title": "合作改善", "type": "book", "degree": 3, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：横向领导力：不是主管，如何带人成事。核心主题：本书旨在教授没有正式职权的普通员工，如何通过培养个人技能、明确合作目标并运用“提问、作答、行动”等参与式领导方法，横向影响同事，从而改善团队合作，共同高效地完成艰巨任务。适合人群：任何在团队中感到合作低效、渴望改变但缺乏正式领导权力的成员，如项目经理、跨部门协作者、团队成员、新晋员工等。要点1：横向领导力的核心是“影响”而非“命令”。横向领导力的本质是作为团队普通一员，通过个人能力、清晰的目标和巧妙的影响策略，促使他人自愿、主动地改善行为", "keywords": ["横向领导", "向领导力", "个人技能有限"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/横向领导力：不是主管，如何带人成事？"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/合作改善.md"}, {"id": "中层领导误区.md", "label": "中层领导误区", "title": "中层领导误区", "type": "book", "degree": 8, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：中层领导力（共三册） Anthology。作者：（美）约翰•C.麦克斯维尔。核心主题：本书核心在于打破“只有高层才能领导”的迷思，系统性地教授处于企业任何层级（特别是中层）的人如何通过提升自身影响力，实现对上司、同事和下属的全方位领导。他引入了“五层领导力”模型（职位、认同、绩效、人才培养、人格魅力）来说明，即使处于最底层（职位层），也可以通过建立信任（认同层）、做出贡献（绩效层）和培养他人（人才培养层）来提升自己的影响力。作者总结了中层领导者常见的7个思维陷阱，这些误区是阻碍其发挥领导力的主要障碍", "keywords": ["层领导力", "破罐子破摔误区", "经验不足误区", "目的地误区", "影响力误区", "职位误区", "自由误区", "潜力误区"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/中层领导力（共三册） Anthology"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/中层领导误区.md"}, {"id": "关键时刻的抉择.md", "label": "关键时刻的抉择", "title": "关键时刻的抉择", "type": "book", "degree": 7, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：亚历克斯·弗格森：我的自传 (弗格森亲笔自传，官方授权中文简体版。核心主题：本书是弗格森爵士以退休为节点，回顾自己辉煌的执教生涯，特别是执掌曼联27年的心路历程。核心主题在于揭示一位传奇教练如何通过构建信任、坚持原则、掌控细节和打造团队文化，将一家俱乐部从低谷带上世界之巅，并最终体面地完成权力交接。弗格森强调，他与球员和团队之间的纽带基于“信任和忠诚”。弗格森深知，打造“一家俱乐部”而非“一支球队”需要时间，而高层的远见和耐心是他成功的关键", "keywords": ["弗格森", "建立信任档案", "变革型领导", "组织韧性", "俱乐部", "亚历克", "历克斯"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/亚历克斯·弗格森：我的自传 (弗格森亲笔自传，官方授权中文简体版！)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/关键时刻的抉择.md"}, {"id": "参与式领导.md", "label": "参与式领导", "title": "参与式领导", "type": "book", "degree": 3, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：横向领导力：不是主管，如何带人成事。核心主题：本书旨在教授没有正式职权的普通员工，如何通过培养个人技能、明确合作目标并运用“提问、作答、行动”等参与式领导方法，横向影响同事，从而改善团队合作，共同高效地完成艰巨任务。适合人群：任何在团队中感到合作低效、渴望改变但缺乏正式领导权力的成员，如项目经理、跨部门协作者、团队成员、新晋员工等。要点1：横向领导力的核心是“影响”而非“命令”。横向领导力的本质是作为团队普通一员，通过个人能力、清晰的目标和巧妙的影响策略，促使他人自愿、主动地改善行为", "keywords": ["横向领导", "向领导力", "个人技能有限"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/横向领导力：不是主管，如何带人成事？"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/参与式领导.md"}, {"id": "系统化思维.md", "label": "系统化思维", "title": "系统化思维", "type": "book", "degree": 8, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "核心概念： 本书的核心是探讨 “领导力” 的本质，并指出营造氛围是领导者区别于管理者和执行者的关键能力。氛围不是虚无缥缈的感觉，而是一种可以被设计、被营造的“场域”，它能激发团队成员的归属感、使命感和创造力。三种角色区分： 组织中每个人都在扮演三种角色：执行者（负责拿到结果）、管理者（负责通过别人完成工作）、领导者（负责营造氛围，提升士气）。领导力的核心是“氛围”： 一个成功的领导者，最重要的是能够创造一个让员工愿意主动付出、感到被尊重、有安全感的氛围。系统化思维： 营造氛围不是一时兴起的团建，而是一套包含制度、仪式、沟通、反馈在内的系统", "keywords": ["领导者", "营造氛围", "营造氛围", "执行者", "管理者", "领导者", "安全感", "让员工"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/05如何营造氛围"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/系统化思维.md"}, {"id": "倾听与反馈.md", "label": "倾听与反馈", "title": "倾听与反馈", "type": "book", "degree": 6, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：领导力思维（可复制的领导力转型关键。作者：（新西兰）珍妮弗•加维•伯格，（新西兰）基斯•约翰斯顿。核心主题：在VUCA（波动性、不确定性、复杂性、模糊性）日益加剧的时代，领导者需要从“关注最可能发生的事情”转向“关注可能发生的事情”，通过培养三种思维习惯（多角度提问、了解多元视角、用多元视角看问题），掌握倾听、反馈、同理心等工具，以更复杂、更灵活的方式应对复杂挑战，实现个人与团队的共同成长。适合人群：面临复杂局面、感到压力倍增的中高层管理者；希望提升应对不确定性能力的领导者；对领导力转型和思维模式升级感兴趣的职场人士。思维习惯二：了解多元视角——主动寻找并理解与自己观点不同的利益相关者（", "keywords": ["做法", "核心观点", "思维习惯", "最可能", "案例", "工具"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力思维（可复制的领导力转型关键！）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/倾听与反馈.md"}, {"id": "激发善意.md", "label": "激发善意", "title": "激发善意", "type": "book", "degree": 4, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：可复制的领导力：樊登的9堂商业课。核心主题：领导力并非天赋或艺术，而是一套可以通过标准化工具和刻意练习习得的能力。本书旨在打破“领导力只能靠悟”的传统观念，提供具体、可操作的管理方法，帮助管理者通过激发员工善意、建立游戏化组织等方式，实现高效团队管理。书中反驳了东方传统中“领导力靠悟”的观念（如孔子“因材施教”式的点化），引入西方逻辑思维（如柏拉图“无毛两脚动物”式的定义、六西格玛流程）。樊登通过自己创办“樊登读书会”的成功经历证明，运用标准化的领导力工具（如目标管理、沟通视窗），即使不亲力亲为（他两个月才去一次公司），团队也能高速成长", "keywords": ["标准化", "管理者", "可复制", "制的领"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/可复制的领导力：樊登的9堂商业课"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/激发善意.md"}, {"id": "角色转换.md", "label": "角色转换", "title": "角色转换", "type": "book", "degree": 6, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：领导力的精进：新手领导如何带出一支高绩效团队。作者：[美]泰茜·白翰姆，睿奇·威林思。核心主题：本书基于DDI（智睿咨询）40余年全球实践经验，旨在帮助首次担任领导者的新手，从“优秀员工”转型为“催化剂型领导者”，通过掌握核心互动技能和领导技能，激发团队潜能，实现高绩效。要点2：催化剂型领导者的定义与特质。书中提供了“催化剂型领导者自我评估表”（工具2.1），帮助读者定位自身水平", "keywords": ["核心内容", "领导者", "具体做法", "催化剂", "化剂型", "剂型领"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力的精进：新手领导如何带出一支高绩效团队"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/角色转换.md"}, {"id": "教练式领导力.md", "label": "教练式领导力", "title": "教练式领导力", "type": "book", "degree": 2, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：Trillion Dollar Coach。核心主题：揭示传奇教练比尔·坎贝尔（Bill Campbell）如何通过“先人后事、以人为本”的教练式领导力，在硅谷打造了价值万亿美元的团队文化，并提炼出可复制的管理原则。适合人群：所有希望从“管理者”成长为“领导者”的企业高管、团队负责人、创业者，以及对领导力、团队建设和个人成长感兴趣的任何人。本书的核心论点是，管理者的成功最终取决于如何让他人成功，而这正是教练的本质。洞察1：教练式领导力是“心理安全感”的具象化实践", "keywords": ["教练式领", "式领导"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/Trillion Dollar Coach"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/教练式领导力.md"}, {"id": "非语言沟通.md", "label": "非语言沟通", "title": "非语言沟通", "type": "book", "degree": 4, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：胜出：非掠夺社交智慧与共享式领导力。核心主题：通过观察和学习马这种非掠夺性、高度社会化的动物的行为模式，揭示一种超越传统权力斗争的社交智慧与领导力，引导读者发展出更具协作性、共情力和适应性的“共享式领导力”。适合人群：企业管理者、团队领导者、创业者、心理咨询师、教育工作者，以及所有希望提升人际沟通能力、领导效能和内在韧性的人。要点1：非掠夺性视角——一种全新的领导力范式。与“掠夺性”领导（强调控制、竞争、等级压迫）不同，非掠夺性领导力源自对马等非掠夺动物的观察", "keywords": ["非掠夺", "掠夺性", "领导者", "非语言"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/胜出：非掠夺社交智慧与共享式领导力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/非语言沟通.md"}, {"id": "杠杆资产.md", "label": "杠杆资产", "title": "杠杆资产", "type": "book", "degree": 2, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "这一层帮您抓住核心，知道这本书在说什么。核心概念：领导力不是天赋，而是一系列可复制、可学习、可标准化的工具。樊登老师直接挑战了中国人“领导力是天生的”、“是打拼出来的”传统观念。这一层帮您理解背后的逻辑，知道为什么行得通。这一层帮您落地，知道明天开始怎么做", "keywords": ["这一层帮", "层帮您"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/01什么是领导力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/杠杆资产.md"}, {"id": "认知闭合需求.md", "label": "认知闭合需求", "title": "认知闭合需求", "type": "book", "degree": 4, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "作者：（新西兰）珍妮弗·加维·伯格，（新西兰）基斯·约翰斯顿。核心主题：在VUCA（波动性、不确定性、复杂性、模糊性）日益加剧的世界中，领导者如何通过培养新的思维习惯，从“简化问题”转向“驾驭复杂性”，从而更有效地应对挑战、引领组织。适合人群：面临复杂管理困境的中高层管理者、团队领导者；希望提升应对不确定性和模糊性能力的职场人士；对系统性思维和领导力理论感兴趣的读者。书中强调领导者要“忍受模糊性”，这与心理学中的“认知闭合需求”（Need for Cognitive Closure）形成强烈对比。深度洞察在于：真正的领导力成长，需要领导者识别并管理自己内心的“认知闭合需求”，学会与不确定性共处", "keywords": ["领导者", "认知闭", "知闭合", "闭合需"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力思维"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/认知闭合需求.md"}, {"id": "激励相容.md", "label": "激励相容", "title": "激励相容", "type": "book", "degree": 6, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：领导力的精进：新手领导如何带出一支高绩效团队。作者：[美]泰茜·白翰姆，睿奇·威林思。核心主题：本书基于DDI（智睿咨询）40余年全球实践经验，旨在帮助首次担任领导者的新手，从“优秀员工”转型为“催化剂型领导者”，通过掌握核心互动技能和领导技能，激发团队潜能，实现高绩效。要点2：催化剂型领导者的定义与特质。书中提供了“催化剂型领导者自我评估表”（工具2.1），帮助读者定位自身水平", "keywords": ["核心内容", "领导者", "具体做法", "催化剂", "化剂型", "剂型领"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力的精进：新手领导如何带出一支高绩效团队"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/激励相容.md"}, {"id": "明星团队.md", "label": "明星团队", "title": "明星团队", "type": "book", "degree": 3, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "核心概念： 本书的核心不是教你如何“处理危机”，而是教你如何 “带领团队走出困境”。它研究的不是公关危机，而是团队在极端、绝望、资源匮乏的情况下，如何生存下来并最终获胜的领导力。其本质是 “逆境领导力” 或 “绝境领导力”。主要论点： 一个优秀的团队在面对巨大挑战时，其获胜的关键不在于拥有多少“明星”成员，而在于能否让整个团队成为一个“明星”。例如，“让团队成为明星”对应了“不抛弃、不放弃”的连队精神；“功和文化”对应了美军“事后复盘（AAR）”制度，鼓励士兵在行动后坦诚讨论成败；“评估风险，驶入风暴”则对应了特种部队“先敌发现、先敌打击”的进攻性思维", "keywords": ["功和文化", "团队成", "教你如"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/0211危机领导力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/明星团队.md"}, {"id": "复杂系统.md", "label": "复杂系统", "title": "复杂系统", "type": "book", "degree": 6, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：领导力思维（可复制的领导力转型关键。作者：（新西兰）珍妮弗•加维•伯格，（新西兰）基斯•约翰斯顿。核心主题：在VUCA（波动性、不确定性、复杂性、模糊性）日益加剧的时代，领导者需要从“关注最可能发生的事情”转向“关注可能发生的事情”，通过培养三种思维习惯（多角度提问、了解多元视角、用多元视角看问题），掌握倾听、反馈、同理心等工具，以更复杂、更灵活的方式应对复杂挑战，实现个人与团队的共同成长。适合人群：面临复杂局面、感到压力倍增的中高层管理者；希望提升应对不确定性能力的领导者；对领导力转型和思维模式升级感兴趣的职场人士。思维习惯二：了解多元视角——主动寻找并理解与自己观点不同的利益相关者（", "keywords": ["做法", "核心观点", "思维习惯", "最可能", "案例", "工具"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力思维（可复制的领导力转型关键！）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/复杂系统.md"}, {"id": "组织存续.md", "label": "组织存续", "title": "组织存续", "type": "book", "degree": 4, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "作者：（德）施普伦格　著　张凌萱　译。核心主题：本书旨在回归领导力的“根源”（Radikal），通过考古学式的方法，探讨领导工作的核心任务与永恒本质，而非提供流行风格或管理技巧。核心问题是：如果领导是某个问题的答案，那么这个问题是什么。适合人群：希望摆脱管理时尚与浮于表面的领导力技巧，寻求领导工作本质与核心任务的企业中高层管理者；对组织行为学、领导力哲学感兴趣的读者。作者认为，领导者需要从对“手段”的迷恋转向对“目的”的思考，关注那些被忽略的、决定组织存续的核心任务", "keywords": ["领导者", "领导工", "导工作", "核心任"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力的五项修炼"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/组织存续.md"}, {"id": "体面的退出.md", "label": "体面的退出", "title": "体面的退出", "type": "book", "degree": 7, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：亚历克斯·弗格森：我的自传 (弗格森亲笔自传，官方授权中文简体版。核心主题：本书是弗格森爵士以退休为节点，回顾自己辉煌的执教生涯，特别是执掌曼联27年的心路历程。核心主题在于揭示一位传奇教练如何通过构建信任、坚持原则、掌控细节和打造团队文化，将一家俱乐部从低谷带上世界之巅，并最终体面地完成权力交接。弗格森强调，他与球员和团队之间的纽带基于“信任和忠诚”。弗格森深知，打造“一家俱乐部”而非“一支球队”需要时间，而高层的远见和耐心是他成功的关键", "keywords": ["弗格森", "建立信任档案", "变革型领导", "组织韧性", "俱乐部", "亚历克", "历克斯"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/亚历克斯·弗格森：我的自传 (弗格森亲笔自传，官方授权中文简体版！)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/体面的退出.md"}, {"id": "价值创造.md", "label": "价值创造", "title": "价值创造", "type": "book", "degree": 4, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "作者：（德）施普伦格　著　张凌萱　译。核心主题：本书旨在回归领导力的“根源”（Radikal），通过考古学式的方法，探讨领导工作的核心任务与永恒本质，而非提供流行风格或管理技巧。核心问题是：如果领导是某个问题的答案，那么这个问题是什么。适合人群：希望摆脱管理时尚与浮于表面的领导力技巧，寻求领导工作本质与核心任务的企业中高层管理者；对组织行为学、领导力哲学感兴趣的读者。要点2：领导者并非因其“领导工作”而被雇用，而是因为“成功”", "keywords": ["领导者", "领导工", "导工作", "核心任"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力的五项修炼"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/价值创造.md"}, {"id": "心理安全感.md", "label": "心理安全感", "title": "心理安全感", "type": "book", "degree": 8, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "核心概念： 本书的核心是探讨 “领导力” 的本质，并指出营造氛围是领导者区别于管理者和执行者的关键能力。氛围不是虚无缥缈的感觉，而是一种可以被设计、被营造的“场域”，它能激发团队成员的归属感、使命感和创造力。三种角色区分： 组织中每个人都在扮演三种角色：执行者（负责拿到结果）、管理者（负责通过别人完成工作）、领导者（负责营造氛围，提升士气）。领导力的核心是“氛围”： 一个成功的领导者，最重要的是能够创造一个让员工愿意主动付出、感到被尊重、有安全感的氛围。系统化思维： 营造氛围不是一时兴起的团建，而是一套包含制度、仪式、沟通、反馈在内的系统", "keywords": ["领导者", "营造氛围", "执行者", "管理者", "领导者", "安全感", "营造氛围", "让员工"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/05如何营造氛围"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/心理安全感.md"}, {"id": "仪式感.md", "label": "仪式感", "title": "仪式感", "type": "book", "degree": 8, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "核心概念： 本书的核心是探讨 “领导力” 的本质，并指出营造氛围是领导者区别于管理者和执行者的关键能力。氛围不是虚无缥缈的感觉，而是一种可以被设计、被营造的“场域”，它能激发团队成员的归属感、使命感和创造力。三种角色区分： 组织中每个人都在扮演三种角色：执行者（负责拿到结果）、管理者（负责通过别人完成工作）、领导者（负责营造氛围，提升士气）。领导力的核心是“氛围”： 一个成功的领导者，最重要的是能够创造一个让员工愿意主动付出、感到被尊重、有安全感的氛围。系统化思维： 营造氛围不是一时兴起的团建，而是一套包含制度、仪式、沟通、反馈在内的系统", "keywords": ["领导者", "营造氛围", "营造氛围", "执行者", "管理者", "领导者", "安全感", "让员工"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/05如何营造氛围"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/仪式感.md"}, {"id": "经验学习圈.md", "label": "经验学习圈", "title": "经验学习圈", "type": "book", "degree": 6, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：领导力的精进：新手领导如何带出一支高绩效团队。作者：[美]泰茜·白翰姆，睿奇·威林思。核心主题：本书基于DDI（智睿咨询）40余年全球实践经验，旨在帮助首次担任领导者的新手，从“优秀员工”转型为“催化剂型领导者”，通过掌握核心互动技能和领导技能，激发团队潜能，实现高绩效。要点2：催化剂型领导者的定义与特质。书中提供了“催化剂型领导者自我评估表”（工具2.1），帮助读者定位自身水平", "keywords": ["核心内容", "领导者", "具体做法", "催化剂", "化剂型", "剂型领"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力的精进：新手领导如何带出一支高绩效团队"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/经验学习圈.md"}, {"id": "布置工作说五遍.md", "label": "布置工作说五遍", "title": "布置工作说五遍", "type": "book", "degree": 2, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "这一层帮您抓住核心，知道这本书在说什么。核心概念：领导力不是天赋，而是一系列可复制、可学习、可标准化的工具。樊登老师直接挑战了中国人“领导力是天生的”、“是打拼出来的”传统观念。这一层帮您理解背后的逻辑，知道为什么行得通。可执行的行动步骤一：明天就尝试“布置工作说五遍”", "keywords": ["这一层帮", "层帮您"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/01什么是领导力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/布置工作说五遍.md"}, {"id": "利他思维.md", "label": "利他思维", "title": "利他思维", "type": "book", "degree": 4, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：Trillion Dollar Coach。核心主题：揭示传奇教练比尔·坎贝尔（Bill Campbell）如何通过“先人后事、以人为本”的教练式领导力，在硅谷打造了价值万亿美元的团队文化，并提炼出可复制的管理原则。适合人群：所有希望从“管理者”成长为“领导者”的企业高管、团队负责人、创业者，以及对领导力、团队建设和个人成长感兴趣的任何人。比尔·坎贝尔并非技术出身，而是一名橄榄球教练转型的销售，但他却成为乔布斯、谷歌创始人的核心顾问。比尔的核心工作方法是建立一种绝对安全的心理环境（即“信任信封”），让团队成员敢于坦诚沟通、暴露缺点、提出挑战", "keywords": ["教练式", "管理者", "橄榄球", "坎贝尔"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/Trillion Dollar Coach"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/利他思维.md"}, {"id": "中层领导力.md", "label": "中层领导力", "title": "中层领导力", "type": "book", "degree": 8, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：中层领导力（共三册） Anthology。作者：（美）约翰•C.麦克斯维尔。核心主题：本书核心在于打破“只有高层才能领导”的迷思，系统性地教授处于企业任何层级（特别是中层）的人如何通过提升自身影响力，实现对上司、同事和下属的全方位领导。他引入了“五层领导力”模型（职位、认同、绩效、人才培养、人格魅力）来说明，即使处于最底层（职位层），也可以通过建立信任（认同层）、做出贡献（绩效层）和培养他人（人才培养层）来提升自己的影响力。作者总结了中层领导者常见的7个思维陷阱，这些误区是阻碍其发挥领导力的主要障碍", "keywords": ["层领导力", "破罐子破摔误区", "经验不足误区", "目的地误区", "影响力误区", "职位误区", "自由误区", "潜力误区"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/中层领导力（共三册） Anthology"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/中层领导力.md"}, {"id": "逆境领导力.md", "label": "逆境领导力", "title": "逆境领导力", "type": "book", "degree": 3, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "核心概念： 本书的核心不是教你如何“处理危机”，而是教你如何 “带领团队走出困境”。它研究的不是公关危机，而是团队在极端、绝望、资源匮乏的情况下，如何生存下来并最终获胜的领导力。其本质是 “逆境领导力” 或 “绝境领导力”。主要论点： 一个优秀的团队在面对巨大挑战时，其获胜的关键不在于拥有多少“明星”成员，而在于能否让整个团队成为一个“明星”。例如，“让团队成为明星”对应了“不抛弃、不放弃”的连队精神；“功和文化”对应了美军“事后复盘（AAR）”制度，鼓励士兵在行动后坦诚讨论成败；“评估风险，驶入风暴”则对应了特种部队“先敌发现、先敌打击”的进攻性思维", "keywords": ["境领导力", "团队成", "功和文"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/0211危机领导力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/逆境领导力.md"}, {"id": "领导力工具.md", "label": "领导力工具", "title": "领导力工具", "type": "book", "degree": 2, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "这一层帮您抓住核心，知道这本书在说什么。核心概念：领导力不是天赋，而是一系列可复制、可学习、可标准化的工具。樊登老师直接挑战了中国人“领导力是天生的”、“是打拼出来的”传统观念。这一层帮您理解背后的逻辑，知道为什么行得通。这一层帮您落地，知道明天开始怎么做", "keywords": ["这一层帮", "层帮您"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/01什么是领导力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/领导力工具.md"}, {"id": "及时反馈.md", "label": "及时反馈", "title": "及时反馈", "type": "book", "degree": 4, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：可复制的领导力：樊登的9堂商业课。核心主题：领导力并非天赋或艺术，而是一套可以通过标准化工具和刻意练习习得的能力。本书旨在打破“领导力只能靠悟”的传统观念，提供具体、可操作的管理方法，帮助管理者通过激发员工善意、建立游戏化组织等方式，实现高效团队管理。书中反驳了东方传统中“领导力靠悟”的观念（如孔子“因材施教”式的点化），引入西方逻辑思维（如柏拉图“无毛两脚动物”式的定义、六西格玛流程）。樊登通过自己创办“樊登读书会”的成功经历证明，运用标准化的领导力工具（如目标管理、沟通视窗），即使不亲力亲为（他两个月才去一次公司），团队也能高速成长", "keywords": ["标准化", "管理者", "可复制", "制的领"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/可复制的领导力：樊登的9堂商业课"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/及时反馈.md"}, {"id": "情绪韧性.md", "label": "情绪韧性", "title": "情绪韧性", "type": "book", "degree": 4, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：胜出：非掠夺社交智慧与共享式领导力。核心主题：通过观察和学习马这种非掠夺性、高度社会化的动物的行为模式，揭示一种超越传统权力斗争的社交智慧与领导力，引导读者发展出更具协作性、共情力和适应性的“共享式领导力”。适合人群：企业管理者、团队领导者、创业者、心理咨询师、教育工作者，以及所有希望提升人际沟通能力、领导效能和内在韧性的人。要点1：非掠夺性视角——一种全新的领导力范式。与“掠夺性”领导（强调控制、竞争、等级压迫）不同，非掠夺性领导力源自对马等非掠夺动物的观察", "keywords": ["非掠夺", "掠夺性", "领导者", "社交智"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/胜出：非掠夺社交智慧与共享式领导力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/情绪韧性.md"}, {"id": "成功协商.md", "label": "成功协商", "title": "成功协商", "type": "book", "degree": 4, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "作者：（德）施普伦格　著　张凌萱　译。核心主题：本书旨在回归领导力的“根源”（Radikal），通过考古学式的方法，探讨领导工作的核心任务与永恒本质，而非提供流行风格或管理技巧。核心问题是：如果领导是某个问题的答案，那么这个问题是什么。适合人群：希望摆脱管理时尚与浮于表面的领导力技巧，寻求领导工作本质与核心任务的企业中高层管理者；对组织行为学、领导力哲学感兴趣的读者。要点2：领导者并非因其“领导工作”而被雇用，而是因为“成功”", "keywords": ["领导者", "领导工", "导工作", "核心任"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力的五项修炼"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/成功协商.md"}, {"id": "个人技能.md", "label": "个人技能", "title": "个人技能", "type": "book", "degree": 3, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：横向领导力：不是主管，如何带人成事。核心主题：本书旨在教授没有正式职权的普通员工，如何通过培养个人技能、明确合作目标并运用“提问、作答、行动”等参与式领导方法，横向影响同事，从而改善团队合作，共同高效地完成艰巨任务。适合人群：任何在团队中感到合作低效、渴望改变但缺乏正式领导权力的成员，如项目经理、跨部门协作者、团队成员、新晋员工等。要点1：横向领导力的核心是“影响”而非“命令”。横向领导力的本质是作为团队普通一员，通过个人能力、清晰的目标和巧妙的影响策略，促使他人自愿、主动地改善行为", "keywords": ["横向领导", "向领导力", "个人技能有限"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/横向领导力：不是主管，如何带人成事？"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/个人技能.md"}, {"id": "五层领导力模型.md", "label": "五层领导力模型", "title": "五层领导力模型", "type": "book", "degree": 8, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：中层领导力（共三册） Anthology。作者：（美）约翰•C.麦克斯维尔。核心主题：本书核心在于打破“只有高层才能领导”的迷思，系统性地教授处于企业任何层级（特别是中层）的人如何通过提升自身影响力，实现对上司、同事和下属的全方位领导。他引入了“五层领导力”模型（职位、认同、绩效、人才培养、人格魅力）来说明，即使处于最底层（职位层），也可以通过建立信任（认同层）、做出贡献（绩效层）和培养他人（人才培养层）来提升自己的影响力。作者总结了中层领导者常见的7个思维陷阱，这些误区是阻碍其发挥领导力的主要障碍", "keywords": ["层领导力", "破罐子破摔误区", "经验不足误区", "目的地误区", "影响力误区", "职位误区", "自由误区", "潜力误区"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/中层领导力（共三册） Anthology"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/五层领导力模型.md"}, {"id": "非线性思维.md", "label": "非线性思维", "title": "非线性思维", "type": "book", "degree": 2, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "作者：（新西兰）珍妮弗·加维·伯格，（新西兰）基斯·约翰斯顿。核心主题：在VUCA（波动性、不确定性、复杂性、模糊性）日益加剧的世界中，领导者如何通过培养新的思维习惯，从“简化问题”转向“驾驭复杂性”，从而更有效地应对挑战、引领组织。适合人群：面临复杂管理困境的中高层管理者、团队领导者；希望提升应对不确定性和模糊性能力的职场人士；对系统性思维和领导力理论感兴趣的读者。书中强调领导者要“忍受模糊性”，这与心理学中的“认知闭合需求”（Need for Cognitive Closure）形成强烈对比。深度洞察在于：真正的领导力成长，需要领导者识别并管理自己内心的“认知闭合需求”，学会与不确定性共处", "keywords": ["领导者", "不确定性"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力思维"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/非线性思维.md"}, {"id": "非掠夺性社交智慧.md", "label": "非掠夺性社交智慧", "title": "非掠夺性社交智慧", "type": "book", "degree": 4, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：胜出：非掠夺社交智慧与共享式领导力。核心主题：通过观察和学习马这种非掠夺性、高度社会化的动物的行为模式，揭示一种超越传统权力斗争的社交智慧与领导力，引导读者发展出更具协作性、共情力和适应性的“共享式领导力”。适合人群：企业管理者、团队领导者、创业者、心理咨询师、教育工作者，以及所有希望提升人际沟通能力、领导效能和内在韧性的人。要点1：非掠夺性视角——一种全新的领导力范式。与“掠夺性”领导（强调控制、竞争、等级压迫）不同，非掠夺性领导力源自对马等非掠夺动物的观察", "keywords": ["非掠夺", "掠夺性", "社交智", "交智慧"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/胜出：非掠夺社交智慧与共享式领导力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/非掠夺性社交智慧.md"}, {"id": "全方位领导原则.md", "label": "全方位领导原则", "title": "全方位领导原则", "type": "book", "degree": 8, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：中层领导力（共三册） Anthology。作者：（美）约翰•C.麦克斯维尔。核心主题：本书核心在于打破“只有高层才能领导”的迷思，系统性地教授处于企业任何层级（特别是中层）的人如何通过提升自身影响力，实现对上司、同事和下属的全方位领导。他引入了“五层领导力”模型（职位、认同、绩效、人才培养、人格魅力）来说明，即使处于最底层（职位层），也可以通过建立信任（认同层）、做出贡献（绩效层）和培养他人（人才培养层）来提升自己的影响力。作者总结了中层领导者常见的7个思维陷阱，这些误区是阻碍其发挥领导力的主要障碍", "keywords": ["层领导力", "破罐子破摔误区", "经验不足误区", "目的地误区", "影响力误区", "职位误区", "自由误区", "潜力误区"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/中层领导力（共三册） Anthology"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/全方位领导原则.md"}, {"id": "团队至上.md", "label": "团队至上", "title": "团队至上", "type": "book", "degree": 4, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：Trillion Dollar Coach。核心主题：揭示传奇教练比尔·坎贝尔（Bill Campbell）如何通过“先人后事、以人为本”的教练式领导力，在硅谷打造了价值万亿美元的团队文化，并提炼出可复制的管理原则。适合人群：所有希望从“管理者”成长为“领导者”的企业高管、团队负责人、创业者，以及对领导力、团队建设和个人成长感兴趣的任何人。比尔·坎贝尔并非技术出身，而是一名橄榄球教练转型的销售，但他却成为乔布斯、谷歌创始人的核心顾问。比尔的核心工作方法是建立一种绝对安全的心理环境（即“信任信封”），让团队成员敢于坦诚沟通、暴露缺点、提出挑战", "keywords": ["教练式", "管理者", "橄榄球", "团队至"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/Trillion Dollar Coach"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/团队至上.md"}, {"id": "领导力.md", "label": "领导力", "title": "领导力", "type": "book", "degree": 8, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "核心概念： 本书的核心是探讨 “领导力” 的本质，并指出营造氛围是领导者区别于管理者和执行者的关键能力。氛围不是虚无缥缈的感觉，而是一种可以被设计、被营造的“场域”，它能激发团队成员的归属感、使命感和创造力。三种角色区分： 组织中每个人都在扮演三种角色：执行者（负责拿到结果）、管理者（负责通过别人完成工作）、领导者（负责营造氛围，提升士气）。领导力的核心是“氛围”： 一个成功的领导者，最重要的是能够创造一个让员工愿意主动付出、感到被尊重、有安全感的氛围。系统化思维： 营造氛围不是一时兴起的团建，而是一套包含制度、仪式、沟通、反馈在内的系统", "keywords": ["领导者", "营造氛围", "营造氛围", "执行者", "管理者", "领导者", "安全感", "让员工"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/05如何营造氛围"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/领导力.md"}, {"id": "团队文化.md", "label": "团队文化", "title": "团队文化", "type": "book", "degree": 4, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：Trillion Dollar Coach。核心主题：揭示传奇教练比尔·坎贝尔（Bill Campbell）如何通过“先人后事、以人为本”的教练式领导力，在硅谷打造了价值万亿美元的团队文化，并提炼出可复制的管理原则。适合人群：所有希望从“管理者”成长为“领导者”的企业高管、团队负责人、创业者，以及对领导力、团队建设和个人成长感兴趣的任何人。比尔·坎贝尔并非技术出身，而是一名橄榄球教练转型的销售，但他却成为乔布斯、谷歌创始人的核心顾问。比尔的核心工作方法是建立一种绝对安全的心理环境（即“信任信封”），让团队成员敢于坦诚沟通、暴露缺点、提出挑战", "keywords": ["教练式", "管理者", "橄榄球", "团队文"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/Trillion Dollar Coach"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/团队文化.md"}, {"id": "功和文化.md", "label": "功和文化", "title": "功和文化", "type": "book", "degree": 3, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "核心概念： 本书的核心不是教你如何“处理危机”，而是教你如何 “带领团队走出困境”。它研究的不是公关危机，而是团队在极端、绝望、资源匮乏的情况下，如何生存下来并最终获胜的领导力。其本质是 “逆境领导力” 或 “绝境领导力”。主要论点： 一个优秀的团队在面对巨大挑战时，其获胜的关键不在于拥有多少“明星”成员，而在于能否让整个团队成为一个“明星”。例如，“让团队成为明星”对应了“不抛弃、不放弃”的连队精神；“功和文化”对应了美军“事后复盘（AAR）”制度，鼓励士兵在行动后坦诚讨论成败；“评估风险，驶入风暴”则对应了特种部队“先敌发现、先敌打击”的进攻性思维", "keywords": ["功和文化", "团队成", "教你如"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/0211危机领导力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/功和文化.md"}, {"id": "执行力是伪命题.md", "label": "执行力是伪命题", "title": "执行力是伪命题", "type": "book", "degree": 8, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "传统观念认为领导力是一种天赋、气质或多年经验的产物，无法传授。本书的核心论点恰恰相反：领导力并非玄学，而是一系列可标准化、可工具化、可传授的步骤和方法。像西方公司一样，我们可以将领导力拆解为“第一步、第二步、第三步”，让普通人也能学会并运用。关键论点一：执行力是伪命题，员工的执行力等于领导的领导力。西方（柏拉图、苏格拉底为代表）：重视逻辑和“三段论”，擅长将复杂事物拆解成可复制的步骤", "keywords": ["执行力", "与教育领域的联系", "与市场营销的联系", "应用场景", "行动清单", "第一遍", "第二遍", "第三遍"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/1210可复制的领导力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/执行力是伪命题.md"}, {"id": "团队明星.md", "label": "团队明星", "title": "团队明星", "type": "book", "degree": 3, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "核心概念： 本书的核心不是教你如何“处理危机”，而是教你如何 “带领团队走出困境”。它研究的不是公关危机，而是团队在极端、绝望、资源匮乏的情况下，如何生存下来并最终获胜的领导力。其本质是 “逆境领导力” 或 “绝境领导力”。主要论点： 一个优秀的团队在面对巨大挑战时，其获胜的关键不在于拥有多少“明星”成员，而在于能否让整个团队成为一个“明星”。例如，“让团队成为明星”对应了“不抛弃、不放弃”的连队精神；“功和文化”对应了美军“事后复盘（AAR）”制度，鼓励士兵在行动后坦诚讨论成败；“评估风险，驶入风暴”则对应了特种部队“先敌发现、先敌打击”的进攻性思维", "keywords": ["功和文化", "团队成", "教你如"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/0211危机领导力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/团队明星.md"}, {"id": "信任与忠诚.md", "label": "信任与忠诚", "title": "信任与忠诚", "type": "book", "degree": 7, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：亚历克斯·弗格森：我的自传 (弗格森亲笔自传，官方授权中文简体版。核心主题：本书是弗格森爵士以退休为节点，回顾自己辉煌的执教生涯，特别是执掌曼联27年的心路历程。核心主题在于揭示一位传奇教练如何通过构建信任、坚持原则、掌控细节和打造团队文化，将一家俱乐部从低谷带上世界之巅，并最终体面地完成权力交接。弗格森强调，他与球员和团队之间的纽带基于“信任和忠诚”。弗格森深知，打造“一家俱乐部”而非“一支球队”需要时间，而高层的远见和耐心是他成功的关键", "keywords": ["弗格森", "建立信任档案", "变革型领导", "组织韧性", "俱乐部", "亚历克", "历克斯"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/亚历克斯·弗格森：我的自传 (弗格森亲笔自传，官方授权中文简体版！)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/信任与忠诚.md"}, {"id": "清单革命.md", "label": "清单革命", "title": "清单革命", "type": "book", "degree": 3, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "核心概念： 本书的核心不是教你如何“处理危机”，而是教你如何 “带领团队走出困境”。它研究的不是公关危机，而是团队在极端、绝望、资源匮乏的情况下，如何生存下来并最终获胜的领导力。其本质是 “逆境领导力” 或 “绝境领导力”。主要论点： 一个优秀的团队在面对巨大挑战时，其获胜的关键不在于拥有多少“明星”成员，而在于能否让整个团队成为一个“明星”。例如，“让团队成为明星”对应了“不抛弃、不放弃”的连队精神；“功和文化”对应了美军“事后复盘（AAR）”制度，鼓励士兵在行动后坦诚讨论成败；“评估风险，驶入风暴”则对应了特种部队“先敌发现、先敌打击”的进攻性思维", "keywords": ["功和文化", "团队成", "清单革"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/0211危机领导力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/清单革命.md"}, {"id": "影响力.md", "label": "影响力", "title": "影响力", "type": "book", "degree": 8, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：中层领导力（共三册） Anthology。作者：（美）约翰•C.麦克斯维尔。核心主题：本书核心在于打破“只有高层才能领导”的迷思，系统性地教授处于企业任何层级（特别是中层）的人如何通过提升自身影响力，实现对上司、同事和下属的全方位领导。他引入了“五层领导力”模型（职位、认同、绩效、人才培养、人格魅力）来说明，即使处于最底层（职位层），也可以通过建立信任（认同层）、做出贡献（绩效层）和培养他人（人才培养层）来提升自己的影响力。作者总结了中层领导者常见的7个思维陷阱，这些误区是阻碍其发挥领导力的主要障碍", "keywords": ["层领导力", "破罐子破摔误区", "经验不足误区", "目的地误区", "影响力误区", "职位误区", "自由误区", "潜力误区"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/中层领导力（共三册） Anthology"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/影响力.md"}, {"id": "根源回归.md", "label": "根源回归", "title": "根源回归", "type": "book", "degree": 4, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "作者：（德）施普伦格　著　张凌萱　译。核心主题：本书旨在回归领导力的“根源”（Radikal），通过考古学式的方法，探讨领导工作的核心任务与永恒本质，而非提供流行风格或管理技巧。核心问题是：如果领导是某个问题的答案，那么这个问题是什么。适合人群：希望摆脱管理时尚与浮于表面的领导力技巧，寻求领导工作本质与核心任务的企业中高层管理者；对组织行为学、领导力哲学感兴趣的读者。要点2：领导者并非因其“领导工作”而被雇用，而是因为“成功”", "keywords": ["领导者", "领导工", "导工作", "核心任"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力的五项修炼"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/根源回归.md"}, {"id": "领导力标准化.md", "label": "领导力标准化", "title": "领导力标准化", "type": "book", "degree": 4, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：可复制的领导力：樊登的9堂商业课。核心主题：领导力并非天赋或艺术，而是一套可以通过标准化工具和刻意练习习得的能力。本书旨在打破“领导力只能靠悟”的传统观念，提供具体、可操作的管理方法，帮助管理者通过激发员工善意、建立游戏化组织等方式，实现高效团队管理。书中反驳了东方传统中“领导力靠悟”的观念（如孔子“因材施教”式的点化），引入西方逻辑思维（如柏拉图“无毛两脚动物”式的定义、六西格玛流程）。樊登通过自己创办“樊登读书会”的成功经历证明，运用标准化的领导力工具（如目标管理、沟通视窗），即使不亲力亲为（他两个月才去一次公司），团队也能高速成长", "keywords": ["标准化", "管理者", "可复制", "制的领"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/可复制的领导力：樊登的9堂商业课"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/领导力标准化.md"}, {"id": "催化剂型领导者.md", "label": "催化剂型领导者", "title": "催化剂型领导者", "type": "book", "degree": 6, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：领导力的精进：新手领导如何带出一支高绩效团队。作者：[美]泰茜·白翰姆，睿奇·威林思。核心主题：本书基于DDI（智睿咨询）40余年全球实践经验，旨在帮助首次担任领导者的新手，从“优秀员工”转型为“催化剂型领导者”，通过掌握核心互动技能和领导技能，激发团队潜能，实现高绩效。要点2：催化剂型领导者的定义与特质。书中提供了“催化剂型领导者自我评估表”（工具2.1），帮助读者定位自身水平", "keywords": ["领导者", "核心内容", "具体做法", "催化剂", "化剂型", "剂型领"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力的精进：新手领导如何带出一支高绩效团队"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/催化剂型领导者.md"}, {"id": "营造氛围.md", "label": "营造氛围", "title": "营造氛围", "type": "book", "degree": 8, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "核心概念： 本书的核心是探讨 “领导力” 的本质，并指出营造氛围是领导者区别于管理者和执行者的关键能力。氛围不是虚无缥缈的感觉，而是一种可以被设计、被营造的“场域”，它能激发团队成员的归属感、使命感和创造力。三种角色区分： 组织中每个人都在扮演三种角色：执行者（负责拿到结果）、管理者（负责通过别人完成工作）、领导者（负责营造氛围，提升士气）。领导力的核心是“氛围”： 一个成功的领导者，最重要的是能够创造一个让员工愿意主动付出、感到被尊重、有安全感的氛围。系统化思维： 营造氛围不是一时兴起的团建，而是一套包含制度、仪式、沟通、反馈在内的系统", "keywords": ["营造氛围", "领导者", "营造氛围", "执行者", "管理者", "领导者", "安全感", "让员工"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/05如何营造氛围"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/营造氛围.md"}, {"id": "同理心.md", "label": "同理心", "title": "同理心", "type": "book", "degree": 6, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：领导力思维（可复制的领导力转型关键。作者：（新西兰）珍妮弗•加维•伯格，（新西兰）基斯•约翰斯顿。核心主题：在VUCA（波动性、不确定性、复杂性、模糊性）日益加剧的时代，领导者需要从“关注最可能发生的事情”转向“关注可能发生的事情”，通过培养三种思维习惯（多角度提问、了解多元视角、用多元视角看问题），掌握倾听、反馈、同理心等工具，以更复杂、更灵活的方式应对复杂挑战，实现个人与团队的共同成长。适合人群：面临复杂局面、感到压力倍增的中高层管理者；希望提升应对不确定性能力的领导者；对领导力转型和思维模式升级感兴趣的职场人士。思维习惯二：了解多元视角——主动寻找并理解与自己观点不同的利益相关者（", "keywords": ["做法", "核心观点", "思维习惯", "最可能", "案例", "工具"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力思维（可复制的领导力转型关键！）"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/同理心.md"}, {"id": "严厉的爱.md", "label": "严厉的爱", "title": "严厉的爱", "type": "book", "degree": 4, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：Trillion Dollar Coach。核心主题：揭示传奇教练比尔·坎贝尔（Bill Campbell）如何通过“先人后事、以人为本”的教练式领导力，在硅谷打造了价值万亿美元的团队文化，并提炼出可复制的管理原则。适合人群：所有希望从“管理者”成长为“领导者”的企业高管、团队负责人、创业者，以及对领导力、团队建设和个人成长感兴趣的任何人。比尔·坎贝尔并非技术出身，而是一名橄榄球教练转型的销售，但他却成为乔布斯、谷歌创始人的核心顾问。比尔的核心工作方法是建立一种绝对安全的心理环境（即“信任信封”），让团队成员敢于坦诚沟通、暴露缺点、提出挑战", "keywords": ["教练式", "管理者", "橄榄球", "厉的爱"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/Trillion Dollar Coach"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/严厉的爱.md"}, {"id": "领导力可复制.md", "label": "领导力可复制", "title": "领导力可复制", "type": "book", "degree": 8, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "传统观念认为领导力是一种天赋、气质或多年经验的产物，无法传授。本书的核心论点恰恰相反：领导力并非玄学，而是一系列可标准化、可工具化、可传授的步骤和方法。像西方公司一样，我们可以将领导力拆解为“第一步、第二步、第三步”，让普通人也能学会并运用。关键论点一：执行力是伪命题，员工的执行力等于领导的领导力。西方（柏拉图、苏格拉底为代表）：重视逻辑和“三段论”，擅长将复杂事物拆解成可复制的步骤", "keywords": ["与教育领域的联系", "与市场营销的联系", "应用场景", "行动清单", "第一遍", "第二遍", "第三遍", "第四遍"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/1210可复制的领导力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/领导力可复制.md"}, {"id": "成功要素.md", "label": "成功要素", "title": "成功要素", "type": "book", "degree": 6, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：领导力的精进：新手领导如何带出一支高绩效团队。作者：[美]泰茜·白翰姆，睿奇·威林思。核心主题：本书基于DDI（智睿咨询）40余年全球实践经验，旨在帮助首次担任领导者的新手，从“优秀员工”转型为“催化剂型领导者”，通过掌握核心互动技能和领导技能，激发团队潜能，实现高绩效。要点2：催化剂型领导者的定义与特质。书中提供了“催化剂型领导者自我评估表”（工具2.1），帮助读者定位自身水平", "keywords": ["核心内容", "领导者", "具体做法", "催化剂", "化剂型", "剂型领"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力的精进：新手领导如何带出一支高绩效团队"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/成功要素.md"}, {"id": "细节管理.md", "label": "细节管理", "title": "细节管理", "type": "book", "degree": 7, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：亚历克斯·弗格森：我的自传 (弗格森亲笔自传，官方授权中文简体版。核心主题：本书是弗格森爵士以退休为节点，回顾自己辉煌的执教生涯，特别是执掌曼联27年的心路历程。核心主题在于揭示一位传奇教练如何通过构建信任、坚持原则、掌控细节和打造团队文化，将一家俱乐部从低谷带上世界之巅，并最终体面地完成权力交接。弗格森强调，他与球员和团队之间的纽带基于“信任和忠诚”。弗格森深知，打造“一家俱乐部”而非“一支球队”需要时间，而高层的远见和耐心是他成功的关键", "keywords": ["弗格森", "建立信任档案", "变革型领导", "组织韧性", "俱乐部", "亚历克", "历克斯"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/亚历克斯·弗格森：我的自传 (弗格森亲笔自传，官方授权中文简体版！)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/细节管理.md"}, {"id": "游戏改变领导力.md", "label": "游戏改变领导力", "title": "游戏改变领导力", "type": "book", "degree": 8, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "传统观念认为领导力是一种天赋、气质或多年经验的产物，无法传授。本书的核心论点恰恰相反：领导力并非玄学，而是一系列可标准化、可工具化、可传授的步骤和方法。像西方公司一样，我们可以将领导力拆解为“第一步、第二步、第三步”，让普通人也能学会并运用。关键论点一：执行力是伪命题，员工的执行力等于领导的领导力。西方（柏拉图、苏格拉底为代表）：重视逻辑和“三段论”，擅长将复杂事物拆解成可复制的步骤", "keywords": ["与教育领域的联系", "与市场营销的联系", "应用场景", "行动清单", "第一遍", "第二遍", "第三遍", "第四遍"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/1210可复制的领导力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/游戏改变领导力.md"}, {"id": "360度领导力.md", "label": "360度领导力", "title": "360度领导力", "type": "book", "degree": 8, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：中层领导力（共三册） Anthology。作者：（美）约翰•C.麦克斯维尔。核心主题：本书核心在于打破“只有高层才能领导”的迷思，系统性地教授处于企业任何层级（特别是中层）的人如何通过提升自身影响力，实现对上司、同事和下属的全方位领导。他引入了“五层领导力”模型（职位、认同、绩效、人才培养、人格魅力）来说明，即使处于最底层（职位层），也可以通过建立信任（认同层）、做出贡献（绩效层）和培养他人（人才培养层）来提升自己的影响力。作者总结了中层领导者常见的7个思维陷阱，这些误区是阻碍其发挥领导力的主要障碍", "keywords": ["层领导力", "破罐子破摔误区", "经验不足误区", "目的地误区", "影响力误区", "职位误区", "自由误区", "潜力误区"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/中层领导力（共三册） Anthology"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/360度领导力.md"}, {"id": "复杂性思维.md", "label": "复杂性思维", "title": "复杂性思维", "type": "book", "degree": 4, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "作者：（新西兰）珍妮弗·加维·伯格，（新西兰）基斯·约翰斯顿。核心主题：在VUCA（波动性、不确定性、复杂性、模糊性）日益加剧的世界中，领导者如何通过培养新的思维习惯，从“简化问题”转向“驾驭复杂性”，从而更有效地应对挑战、引领组织。适合人群：面临复杂管理困境的中高层管理者、团队领导者；希望提升应对不确定性和模糊性能力的职场人士；对系统性思维和领导力理论感兴趣的读者。书中强调领导者要“忍受模糊性”，这与心理学中的“认知闭合需求”（Need for Cognitive Closure）形成强烈对比。深度洞察在于：真正的领导力成长，需要领导者识别并管理自己内心的“认知闭合需求”，学会与不确定性共处", "keywords": ["领导者", "复杂性", "不确定", "确定性"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力思维"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/复杂性思维.md"}, {"id": "横向领导力.md", "label": "横向领导力", "title": "横向领导力", "type": "book", "degree": 3, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：横向领导力：不是主管，如何带人成事。核心主题：本书旨在教授没有正式职权的普通员工，如何通过培养个人技能、明确合作目标并运用“提问、作答、行动”等参与式领导方法，横向影响同事，从而改善团队合作，共同高效地完成艰巨任务。适合人群：任何在团队中感到合作低效、渴望改变但缺乏正式领导权力的成员，如项目经理、跨部门协作者、团队成员、新晋员工等。要点1：横向领导力的核心是“影响”而非“命令”。横向领导力的本质是作为团队普通一员，通过个人能力、清晰的目标和巧妙的影响策略，促使他人自愿、主动地改善行为", "keywords": ["横向领导", "向领导力", "个人技能有限"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/横向领导力：不是主管，如何带人成事？"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/横向领导力.md"}, {"id": "组织韧性.md", "label": "组织韧性", "title": "组织韧性", "type": "book", "degree": 7, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "书名：亚历克斯·弗格森：我的自传 (弗格森亲笔自传，官方授权中文简体版。核心主题：本书是弗格森爵士以退休为节点，回顾自己辉煌的执教生涯，特别是执掌曼联27年的心路历程。核心主题在于揭示一位传奇教练如何通过构建信任、坚持原则、掌控细节和打造团队文化，将一家俱乐部从低谷带上世界之巅，并最终体面地完成权力交接。弗格森深知，打造“一家俱乐部”而非“一支球队”需要时间，而高层的远见和耐心是他成功的关键。弗格森的成功不仅仅是战术的成功，更是组织韧性的胜利", "keywords": ["弗格森", "建立信任档案", "变革型领导", "组织韧性", "俱乐部", "亚历克", "历克斯"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/亚历克斯·弗格森：我的自传 (弗格森亲笔自传，官方授权中文简体版！)"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/组织韧性.md"}, {"id": "执行力伪概念.md", "label": "执行力伪概念", "title": "执行力伪概念", "type": "book", "degree": 2, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "这一层帮您抓住核心，知道这本书在说什么。核心概念：领导力不是天赋，而是一系列可复制、可学习、可标准化的工具。樊登老师直接挑战了中国人“领导力是天生的”、“是打拼出来的”传统观念。这一层帮您理解背后的逻辑，知道为什么行得通。这一层帮您落地，知道明天开始怎么做", "keywords": ["这一层帮", "层帮您"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/01什么是领导力"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/执行力伪概念.md"}, {"id": "VUCA.md", "label": "VUCA", "title": "VUCA", "type": "book", "degree": 2, "cluster": "领导力", "domain": "商业", "sub_domain": "领导力", "summary": "作者：（新西兰）珍妮弗·加维·伯格，（新西兰）基斯·约翰斯顿。核心主题：在VUCA（波动性、不确定性、复杂性、模糊性）日益加剧的世界中，领导者如何通过培养新的思维习惯，从“简化问题”转向“驾驭复杂性”，从而更有效地应对挑战、引领组织。适合人群：面临复杂管理困境的中高层管理者、团队领导者；希望提升应对不确定性和模糊性能力的职场人士；对系统性思维和领导力理论感兴趣的读者。书中强调领导者要“忍受模糊性”，这与心理学中的“认知闭合需求”（Need for Cognitive Closure）形成强烈对比。深度洞察在于：真正的领导力成长，需要领导者识别并管理自己内心的“认知闭合需求”，学会与不确定性共处", "keywords": ["领导者", "不确定性"], "tags": ["domain/商业", "sub_domain/领导力", "type/concept", "source/领导力思维"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/商业/领导力/VUCA.md"}];
+var LINKS = [{"source": "执行力=领导力.md", "target": "沟通视窗.md", "value": 6, "shared": ["行动清单", "第一遍", "与市场营销的联系", "应用场景", "第二遍"]}, {"source": "执行力=领导力.md", "target": "执行力是伪命题.md", "value": 7, "shared": ["行动清单", "第一遍", "与市场营销的联系", "执行力", "应用场景"]}, {"source": "执行力=领导力.md", "target": "领导力可复制.md", "value": 6, "shared": ["行动清单", "第一遍", "与市场营销的联系", "应用场景", "第二遍"]}, {"source": "执行力=领导力.md", "target": "游戏改变领导力.md", "value": 6, "shared": ["行动清单", "第一遍", "与市场营销的联系", "应用场景", "第二遍"]}, {"source": "核心任务.md", "target": "Cynefin框架.md", "value": 2, "shared": ["领导者", "相关笔记"]}, {"source": "全方位领导.md", "target": "中层领导误区.md", "value": 7, "shared": ["破罐子破摔误区", "经验不足误区", "目的地误区", "潜力误区", "影响力误区"]}, {"source": "全方位领导.md", "target": "中层领导力.md", "value": 7, "shared": ["破罐子破摔误区", "经验不足误区", "目的地误区", "潜力误区", "影响力误区"]}, {"source": "全方位领导.md", "target": "五层领导力模型.md", "value": 7, "shared": ["破罐子破摔误区", "经验不足误区", "目的地误区", "潜力误区", "影响力误区"]}, {"source": "全方位领导.md", "target": "全方位领导原则.md", "value": 7, "shared": ["破罐子破摔误区", "经验不足误区", "目的地误区", "潜力误区", "影响力误区"]}, {"source": "全方位领导.md", "target": "影响力.md", "value": 7, "shared": ["破罐子破摔误区", "经验不足误区", "目的地误区", "潜力误区", "影响力误区"]}, {"source": "全方位领导.md", "target": "360度领导力.md", "value": 7, "shared": ["破罐子破摔误区", "经验不足误区", "目的地误区", "潜力误区", "影响力误区"]}, {"source": "多元视角.md", "target": "可能思维.md", "value": 4, "shared": ["案例", "核心观点", "做法", "工具"]}, {"source": "多元视角.md", "target": "反馈思维.md", "value": 4, "shared": ["案例", "核心观点", "做法", "工具"]}, {"source": "多元视角.md", "target": "倾听与反馈.md", "value": 4, "shared": ["案例", "核心观点", "做法", "工具"]}, {"source": "多元视角.md", "target": "复杂系统.md", "value": 4, "shared": ["案例", "核心观点", "做法", "工具"]}, {"source": "多元视角.md", "target": "同理心.md", "value": 4, "shared": ["案例", "核心观点", "做法", "工具"]}, {"source": "游戏化组织.md", "target": "杠杆资产.md", "value": 2, "shared": ["层帮您", "这一层帮"]}, {"source": "游戏化组织.md", "target": "布置工作说五遍.md", "value": 2, "shared": ["层帮您", "这一层帮"]}, {"source": "游戏化组织.md", "target": "领导力工具.md", "value": 2, "shared": ["层帮您", "这一层帮"]}, {"source": "游戏化组织.md", "target": "执行力伪概念.md", "value": 2, "shared": ["层帮您", "这一层帮"]}, {"source": "可能思维.md", "target": "反馈思维.md", "value": 6, "shared": ["工具", "核心观点", "最可能", "案例", "思维习惯"]}, {"source": "可能思维.md", "target": "倾听与反馈.md", "value": 6, "shared": ["工具", "核心观点", "最可能", "案例", "思维习惯"]}, {"source": "可能思维.md", "target": "复杂系统.md", "value": 6, "shared": ["工具", "核心观点", "最可能", "案例", "思维习惯"]}, {"source": "可能思维.md", "target": "同理心.md", "value": 6, "shared": ["工具", "核心观点", "最可能", "案例", "思维习惯"]}, {"source": "反馈机制.md", "target": "非线性思维.md", "value": 2, "shared": ["不确定性", "领导者"]}, {"source": "反馈机制.md", "target": "VUCA.md", "value": 2, "shared": ["不确定性", "领导者"]}, {"source": "影响策略.md", "target": "合作改善.md", "value": 3, "shared": ["个人技能有限", "横向领导", "向领导力"]}, {"source": "影响策略.md", "target": "参与式领导.md", "value": 3, "shared": ["个人技能有限", "横向领导", "向领导力"]}, {"source": "影响策略.md", "target": "个人技能.md", "value": 3, "shared": ["个人技能有限", "横向领导", "向领导力"]}, {"source": "影响策略.md", "target": "横向领导力.md", "value": 3, "shared": ["个人技能有限", "横向领导", "向领导力"]}, {"source": "互动技能.md", "target": "角色转换.md", "value": 6, "shared": ["具体做法", "核心内容", "剂型领", "领导者", "化剂型"]}, {"source": "互动技能.md", "target": "激励相容.md", "value": 6, "shared": ["具体做法", "核心内容", "剂型领", "领导者", "化剂型"]}, {"source": "互动技能.md", "target": "经验学习圈.md", "value": 6, "shared": ["具体做法", "核心内容", "剂型领", "领导者", "化剂型"]}, {"source": "互动技能.md", "target": "催化剂型领导者.md", "value": 6, "shared": ["具体做法", "核心内容", "剂型领", "领导者", "化剂型"]}, {"source": "互动技能.md", "target": "成功要素.md", "value": 6, "shared": ["具体做法", "核心内容", "剂型领", "领导者", "化剂型"]}, {"source": "利他慷慨.md", "target": "利他思维.md", "value": 4, "shared": ["管理者", "教练式", "橄榄球", "坎贝尔"]}, {"source": "利他慷慨.md", "target": "团队至上.md", "value": 3, "shared": ["管理者", "教练式", "橄榄球"]}, {"source": "利他慷慨.md", "target": "团队文化.md", "value": 3, "shared": ["管理者", "教练式", "橄榄球"]}, {"source": "利他慷慨.md", "target": "严厉的爱.md", "value": 3, "shared": ["管理者", "教练式", "橄榄球"]}, {"source": "系统性领导.md", "target": "组织存续.md", "value": 4, "shared": ["导工作", "核心任", "领导者", "领导工"]}, {"source": "系统性领导.md", "target": "价值创造.md", "value": 4, "shared": ["导工作", "核心任", "领导者", "领导工"]}, {"source": "系统性领导.md", "target": "成功协商.md", "value": 4, "shared": ["导工作", "核心任", "领导者", "领导工"]}, {"source": "系统性领导.md", "target": "根源回归.md", "value": 4, "shared": ["导工作", "核心任", "领导者", "领导工"]}, {"source": "反馈思维.md", "target": "倾听与反馈.md", "value": 6, "shared": ["工具", "核心观点", "最可能", "案例", "思维习惯"]}, {"source": "反馈思维.md", "target": "复杂系统.md", "value": 6, "shared": ["工具", "核心观点", "最可能", "案例", "思维习惯"]}, {"source": "反馈思维.md", "target": "同理心.md", "value": 6, "shared": ["工具", "核心观点", "最可能", "案例", "思维习惯"]}, {"source": "沟通视窗.md", "target": "执行力是伪命题.md", "value": 7, "shared": ["行动清单", "第一遍", "与市场营销的联系", "应用场景", "第二遍"]}, {"source": "沟通视窗.md", "target": "领导力可复制.md", "value": 8, "shared": ["行动清单", "第一遍", "与市场营销的联系", "第四遍", "应用场景"]}, {"source": "沟通视窗.md", "target": "游戏改变领导力.md", "value": 8, "shared": ["行动清单", "第一遍", "与市场营销的联系", "第四遍", "应用场景"]}, {"source": "合作改善.md", "target": "参与式领导.md", "value": 3, "shared": ["个人技能有限", "横向领导", "向领导力"]}, {"source": "合作改善.md", "target": "个人技能.md", "value": 3, "shared": ["个人技能有限", "横向领导", "向领导力"]}, {"source": "合作改善.md", "target": "横向领导力.md", "value": 3, "shared": ["个人技能有限", "横向领导", "向领导力"]}, {"source": "中层领导误区.md", "target": "中层领导力.md", "value": 8, "shared": ["破罐子破摔误区", "经验不足误区", "目的地误区", "潜力误区", "影响力误区"]}, {"source": "中层领导误区.md", "target": "五层领导力模型.md", "value": 8, "shared": ["破罐子破摔误区", "经验不足误区", "目的地误区", "潜力误区", "影响力误区"]}, {"source": "中层领导误区.md", "target": "全方位领导原则.md", "value": 8, "shared": ["破罐子破摔误区", "经验不足误区", "目的地误区", "潜力误区", "影响力误区"]}, {"source": "中层领导误区.md", "target": "影响力.md", "value": 8, "shared": ["破罐子破摔误区", "经验不足误区", "目的地误区", "潜力误区", "影响力误区"]}, {"source": "中层领导误区.md", "target": "360度领导力.md", "value": 8, "shared": ["破罐子破摔误区", "经验不足误区", "目的地误区", "潜力误区", "影响力误区"]}, {"source": "关键时刻的抉择.md", "target": "体面的退出.md", "value": 7, "shared": ["建立信任档案", "俱乐部", "组织韧性", "亚历克", "弗格森"]}, {"source": "关键时刻的抉择.md", "target": "信任与忠诚.md", "value": 7, "shared": ["建立信任档案", "俱乐部", "组织韧性", "亚历克", "弗格森"]}, {"source": "关键时刻的抉择.md", "target": "细节管理.md", "value": 7, "shared": ["建立信任档案", "俱乐部", "组织韧性", "亚历克", "弗格森"]}, {"source": "关键时刻的抉择.md", "target": "组织韧性.md", "value": 7, "shared": ["建立信任档案", "俱乐部", "组织韧性", "亚历克", "弗格森"]}, {"source": "参与式领导.md", "target": "个人技能.md", "value": 3, "shared": ["个人技能有限", "横向领导", "向领导力"]}, {"source": "参与式领导.md", "target": "横向领导力.md", "value": 3, "shared": ["个人技能有限", "横向领导", "向领导力"]}, {"source": "系统化思维.md", "target": "心理安全感.md", "value": 6, "shared": ["让员工", "管理者", "领导者", "营造氛围", "安全感"]}, {"source": "系统化思维.md", "target": "仪式感.md", "value": 6, "shared": ["让员工", "管理者", "领导者", "营造氛围", "安全感"]}, {"source": "系统化思维.md", "target": "领导力.md", "value": 6, "shared": ["让员工", "管理者", "领导者", "营造氛围", "安全感"]}, {"source": "系统化思维.md", "target": "营造氛围.md", "value": 6, "shared": ["让员工", "管理者", "领导者", "营造氛围", "安全感"]}, {"source": "倾听与反馈.md", "target": "复杂系统.md", "value": 6, "shared": ["工具", "核心观点", "最可能", "案例", "思维习惯"]}, {"source": "倾听与反馈.md", "target": "同理心.md", "value": 6, "shared": ["工具", "核心观点", "最可能", "案例", "思维习惯"]}, {"source": "激发善意.md", "target": "及时反馈.md", "value": 4, "shared": ["管理者", "可复制", "制的领", "标准化"]}, {"source": "激发善意.md", "target": "领导力标准化.md", "value": 4, "shared": ["管理者", "可复制", "制的领", "标准化"]}, {"source": "角色转换.md", "target": "激励相容.md", "value": 6, "shared": ["具体做法", "核心内容", "剂型领", "领导者", "化剂型"]}, {"source": "角色转换.md", "target": "经验学习圈.md", "value": 6, "shared": ["具体做法", "核心内容", "剂型领", "领导者", "化剂型"]}, {"source": "角色转换.md", "target": "催化剂型领导者.md", "value": 6, "shared": ["具体做法", "核心内容", "剂型领", "领导者", "化剂型"]}, {"source": "角色转换.md", "target": "成功要素.md", "value": 6, "shared": ["具体做法", "核心内容", "剂型领", "领导者", "化剂型"]}, {"source": "非语言沟通.md", "target": "情绪韧性.md", "value": 3, "shared": ["掠夺性", "非掠夺", "领导者"]}, {"source": "非语言沟通.md", "target": "非掠夺性社交智慧.md", "value": 2, "shared": ["掠夺性", "非掠夺"]}, {"source": "杠杆资产.md", "target": "布置工作说五遍.md", "value": 2, "shared": ["层帮您", "这一层帮"]}, {"source": "杠杆资产.md", "target": "领导力工具.md", "value": 2, "shared": ["层帮您", "这一层帮"]}, {"source": "杠杆资产.md", "target": "执行力伪概念.md", "value": 2, "shared": ["层帮您", "这一层帮"]}, {"source": "激励相容.md", "target": "经验学习圈.md", "value": 6, "shared": ["具体做法", "核心内容", "剂型领", "领导者", "化剂型"]}, {"source": "激励相容.md", "target": "催化剂型领导者.md", "value": 6, "shared": ["具体做法", "核心内容", "剂型领", "领导者", "化剂型"]}, {"source": "激励相容.md", "target": "成功要素.md", "value": 6, "shared": ["具体做法", "核心内容", "剂型领", "领导者", "化剂型"]}, {"source": "明星团队.md", "target": "功和文化.md", "value": 3, "shared": ["团队成", "功和文化", "教你如"]}, {"source": "明星团队.md", "target": "团队明星.md", "value": 3, "shared": ["团队成", "功和文化", "教你如"]}, {"source": "明星团队.md", "target": "清单革命.md", "value": 2, "shared": ["团队成", "功和文化"]}, {"source": "复杂系统.md", "target": "同理心.md", "value": 6, "shared": ["工具", "核心观点", "最可能", "案例", "思维习惯"]}, {"source": "组织存续.md", "target": "价值创造.md", "value": 4, "shared": ["导工作", "核心任", "领导者", "领导工"]}, {"source": "组织存续.md", "target": "成功协商.md", "value": 4, "shared": ["导工作", "核心任", "领导者", "领导工"]}, {"source": "组织存续.md", "target": "根源回归.md", "value": 4, "shared": ["导工作", "核心任", "领导者", "领导工"]}, {"source": "体面的退出.md", "target": "信任与忠诚.md", "value": 7, "shared": ["建立信任档案", "俱乐部", "组织韧性", "亚历克", "弗格森"]}, {"source": "体面的退出.md", "target": "细节管理.md", "value": 7, "shared": ["建立信任档案", "俱乐部", "组织韧性", "亚历克", "弗格森"]}, {"source": "体面的退出.md", "target": "组织韧性.md", "value": 7, "shared": ["建立信任档案", "俱乐部", "组织韧性", "亚历克", "弗格森"]}, {"source": "价值创造.md", "target": "成功协商.md", "value": 4, "shared": ["导工作", "核心任", "领导者", "领导工"]}, {"source": "价值创造.md", "target": "根源回归.md", "value": 4, "shared": ["导工作", "核心任", "领导者", "领导工"]}, {"source": "心理安全感.md", "target": "仪式感.md", "value": 6, "shared": ["让员工", "管理者", "领导者", "营造氛围", "安全感"]}, {"source": "心理安全感.md", "target": "领导力.md", "value": 6, "shared": ["让员工", "管理者", "领导者", "营造氛围", "安全感"]}, {"source": "心理安全感.md", "target": "营造氛围.md", "value": 6, "shared": ["让员工", "管理者", "领导者", "营造氛围", "安全感"]}, {"source": "仪式感.md", "target": "领导力.md", "value": 6, "shared": ["让员工", "管理者", "领导者", "营造氛围", "安全感"]}, {"source": "仪式感.md", "target": "营造氛围.md", "value": 6, "shared": ["让员工", "管理者", "领导者", "营造氛围", "安全感"]}, {"source": "经验学习圈.md", "target": "催化剂型领导者.md", "value": 6, "shared": ["具体做法", "核心内容", "剂型领", "领导者", "化剂型"]}, {"source": "经验学习圈.md", "target": "成功要素.md", "value": 6, "shared": ["具体做法", "核心内容", "剂型领", "领导者", "化剂型"]}, {"source": "布置工作说五遍.md", "target": "领导力工具.md", "value": 2, "shared": ["层帮您", "这一层帮"]}, {"source": "布置工作说五遍.md", "target": "执行力伪概念.md", "value": 2, "shared": ["层帮您", "这一层帮"]}, {"source": "利他思维.md", "target": "团队至上.md", "value": 3, "shared": ["管理者", "教练式", "橄榄球"]}, {"source": "利他思维.md", "target": "团队文化.md", "value": 3, "shared": ["管理者", "教练式", "橄榄球"]}, {"source": "利他思维.md", "target": "严厉的爱.md", "value": 3, "shared": ["管理者", "教练式", "橄榄球"]}, {"source": "中层领导力.md", "target": "五层领导力模型.md", "value": 8, "shared": ["破罐子破摔误区", "经验不足误区", "目的地误区", "潜力误区", "影响力误区"]}, {"source": "中层领导力.md", "target": "全方位领导原则.md", "value": 8, "shared": ["破罐子破摔误区", "经验不足误区", "目的地误区", "潜力误区", "影响力误区"]}, {"source": "中层领导力.md", "target": "影响力.md", "value": 8, "shared": ["破罐子破摔误区", "经验不足误区", "目的地误区", "潜力误区", "影响力误区"]}, {"source": "中层领导力.md", "target": "360度领导力.md", "value": 8, "shared": ["破罐子破摔误区", "经验不足误区", "目的地误区", "潜力误区", "影响力误区"]}, {"source": "领导力工具.md", "target": "执行力伪概念.md", "value": 2, "shared": ["层帮您", "这一层帮"]}, {"source": "及时反馈.md", "target": "领导力标准化.md", "value": 4, "shared": ["管理者", "可复制", "制的领", "标准化"]}, {"source": "情绪韧性.md", "target": "非掠夺性社交智慧.md", "value": 3, "shared": ["掠夺性", "非掠夺", "社交智"]}, {"source": "成功协商.md", "target": "根源回归.md", "value": 4, "shared": ["导工作", "核心任", "领导者", "领导工"]}, {"source": "个人技能.md", "target": "横向领导力.md", "value": 3, "shared": ["个人技能有限", "横向领导", "向领导力"]}, {"source": "五层领导力模型.md", "target": "全方位领导原则.md", "value": 8, "shared": ["破罐子破摔误区", "经验不足误区", "目的地误区", "潜力误区", "影响力误区"]}, {"source": "五层领导力模型.md", "target": "影响力.md", "value": 8, "shared": ["破罐子破摔误区", "经验不足误区", "目的地误区", "潜力误区", "影响力误区"]}, {"source": "五层领导力模型.md", "target": "360度领导力.md", "value": 8, "shared": ["破罐子破摔误区", "经验不足误区", "目的地误区", "潜力误区", "影响力误区"]}, {"source": "非线性思维.md", "target": "VUCA.md", "value": 2, "shared": ["不确定性", "领导者"]}, {"source": "全方位领导原则.md", "target": "影响力.md", "value": 8, "shared": ["破罐子破摔误区", "经验不足误区", "目的地误区", "潜力误区", "影响力误区"]}, {"source": "全方位领导原则.md", "target": "360度领导力.md", "value": 8, "shared": ["破罐子破摔误区", "经验不足误区", "目的地误区", "潜力误区", "影响力误区"]}, {"source": "团队至上.md", "target": "团队文化.md", "value": 3, "shared": ["管理者", "教练式", "橄榄球"]}, {"source": "团队至上.md", "target": "严厉的爱.md", "value": 3, "shared": ["管理者", "教练式", "橄榄球"]}, {"source": "领导力.md", "target": "营造氛围.md", "value": 6, "shared": ["让员工", "管理者", "领导者", "营造氛围", "安全感"]}, {"source": "团队文化.md", "target": "严厉的爱.md", "value": 3, "shared": ["管理者", "教练式", "橄榄球"]}, {"source": "功和文化.md", "target": "团队明星.md", "value": 3, "shared": ["团队成", "功和文化", "教你如"]}, {"source": "功和文化.md", "target": "清单革命.md", "value": 2, "shared": ["团队成", "功和文化"]}, {"source": "执行力是伪命题.md", "target": "领导力可复制.md", "value": 7, "shared": ["行动清单", "第一遍", "与市场营销的联系", "应用场景", "第二遍"]}, {"source": "执行力是伪命题.md", "target": "游戏改变领导力.md", "value": 7, "shared": ["行动清单", "第一遍", "与市场营销的联系", "应用场景", "第二遍"]}, {"source": "团队明星.md", "target": "清单革命.md", "value": 2, "shared": ["团队成", "功和文化"]}, {"source": "信任与忠诚.md", "target": "细节管理.md", "value": 7, "shared": ["建立信任档案", "俱乐部", "组织韧性", "亚历克", "弗格森"]}, {"source": "信任与忠诚.md", "target": "组织韧性.md", "value": 7, "shared": ["建立信任档案", "俱乐部", "组织韧性", "亚历克", "弗格森"]}, {"source": "影响力.md", "target": "360度领导力.md", "value": 8, "shared": ["破罐子破摔误区", "经验不足误区", "目的地误区", "潜力误区", "影响力误区"]}, {"source": "催化剂型领导者.md", "target": "成功要素.md", "value": 6, "shared": ["具体做法", "核心内容", "剂型领", "领导者", "化剂型"]}, {"source": "领导力可复制.md", "target": "游戏改变领导力.md", "value": 8, "shared": ["行动清单", "第一遍", "与市场营销的联系", "第四遍", "应用场景"]}, {"source": "细节管理.md", "target": "组织韧性.md", "value": 7, "shared": ["建立信任档案", "俱乐部", "组织韧性", "亚历克", "弗格森"]}];
+var CLUSTER_COLORS = {"领导力": "#10b981"};
+var SEARCH_DATA = [{"id": "执行力=领导力.md", "label": "执行力=领导力"}, {"id": "核心任务.md", "label": "核心任务"}, {"id": "正念领导力.md", "label": "正念领导力"}, {"id": "全方位领导.md", "label": "全方位领导"}, {"id": "Cynefin框架.md", "label": "Cynefin框架"}, {"id": "多元视角.md", "label": "多元视角"}, {"id": "游戏化组织.md", "label": "游戏化组织"}, {"id": "可能思维.md", "label": "可能思维"}, {"id": "共享式领导力.md", "label": "共享式领导力"}, {"id": "反馈机制.md", "label": "反馈机制"}, {"id": "影响策略.md", "label": "影响策略"}, {"id": "心理安全.md", "label": "心理安全"}, {"id": "互动技能.md", "label": "互动技能"}, {"id": "利他慷慨.md", "label": "利他慷慨"}, {"id": "系统性领导.md", "label": "系统性领导"}, {"id": "反馈思维.md", "label": "反馈思维"}, {"id": "沟通视窗.md", "label": "沟通视窗"}, {"id": "合作改善.md", "label": "合作改善"}, {"id": "中层领导误区.md", "label": "中层领导误区"}, {"id": "关键时刻的抉择.md", "label": "关键时刻的抉择"}, {"id": "参与式领导.md", "label": "参与式领导"}, {"id": "系统化思维.md", "label": "系统化思维"}, {"id": "倾听与反馈.md", "label": "倾听与反馈"}, {"id": "激发善意.md", "label": "激发善意"}, {"id": "角色转换.md", "label": "角色转换"}, {"id": "教练式领导力.md", "label": "教练式领导力"}, {"id": "非语言沟通.md", "label": "非语言沟通"}, {"id": "杠杆资产.md", "label": "杠杆资产"}, {"id": "认知闭合需求.md", "label": "认知闭合需求"}, {"id": "激励相容.md", "label": "激励相容"}, {"id": "明星团队.md", "label": "明星团队"}, {"id": "复杂系统.md", "label": "复杂系统"}, {"id": "组织存续.md", "label": "组织存续"}, {"id": "体面的退出.md", "label": "体面的退出"}, {"id": "价值创造.md", "label": "价值创造"}, {"id": "心理安全感.md", "label": "心理安全感"}, {"id": "仪式感.md", "label": "仪式感"}, {"id": "经验学习圈.md", "label": "经验学习圈"}, {"id": "布置工作说五遍.md", "label": "布置工作说五遍"}, {"id": "利他思维.md", "label": "利他思维"}, {"id": "中层领导力.md", "label": "中层领导力"}, {"id": "逆境领导力.md", "label": "逆境领导力"}, {"id": "领导力工具.md", "label": "领导力工具"}, {"id": "及时反馈.md", "label": "及时反馈"}, {"id": "情绪韧性.md", "label": "情绪韧性"}, {"id": "成功协商.md", "label": "成功协商"}, {"id": "个人技能.md", "label": "个人技能"}, {"id": "五层领导力模型.md", "label": "五层领导力模型"}, {"id": "非线性思维.md", "label": "非线性思维"}, {"id": "非掠夺性社交智慧.md", "label": "非掠夺性社交智慧"}, {"id": "全方位领导原则.md", "label": "全方位领导原则"}, {"id": "团队至上.md", "label": "团队至上"}, {"id": "领导力.md", "label": "领导力"}, {"id": "团队文化.md", "label": "团队文化"}, {"id": "功和文化.md", "label": "功和文化"}, {"id": "执行力是伪命题.md", "label": "执行力是伪命题"}, {"id": "团队明星.md", "label": "团队明星"}, {"id": "信任与忠诚.md", "label": "信任与忠诚"}, {"id": "清单革命.md", "label": "清单革命"}, {"id": "影响力.md", "label": "影响力"}, {"id": "根源回归.md", "label": "根源回归"}, {"id": "领导力标准化.md", "label": "领导力标准化"}, {"id": "催化剂型领导者.md", "label": "催化剂型领导者"}, {"id": "营造氛围.md", "label": "营造氛围"}, {"id": "同理心.md", "label": "同理心"}, {"id": "严厉的爱.md", "label": "严厉的爱"}, {"id": "领导力可复制.md", "label": "领导力可复制"}, {"id": "成功要素.md", "label": "成功要素"}, {"id": "细节管理.md", "label": "细节管理"}, {"id": "游戏改变领导力.md", "label": "游戏改变领导力"}, {"id": "360度领导力.md", "label": "360度领导力"}, {"id": "复杂性思维.md", "label": "复杂性思维"}, {"id": "横向领导力.md", "label": "横向领导力"}, {"id": "组织韧性.md", "label": "组织韧性"}, {"id": "执行力伪概念.md", "label": "执行力伪概念"}, {"id": "VUCA.md", "label": "VUCA"}];
+var CONCEPT_SEARCH = [];
+
+
+/* ---- 搜索 ---- */
+var searchBox = document.getElementById("search-box");
+var searchResults = document.getElementById("search-results");
+
+searchBox.addEventListener("input", function(){
+  var q = this.value.trim().toLowerCase();
+  if(!q) { searchResults.style.display="none"; return; }
+  var combined = SEARCH_DATA.concat(CONCEPT_SEARCH.map(function(c){ return {id:c,label:c,type:"concept"}; }));
+  var matches = combined.filter(function(d){ return d.label.toLowerCase().indexOf(q)>-1; }).slice(0,12);
+  if(!matches.length) { searchResults.style.display="none"; return; }
+  searchResults.innerHTML = matches.map(function(d){
+    return '<div class="sri" data-id="'+d.id+'">'+d.label+'</div>';
+  }).join("");
+  searchResults.style.display="block";
+});
+
+searchResults.addEventListener("click", function(e){
+  var el = e.target.closest(".sri");
+  if(!el) return;
+  highlightNode(el.getAttribute("data-id"));
+  searchResults.style.display="none";
+  searchBox.value="";
+});
+
+function highlightNode(id){
+  svg.selectAll(".node").classed("highlight", function(d){ return d.id===id; });
+  svg.selectAll(".link").classed("highlight", function(d){
+    return d.source.id===id || d.target.id===id;
+  });
+  var nd = nodeMap.get(id);
+  if(!nd) return;
+  var t = d3.zoomTransform(svg.node());
+  var x = -nd.x*t.k + width/2;
+  var y = -nd.y*t.k + height/2;
+  svg.transition().duration(600).call(zoom.transform, d3.zoomIdentity.translate(x,y).scale(t.k));
+}
+
+/* ---- 详情面板 ---- */
+function showDetail(d){
+  var panel = document.getElementById("detail-panel");
+  var title = document.getElementById("detail-title");
+  var body  = document.getElementById("detail-body");
+
+  title.textContent = (d.title || d.label || d.id || "").replace(/\.md$/, "");
+
+  var html = "";
+
+  /* 元信息 */
+  html += '<div class="section"><div class="meta-row"><span class="meta-label">类型</span><span>' + (d.type==="concept" ? "💡 概念" : "📖 笔记") + '</span></div>';
+  if(d.domain)   html += '<div class="meta-row"><span class="meta-label">领域</span><span>' + d.domain + '</span></div>';
+  if(d.cluster) html += '<div class="meta-row"><span class="meta-label">聚类</span><span>' + d.cluster + '</span></div>';
+  if(d.degree !== undefined) html += '<div class="meta-row"><span class="meta-label">连通度</span><span>' + d.degree + '</span></div>';
+  html += '</div>';
+
+  /* 摘要 */
+  if(d.summary){
+    html += '<div class="section"><div class="section-title">📝 摘要</div><div class="summary">' + escapeHtml(d.summary.slice(0,500)) + (d.summary.length>500 ? "..." : "") + '</div></div>';
+  }
+
+  /* 关键词 */
+  if(d.keywords && d.keywords.length){
+    html += '<div class="section"><div class="section-title">🔑 关键词</div>';
+    d.keywords.forEach(function(kw){ html += '<span class="keyword">' + escapeHtml(kw) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 标签 */
+  if(d.tags && d.tags.length){
+    html += '<div class="section"><div class="section-title">🏷️ 标签</div>';
+    d.tags.forEach(function(tg){ html += '<span class="tag">' + escapeHtml(tg) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 打开原文件：用 Obsidian URI 协议，避免浏览器 file:// 限制 */
+  if(d.path){
+    var obsidianUrl = "obsidian://open?path=" + encodeURIComponent(d.path);
+    html += '<div class="section"><a class="open-link" href="' + obsidianUrl + '">📂 在 Obsidian 中打开</a></div>';
+  }
+
+  body.innerHTML = html;
+  panel.classList.add("open");
+}
+
+function closeDetail(){
+  document.getElementById("detail-panel").classList.remove("open");
+}
+
+function escapeHtml(s){
+  if(!s) return "";
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ---- D3 力导向图 ---- */
+var width  = window.innerWidth;
+var height = window.innerHeight - 48;
+var svg = d3.select("#graph").append("svg").attr("width",width).attr("height",height);
+var g = svg.append("g");
+var zoom = d3.zoom().scaleExtent([0.05,5]).on("zoom", function(e){ g.attr("transform", e.transform); });
+svg.call(zoom);
+
+var simulation = d3.forceSimulation(NODES)
+  .force("link",    d3.forceLink(LINKS).id(function(d){ return d.id; }).distance(90))
+  .force("charge",  d3.forceManyBody().strength(-220))
+  .force("center",  d3.forceCenter(width/2, height/2))
+  .force("collision", d3.forceCollide(30))
+  .force("x",       d3.forceX(width/2).strength(0.06))
+  .force("y",       d3.forceY(height/2).strength(0.06));
+
+var link = g.append("g").attr("class","links").selectAll("line")
+  .data(LINKS).join("line")
+  .attr("class", function(d){ return "link" + ((d.type==="book-book") ? " link-book" : ""); });
+
+var node = g.append("g").attr("class","nodes").selectAll("g")
+  .data(NODES).join("g")
+  .attr("class","node")
+  .attr("data-id", function(d){ return d.id; })
+  .call(d3.drag()
+    .on("start", function(event,d){ if(!event.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+    .on("drag",  function(event,d){ d.fx=event.x; d.fy=event.y; })
+    .on("end",   function(event,d){ if(!event.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+node.append("circle")
+  .attr("r", function(d){ return d.type==="book" ? 5+Math.sqrt(d.degree||1)*1.5 : 7; })
+  .attr("fill", function(d){ return d.type==="book" ? (CLUSTER_COLORS[d.cluster]||"#94a3b8") : "#10b981"; })
+  .attr("stroke", function(d){ return d.type==="book" ? "#0f172a" : "#d97706"; })
+  .on("mouseover", function(event,d){
+    var html = d.type==="book"
+      ? "<strong>📖 "+d.label+"</strong><br>连通度:"+d.degree+"<br>聚类:"+(d.cluster||"未分类")
+      : "<strong>💡 "+d.concept+"</strong><br>关联:"+d.book_count+" 篇";
+    d3.select("#tooltip").html(html).style("opacity",1)
+      .style("left",(event.pageX+12)+"px").style("top",(event.pageY-8)+"px");
+  })
+  .on("mouseout", function(){ d3.select("#tooltip").style("opacity",0); })
+  .on("click", function(event,d){
+    event.stopPropagation();
+    showDetail(d);
+  });
+
+node.append("text").attr("dx",11).attr("dy","0.35em").text(function(d){ return d.label; });
+
+var nodeMap = new Map();
+simulation.on("tick", function(){
+  link
+    .attr("x1", function(d){ return d.source.x; })
+    .attr("y1", function(d){ return d.source.y; })
+    .attr("x2", function(d){ return d.target.x; })
+    .attr("y2", function(d){ return d.target.y; });
+  node.attr("transform", function(d){
+    nodeMap.set(d.id, d);
+    return "translate("+d.x+","+d.y+")";
+  });
+});
+
+/* ---- 图例 ---- */
+var legendItems = d3.select("#legend").append("div").style("font-weight","bold").style("margin-bottom","8px").text("🎨 聚类").node().parentNode;
+Object.entries(CLUSTER_COLORS).forEach(function(entry){
+  var li = d3.select(legendItems).append("div").attr("class","li");
+  li.append("span").attr("class","ld").style("background",entry[1]);
+  li.append("span").text(entry[0]);
+});
+
+/* ---- 按钮 ---- */
+var conceptVisible = true;
+d3.select("#btn-toggle-concept").on("click", function(){
+  conceptVisible = !conceptVisible;
+  svg.selectAll(".node").filter(function(d){ return d.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  svg.selectAll(".link").filter(function(d){ return d.source.type==="concept"||d.target.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  d3.select(this).text(conceptVisible?"隐藏概念":"显示概念").classed("active",!conceptVisible);
+});
+d3.select("#btn-reset").on("click", function(){
+  closeDetail();
+  svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+});
+
+svg.on("click", function(){ searchResults.style.display="none"; });
+document.addEventListener("click", function(e){
+  if(!document.getElementById("detail-panel").contains(e.target) && !e.target.closest(".node")){
+    closeDetail();
+  }
+});
+
+/* 更新统计 */
+d3.select("#node-count").text(NODES.length);
+d3.select("#link-count").text(LINKS.length);
+</script>
+</body>
+</html>

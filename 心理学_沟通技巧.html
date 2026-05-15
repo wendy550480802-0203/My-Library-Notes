@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>心理学 - 沟通技巧 - 知识图谱</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#0f172a; color:#e2e8f0; overflow:hidden; }
+
+/* 侧边栏 */
+#sidebar { position:fixed; left:0; top:0; width:220px; height:100vh; background:#1e293b; border-right:1px solid #334155; overflow-y:auto; z-index:50; transition:transform 0.3s; font-size:12px; }
+#sidebar.collapsed { transform:translateX(-220px); }
+#sidebar h2 { font-size:13px; padding:12px 14px 8px; color:#94a3b8; border-bottom:1px solid #334155; }
+#sidebar .domain-header { padding:7px 14px; cursor:pointer; font-weight:600; border-bottom:1px solid #1a2332; transition:background 0.15s; user-select:none; }
+#sidebar .domain-header:hover { background:#334155; }
+#sidebar .domain-pages { display:none; }
+#sidebar .domain-pages a { display:block; padding:5px 14px 5px 24px; color:#cbd5e1; text-decoration:none; border-bottom:1px solid #1a2332; transition:background 0.15s; font-size:11px; }
+#sidebar .domain-pages a:hover { background:#334155; color:#fff; }
+#sidebar .domain-pages a.active { font-weight:600; }
+#sidebar a.active { background:#f59e0b; color:#0f172a; }
+#sidebar-toggle { position:fixed; left:8px; top:56px; z-index:60; background:#334155; border:1px solid #475569; color:#e2e8f0; border-radius:6px; padding:4px 7px; cursor:pointer; font-size:13px; transition:left 0.3s; }
+#sidebar:not(.collapsed) ~ #sidebar-toggle { left:228px; }
+
+/* 右侧详情面板 */
+#detail-panel { position:fixed; top:0; right:-420px; width:400px; height:100vh; background:#1e293b; border-left:1px solid #334155; z-index:55; transition:right 0.3s; display:flex; flex-direction:column; }
+#detail-panel.open { right:0; }
+#detail-header { padding:14px 16px; border-bottom:1px solid #334155; display:flex; align-items:flex-start; gap:10px; }
+#detail-header h2 { flex:1; font-size:14px; line-height:1.4; margin:0; word-break:break-all; }
+#detail-close { background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer; padding:0 4px; line-height:1; }
+#detail-close:hover { color:#fff; }
+#detail-body { flex:1; overflow-y:auto; padding:16px; font-size:13px; line-height:1.7; }
+#detail-body .section { margin-bottom:16px; }
+#detail-body .section-title { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+#detail-body .tag { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#334155; border-radius:4px; font-size:11px; color:#cbd5e1; }
+#detail-body .keyword { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; background:#f59e0b22; border:1px solid #f59e0b66; border-radius:4px; font-size:11px; color:#e2e8f0; }
+#detail-body .summary { color:#cbd5e1; white-space:pre-wrap; }
+#detail-body .open-link { display:inline-block; margin-top:12px; padding:6px 14px; background:#f59e0b; color:#0f172a; border-radius:6px; text-decoration:none; font-size:12px; font-weight:600; }
+#detail-body .open-link:hover { opacity:0.85; }
+#detail-body .meta-row { display:flex; gap:12px; margin-bottom:8px; font-size:12px; }
+#detail-body .meta-label { color:#94a3b8; min-width:60px; }
+#detail-body .connected-list { list-style:none; padding:0; }
+#detail-body .connected-list li { padding:4px 0; border-bottom:1px solid #1a2332; font-size:12px; cursor:pointer; }
+#detail-body .connected-list li:hover { color:#f59e0b; }
+
+#header { padding:10px 20px 10px 50px; background:#1e293b; border-bottom:1px solid #334155; display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-left:200px; transition:margin-left 0.3s; }
+#sidebar.collapsed ~ #header { margin-left:0; }
+#header h1 { margin:0; font-size:17px; color:#f59e0b; white-space:nowrap; }
+#search-wrap { position:relative; }
+#search-box { width:220px; padding:5px 10px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#e2e8f0; font-size:13px; }
+#search-results { position:absolute; top:32px; left:0; width:260px; max-height:300px; overflow-y:auto; background:#1e293b; border:1px solid #475569; border-radius:6px; display:none; z-index:100; }
+.sri { padding:7px 10px; cursor:pointer; font-size:12px; border-bottom:1px solid #334155; }
+.sri:hover { background:#334155; }
+.stats { font-size:12px; color:#94a3b8; white-space:nowrap; }
+.ctrls { display:flex; gap:6px; margin-left:auto; }
+.btn { padding:5px 12px; border-radius:6px; border:1px solid #475569; background:#334155; color:#e2e8f0; cursor:pointer; font-size:12px; }
+.btn:hover { background:#475569; }
+.btn.active { background:#f59e0b; color:#0f172a; border-color:#f59e0b; }
+#legend { position:absolute; top:52px; left:220px; background:#1e293b; border:1px solid #475569; border-radius:8px; padding:10px 14px; font-size:12px; z-index:10; }
+.li { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+.ld { width:10px; height:10px; border-radius:50%; }
+#tooltip { position:absolute; padding:8px 12px; background:#1e293b; border:1px solid #475569; border-radius:8px; font-size:12px; pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:100; box-shadow:0 4px 20px rgba(0,0,0,0.5); max-width:320px; }
+#graph { width:calc(100vw - 200px); height:calc(100vh - 48px); margin-left:200px; transition:width 0.3s, margin-left 0.3s; }
+#sidebar.collapsed ~ #graph { margin-left:0; width:100vw; }
+#detail-panel.open ~ #graph { width:calc(100vw - 200px - 400px); }
+.link { stroke:#475569; stroke-opacity:0.3; }
+.link-book { stroke-opacity:0.12; }
+.node circle { cursor:pointer; stroke-width:1.5; }
+.node text { fill:#e2e8f0; font-size:10px; pointer-events:none; }
+.highlight circle { stroke:#fff !important; stroke-width:2.5px; }
+.highlight text { fill:#fff; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>📚 藏书阁 · 知识图谱</h2>
+  <div class="domain-header" data-target="IT" style="color:#67e8f9; border-left:3px solid #67e8f9;">IT ▾</div>
+  <div class="domain-pages" id="IT">
+    <a href="IT.json" style="border-left:3px solid #67e8f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(225篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="个人成长" style="color:#fb923c; border-left:3px solid #fb923c;">个人成长 ▾</div>
+  <div class="domain-pages" id="个人成长">
+    <a href="个人成长.json" style="border-left:3px solid #fb923c; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(461篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="产品" style="color:#a855f7; border-left:3px solid #a855f7;">产品 ▾</div>
+  <div class="domain-pages" id="产品">
+    <a href="产品_(其他).json" style="border-left:3px solid #a855f7; padding-left:18px;">(其他) <span style="font-size:10px;color:#64748b;">(553篇)</span></a>
+    <a href="产品_产品思维.json" style="border-left:3px solid #a855f7; padding-left:18px;">产品思维 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="产品_小程序生态.json" style="border-left:3px solid #a855f7; padding-left:18px;">小程序生态 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="产品_用户增长.json" style="border-left:3px solid #a855f7; padding-left:18px;">用户增长 <span style="font-size:10px;color:#64748b;">(49篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="会计" style="color:#86efac; border-left:3px solid #86efac;">会计 ▾</div>
+  <div class="domain-pages" id="会计">
+    <a href="会计.json" style="border-left:3px solid #86efac; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(67篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="健康" style="color:#34d399; border-left:3px solid #34d399;">健康 ▾</div>
+  <div class="domain-pages" id="健康">
+    <a href="健康.json" style="border-left:3px solid #34d399; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(284篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="写作" style="color:#c084fc; border-left:3px solid #c084fc;">写作 ▾</div>
+  <div class="domain-pages" id="写作">
+    <a href="写作.json" style="border-left:3px solid #c084fc; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(238篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="历史" style="color:#06b6d4; border-left:3px solid #06b6d4;">历史 ▾</div>
+  <div class="domain-pages" id="历史">
+    <a href="历史_(其他)_part1.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part2.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part3.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part4.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="历史_(其他)_part5.json" style="border-left:3px solid #06b6d4; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(541篇)</span></a>
+    <a href="历史_世界史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">世界史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="历史_中国历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国历史 <span style="font-size:10px;color:#64748b;">(96篇)</span></a>
+    <a href="历史_中国古代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国古代文学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="历史_中国现代文学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国现代文学 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="历史_中国近代史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">中国近代史 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="历史_人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">人物传记 <span style="font-size:10px;color:#64748b;">(143篇)</span></a>
+    <a href="历史_军事历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">军事历史 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="历史_历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史 <span style="font-size:10px;color:#64748b;">(538篇)</span></a>
+    <a href="历史_历史与政治.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史与政治 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史人物传记.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史人物传记 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="历史_历史学.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史学 <span style="font-size:10px;color:#64748b;">(189篇)</span></a>
+    <a href="历史_历史小说.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史小说 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="历史_历史研究.json" style="border-left:3px solid #06b6d4; padding-left:18px;">历史研究 <span style="font-size:10px;color:#64748b;">(162篇)</span></a>
+    <a href="历史_思想史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">思想史 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="历史_文学与历史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">文学与历史 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="历史_科技史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">科技史 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="历史_艺术史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">艺术史 <span style="font-size:10px;color:#64748b;">(83篇)</span></a>
+    <a href="历史_西方哲学史.json" style="border-left:3px solid #06b6d4; padding-left:18px;">西方哲学史 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="哲学" style="color:#14b8a6; border-left:3px solid #14b8a6;">哲学 ▾</div>
+  <div class="domain-pages" id="哲学">
+    <a href="哲学_(其他)_part1.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="哲学_(其他)_part2.json" style="border-left:3px solid #14b8a6; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(272篇)</span></a>
+    <a href="哲学_中国哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">中国哲学 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="哲学_人生哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">人生哲学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="哲学_哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">哲学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+    <a href="哲学_政治哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">政治哲学 <span style="font-size:10px;color:#64748b;">(61篇)</span></a>
+    <a href="哲学_生活哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">生活哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+    <a href="哲学_社会哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">社会哲学 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="哲学_科学哲学.json" style="border-left:3px solid #14b8a6; padding-left:18px;">科学哲学 <span style="font-size:10px;color:#64748b;">(37篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="商业" style="color:#10b981; border-left:3px solid #10b981;">商业 ▾</div>
+  <div class="domain-pages" id="商业">
+    <a href="商业_(其他)_part1.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（1/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part2.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（2/3） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="商业_(其他)_part3.json" style="border-left:3px solid #10b981; padding-left:18px;">(其他)（3/3） <span style="font-size:10px;color:#64748b;">(391篇)</span></a>
+    <a href="商业_企业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">企业管理 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="商业_健康管理.json" style="border-left:3px solid #10b981; padding-left:18px;">健康管理 <span style="font-size:10px;color:#64748b;">(41篇)</span></a>
+    <a href="商业_创业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">创业管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业战略.json" style="border-left:3px solid #10b981; padding-left:18px;">商业战略 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_商业管理.json" style="border-left:3px solid #10b981; padding-left:18px;">商业管理 <span style="font-size:10px;color:#64748b;">(64篇)</span></a>
+    <a href="商业_投资理财.json" style="border-left:3px solid #10b981; padding-left:18px;">投资理财 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_知识管理.json" style="border-left:3px solid #10b981; padding-left:18px;">知识管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_管理.json" style="border-left:3px solid #10b981; padding-left:18px;">管理 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="商业_组织管理.json" style="border-left:3px solid #10b981; padding-left:18px;">组织管理 <span style="font-size:10px;color:#64748b;">(36篇)</span></a>
+    <a href="商业_经济学.json" style="border-left:3px solid #10b981; padding-left:18px;">经济学 <span style="font-size:10px;color:#64748b;">(74篇)</span></a>
+    <a href="商业_金融投资.json" style="border-left:3px solid #10b981; padding-left:18px;">金融投资 <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+    <a href="商业_领导力.json" style="border-left:3px solid #10b981; padding-left:18px;">领导力 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="图书馆学" style="color:#5eead4; border-left:3px solid #5eead4;">图书馆学 ▾</div>
+  <div class="domain-pages" id="图书馆学">
+    <a href="图书馆学.json" style="border-left:3px solid #5eead4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(23篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="宗教" style="color:#c4b5fd; border-left:3px solid #c4b5fd;">宗教 ▾</div>
+  <div class="domain-pages" id="宗教">
+    <a href="宗教.json" style="border-left:3px solid #c4b5fd; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(19篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="心理学" style="color:#f59e0b; border-left:3px solid #f59e0b;">心理学 ▾</div>
+  <div class="domain-pages" id="心理学">
+    <a href="心理学_(其他)_part1.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（1/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part2.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（2/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part3.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（3/4） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="心理学_(其他)_part4.json" style="border-left:3px solid #f59e0b; padding-left:18px;">(其他)（4/4） <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="心理学_个人成长与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">个人成长与心理学 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理健康.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理健康 <span style="font-size:10px;color:#64748b;">(31篇)</span></a>
+    <a href="心理学_心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">心理学 <span style="font-size:10px;color:#64748b;">(239篇)</span></a>
+    <a href="心理学_教育心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">教育心理学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="心理学_文学与心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">文学与心理学 <span style="font-size:10px;color:#64748b;">(119篇)</span></a>
+    <a href="心理学_沟通技巧.json" class="active" style="border-left:3px solid #f59e0b; padding-left:18px;">沟通技巧 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="心理学_社会心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">社会心理学 <span style="font-size:10px;color:#64748b;">(76篇)</span></a>
+    <a href="心理学_认知心理学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知心理学 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="心理学_认知科学.json" style="border-left:3px solid #f59e0b; padding-left:18px;">认知科学 <span style="font-size:10px;color:#64748b;">(39篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="房地产" style="color:#6ee7b7; border-left:3px solid #6ee7b7;">房地产 ▾</div>
+  <div class="domain-pages" id="房地产">
+    <a href="房地产.json" style="border-left:3px solid #6ee7b7; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(12篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="政治" style="color:#fbbf24; border-left:3px solid #fbbf24;">政治 ▾</div>
+  <div class="domain-pages" id="政治">
+    <a href="政治.json" style="border-left:3px solid #fbbf24; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(253篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="教育" style="color:#ec4899; border-left:3px solid #ec4899;">教育 ▾</div>
+  <div class="domain-pages" id="教育">
+    <a href="教育_(其他)_part1.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="教育_(其他)_part2.json" style="border-left:3px solid #ec4899; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(382篇)</span></a>
+    <a href="教育_个人成长.json" style="border-left:3px solid #ec4899; padding-left:18px;">个人成长 <span style="font-size:10px;color:#64748b;">(250篇)</span></a>
+    <a href="教育_儿童教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">儿童教育 <span style="font-size:10px;color:#64748b;">(62篇)</span></a>
+    <a href="教育_家庭教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">家庭教育 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="教育_教育理念.json" style="border-left:3px solid #ec4899; padding-left:18px;">教育理念 <span style="font-size:10px;color:#64748b;">(68篇)</span></a>
+    <a href="教育_财商教育.json" style="border-left:3px solid #ec4899; padding-left:18px;">财商教育 <span style="font-size:10px;color:#64748b;">(48篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="文学" style="color:#8b5cf6; border-left:3px solid #8b5cf6;">文学 ▾</div>
+  <div class="domain-pages" id="文学">
+    <a href="文学_(其他)_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（1/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（2/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（3/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（4/5） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_(其他)_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">(其他)（5/5） <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_中国古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">中国古典文学 <span style="font-size:10px;color:#64748b;">(112篇)</span></a>
+    <a href="文学_儿童文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">儿童文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_古典文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">古典文学 <span style="font-size:10px;color:#64748b;">(92篇)</span></a>
+    <a href="文学_奇幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">奇幻文学 <span style="font-size:10px;color:#64748b;">(51篇)</span></a>
+    <a href="文学_女性主义文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">女性主义文学 <span style="font-size:10px;color:#64748b;">(38篇)</span></a>
+    <a href="文学_悬疑小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">悬疑小说分析 <span style="font-size:10px;color:#64748b;">(52篇)</span></a>
+    <a href="文学_推理小说.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说 <span style="font-size:10px;color:#64748b;">(58篇)</span></a>
+    <a href="文学_推理小说分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理小说分析 <span style="font-size:10px;color:#64748b;">(126篇)</span></a>
+    <a href="文学_推理文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">推理文学 <span style="font-size:10px;color:#64748b;">(35篇)</span></a>
+    <a href="文学_文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学 <span style="font-size:10px;color:#64748b;">(223篇)</span></a>
+    <a href="文学_文学与个人成长.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与个人成长 <span style="font-size:10px;color:#64748b;">(55篇)</span></a>
+    <a href="文学_文学与人生哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与人生哲学 <span style="font-size:10px;color:#64748b;">(50篇)</span></a>
+    <a href="文学_文学与哲学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与哲学 <span style="font-size:10px;color:#64748b;">(303篇)</span></a>
+    <a href="文学_文学与社会学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学与社会学 <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+    <a href="文学_文学分析_part1.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（1/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part2.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（2/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part3.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（3/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part4.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（4/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part5.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（5/6） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="文学_文学分析_part6.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学分析（6/6） <span style="font-size:10px;color:#64748b;">(254篇)</span></a>
+    <a href="文学_文学批评.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学批评 <span style="font-size:10px;color:#64748b;">(70篇)</span></a>
+    <a href="文学_文学理论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学理论 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_文学研究.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学研究 <span style="font-size:10px;color:#64748b;">(84篇)</span></a>
+    <a href="文学_文学经典.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学经典 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="文学_文学解读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学解读 <span style="font-size:10px;color:#64748b;">(40篇)</span></a>
+    <a href="文学_文学评论.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学评论 <span style="font-size:10px;color:#64748b;">(482篇)</span></a>
+    <a href="文学_文学赏析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学赏析 <span style="font-size:10px;color:#64748b;">(72篇)</span></a>
+    <a href="文学_文学鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学鉴赏 <span style="font-size:10px;color:#64748b;">(82篇)</span></a>
+    <a href="文学_文学阅读.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">文学阅读 <span style="font-size:10px;color:#64748b;">(78篇)</span></a>
+    <a href="文学_旅行文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">旅行文学 <span style="font-size:10px;color:#64748b;">(42篇)</span></a>
+    <a href="文学_日本文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">日本文学 <span style="font-size:10px;color:#64748b;">(98篇)</span></a>
+    <a href="文学_武侠文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">武侠文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+    <a href="文学_科幻文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学 <span style="font-size:10px;color:#64748b;">(175篇)</span></a>
+    <a href="文学_科幻文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">科幻文学分析 <span style="font-size:10px;color:#64748b;">(60篇)</span></a>
+    <a href="文学_网络文学分析.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">网络文学分析 <span style="font-size:10px;color:#64748b;">(34篇)</span></a>
+    <a href="文学_艺术鉴赏.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">艺术鉴赏 <span style="font-size:10px;color:#64748b;">(44篇)</span></a>
+    <a href="文学_非虚构文学.json" style="border-left:3px solid #8b5cf6; padding-left:18px;">非虚构文学 <span style="font-size:10px;color:#64748b;">(30篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="时尚生活" style="color:#f9a8d4; border-left:3px solid #f9a8d4;">时尚生活 ▾</div>
+  <div class="domain-pages" id="时尚生活">
+    <a href="时尚生活.json" style="border-left:3px solid #f9a8d4; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(71篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="未知" style="color:#94a3b8; border-left:3px solid #94a3b8;">未知 ▾</div>
+  <div class="domain-pages" id="未知">
+    <a href="未知.json" style="border-left:3px solid #94a3b8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(16篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="法学" style="color:#fcd34d; border-left:3px solid #fcd34d;">法学 ▾</div>
+  <div class="domain-pages" id="法学">
+    <a href="法学.json" style="border-left:3px solid #fcd34d; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(66篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="社会学" style="color:#6366f1; border-left:3px solid #6366f1;">社会学 ▾</div>
+  <div class="domain-pages" id="社会学">
+    <a href="社会学_(其他)_part1.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="社会学_(其他)_part2.json" style="border-left:3px solid #6366f1; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(484篇)</span></a>
+    <a href="社会学_文化研究.json" style="border-left:3px solid #6366f1; padding-left:18px;">文化研究 <span style="font-size:10px;color:#64748b;">(57篇)</span></a>
+    <a href="社会学_社会学.json" style="border-left:3px solid #6366f1; padding-left:18px;">社会学 <span style="font-size:10px;color:#64748b;">(86篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="科学" style="color:#f97316; border-left:3px solid #f97316;">科学 ▾</div>
+  <div class="domain-pages" id="科学">
+    <a href="科学_(其他)_part1.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（1/2） <span style="font-size:10px;color:#64748b;">(600篇)</span></a>
+    <a href="科学_(其他)_part2.json" style="border-left:3px solid #f97316; padding-left:18px;">(其他)（2/2） <span style="font-size:10px;color:#64748b;">(116篇)</span></a>
+    <a href="科学_医学人文.json" style="border-left:3px solid #f97316; padding-left:18px;">医学人文 <span style="font-size:10px;color:#64748b;">(33篇)</span></a>
+    <a href="科学_神经科学.json" style="border-left:3px solid #f97316; padding-left:18px;">神经科学 <span style="font-size:10px;color:#64748b;">(56篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="编程" style="color:#818cf8; border-left:3px solid #818cf8;">编程 ▾</div>
+  <div class="domain-pages" id="编程">
+    <a href="编程.json" style="border-left:3px solid #818cf8; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(151篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="艺术" style="color:#e879f9; border-left:3px solid #e879f9;">艺术 ▾</div>
+  <div class="domain-pages" id="艺术">
+    <a href="艺术.json" style="border-left:3px solid #e879f9; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(365篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="英语" style="color:#f472b6; border-left:3px solid #f472b6;">英语 ▾</div>
+  <div class="domain-pages" id="英语">
+    <a href="英语.json" style="border-left:3px solid #f472b6; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(209篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="语言文学" style="color:#d8b4fe; border-left:3px solid #d8b4fe;">语言文学 ▾</div>
+  <div class="domain-pages" id="语言文学">
+    <a href="语言文学.json" style="border-left:3px solid #d8b4fe; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(43篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="金融" style="color:#a3e635; border-left:3px solid #a3e635;">金融 ▾</div>
+  <div class="domain-pages" id="金融">
+    <a href="金融.json" style="border-left:3px solid #a3e635; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(208篇)</span></a>
+  </div>
+  <div class="domain-header" data-target="雅思" style="color:#22d3ee; border-left:3px solid #22d3ee;">雅思 ▾</div>
+  <div class="domain-pages" id="雅思">
+    <a href="雅思.json" style="border-left:3px solid #22d3ee; padding-left:18px;">(全部) <span style="font-size:10px;color:#64748b;">(511篇)</span></a>
+  </div>
+
+    <script>
+    document.querySelectorAll('.domain-header').forEach(function(h){
+      h.addEventListener('click', function(){
+        var t = document.getElementById(this.dataset.target);
+        t.style.display = t.style.display==='none' ? 'block' : 'none';
+        this.innerHTML = this.innerHTML.replace(/[▾▸]/, t.style.display==='none'?'▸':'▾');
+      });
+    });
+    </script>
+    
+</div>
+<button id="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">☰</button>
+
+<div id="header">
+  <h1>📚 心理学 · 沟通技巧</h1>
+  <div id="search-wrap">
+    <input id="search-box" type="text" placeholder="🔍 搜索书名/概念...">
+    <div id="search-results"></div>
+  </div>
+  <div class="stats">
+    <span id="node-count">0</span> 节点 ·
+    <span id="link-count">0</span> 连接
+  </div>
+  <div class="ctrls">
+    <button class="btn" id="btn-toggle-concept">隐藏概念</button>
+    <button class="btn" id="btn-reset">重置视图</button>
+  </div>
+</div>
+
+<div id="graph"></div>
+<div id="tooltip"></div>
+
+<!-- 右侧详情面板 -->
+<div id="detail-panel">
+  <div id="detail-header">
+    <h2 id="detail-title"></h2>
+    <button id="detail-close" onclick="closeDetail()">✕</button>
+  </div>
+  <div id="detail-body"></div>
+</div>
+
+<script>
+var NODES = [{"id": "发问技巧.md", "label": "发问技巧", "title": "发问技巧", "type": "book", "degree": 2, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "核心主题：通过系统化的发问技巧，在职场与生活中赢得他人信任、激发行动力、挖掘真心话，并最终影响他人行为。适合人群：管理者、团队领导者、销售人员、教育工作者、父母，以及任何希望提升沟通效能、建立深度人际关系的读者。要点1：用发问传递“爱的信号”，构建信赖关系。书中反复强调“在发问中传达爱”，这与心理学家史蒂芬·柯维提出的“情感账户”概念高度一致。每一次带着关心的发问，都是在对方的情感账户中“存款”；而每一次只问结果、忽略感受的发问，都是在“取款”", "keywords": ["相关笔记", "情感账"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/优秀的人都是提问高手"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/发问技巧.md"}, {"id": "高情商聊天.md", "label": "高情商聊天", "title": "高情商聊天", "type": "book", "degree": 2, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "本书的核心处世智慧在于：在信息爆炸、职业更迭加速的时代，高情商的聊天能力已成为个人最可靠的“终身竞争力”。作者认为，当行业可能一夕消亡、机器不断替代重复劳动时，人类唯一无法被取代的优势是“有趣的灵魂”与“聊天力”——即通过语言建立深度信任、情感联结与影响力。这种能力并非天生，而是一套可习得的谋略：它要求说话者既具备主动性（激发对方兴趣、主导对话节奏），又消除攻击性（不强迫、不压迫），在共情与对抗之间找到精妙平衡。另外，“指出内在矛盾”的策略需要极高的感知力，若判断错误（比如误读了对方的真实情绪），可能被视为“自作聪明”或“冒犯隐私”。自我表露理论：指出对方“内在矛盾”（如外向者的沉默），实际上", "keywords": ["相关笔记", "高情商"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/高情商聊天术_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/高情商聊天.md"}, {"id": "嵌入式沟通.md", "label": "嵌入式沟通", "title": "嵌入式沟通", "type": "book", "degree": 2, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "本书的核心处世智慧在于：在信息爆炸、职业更迭加速的时代，高情商的聊天能力已成为个人最可靠的“终身竞争力”。作者认为，当行业可能一夕消亡、机器不断替代重复劳动时，人类唯一无法被取代的优势是“有趣的灵魂”与“聊天力”——即通过语言建立深度信任、情感联结与影响力。这种能力并非天生，而是一套可习得的谋略：它要求说话者既具备主动性（激发对方兴趣、主导对话节奏），又消除攻击性（不强迫、不压迫），在共情与对抗之间找到精妙平衡。另外，“指出内在矛盾”的策略需要极高的感知力，若判断错误（比如误读了对方的真实情绪），可能被视为“自作聪明”或“冒犯隐私”。自我表露理论：指出对方“内在矛盾”（如外向者的沉默），实际上", "keywords": ["相关笔记", "高情商"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/高情商聊天术_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/嵌入式沟通.md"}, {"id": "感性驱动.md", "label": "感性驱动", "title": "感性驱动", "type": "book", "degree": 2, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "核心主题：通过系统化的发问技巧，在职场与生活中赢得他人信任、激发行动力、挖掘真心话，并最终影响他人行为。适合人群：管理者、团队领导者、销售人员、教育工作者、父母，以及任何希望提升沟通效能、建立深度人际关系的读者。要点1：用发问传递“爱的信号”，构建信赖关系。书中反复强调“在发问中传达爱”，这与心理学家史蒂芬·柯维提出的“情感账户”概念高度一致。每一次带着关心的发问，都是在对方的情感账户中“存款”；而每一次只问结果、忽略感受的发问，都是在“取款”", "keywords": ["相关笔记", "情感账"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/优秀的人都是提问高手"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/感性驱动.md"}, {"id": "话题选择.md", "label": "话题选择", "title": "话题选择", "type": "book", "degree": 4, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "本书的核心处世智慧在于：真正的沟通高手不是巧舌如簧，而是“心里装着别人”——通过细致入微地关注对方的姓名、情绪、兴趣与需求，将尊重与关怀内化为语言行动的底层逻辑。这种智慧的本质是一种“以他人为中心”的利他型沟通策略，它要求说话者主动跳出自我视角，将对方的感受置于表达之前，用“共情”而非“炫技”来赢得信任与好感。作者认为，所有高效的社交行为都遵循一个根本原则：人最重视的是自己。因此，记住名字、选择对方感兴趣的话题、求人时礼仪先行、推销时注入关怀、真诚道谢——这些看似琐碎的行为，实则是一套系统性的“心理账户”管理术。本书案例多出自政商精英（卡内基、和珅、吉姆·佛雷），其逻辑底色是功利主义——记住名", "keywords": ["相关笔记", "人最重视的是自己", "权力暗示", "话题选"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/会说话，就是心里装着别人_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/话题选择.md"}, {"id": "引导思考.md", "label": "引导思考", "title": "引导思考", "type": "book", "degree": 4, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "《好好说话2》的核心理念在于：说话的本质不是技巧的堆砌，而是对“人”的深度理解与关怀。作者团队基于数千个真实生活困惑，提出一套以“降低对方抗拒”“建立信任”“引导思考”为核心的沟通哲学。其根本主张是：真正的沟通高手，不是用语言去操纵他人，而是通过营造“选择感”“安全感”和“共情感”，让对方心甘情愿地与你合作，同时维持关系的亲密与平等。本书将说话的目标归纳为“改变、化解、提升、维护、拉近、理解”六大维度，并强调所有技巧的根源在于说话者自身的情商——即对自我情绪、他人情绪以及双方权力关系的清醒认知。这种话术利用了心理学中的“承诺一致性”原理（先让人在小范围内做出选择，后续更易路径依赖），同时保留了", "keywords": ["核心机制", "启示", "好好说话", "引导思"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/好好说话2_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/引导思考.md"}, {"id": "反悔机制.md", "label": "反悔机制", "title": "反悔机制", "type": "book", "degree": 4, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "《好好说话2》的核心理念在于：说话的本质不是技巧的堆砌，而是对“人”的深度理解与关怀。作者团队基于数千个真实生活困惑，提出一套以“降低对方抗拒”“建立信任”“引导思考”为核心的沟通哲学。其根本主张是：真正的沟通高手，不是用语言去操纵他人，而是通过营造“选择感”“安全感”和“共情感”，让对方心甘情愿地与你合作，同时维持关系的亲密与平等。本书将说话的目标归纳为“改变、化解、提升、维护、拉近、理解”六大维度，并强调所有技巧的根源在于说话者自身的情商——即对自我情绪、他人情绪以及双方权力关系的清醒认知。这种话术利用了心理学中的“承诺一致性”原理（先让人在小范围内做出选择，后续更易路径依赖），同时保留了", "keywords": ["核心机制", "启示", "好好说话", "反悔机"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/好好说话2_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/反悔机制.md"}, {"id": "姓名记忆.md", "label": "姓名记忆", "title": "姓名记忆", "type": "book", "degree": 5, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "本书的核心处世智慧在于：真正的沟通高手不是巧舌如簧，而是“心里装着别人”——通过细致入微地关注对方的姓名、情绪、兴趣与需求，将尊重与关怀内化为语言行动的底层逻辑。这种智慧的本质是一种“以他人为中心”的利他型沟通策略，它要求说话者主动跳出自我视角，将对方的感受置于表达之前，用“共情”而非“炫技”来赢得信任与好感。作者认为，所有高效的社交行为都遵循一个根本原则：人最重视的是自己。书中以安德鲁·卡内基和吉姆·佛雷的案例为核心论证：卡内基利用“以名字命名兔子”赢得儿童合作，又以“艾格·汤姆森钢铁工厂”命名征服宾夕法尼亚铁路公司；吉姆·佛雷能叫出五万人的全名，从而从砖厂工人跃升为邮政局局长。本书案例多出", "keywords": ["人最重视的是自己", "权力暗示", "里装着别", "装着别人", "心里装"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/会说话，就是心里装着别人_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/姓名记忆.md"}, {"id": "心理账户管理.md", "label": "心理账户管理", "title": "心理账户管理", "type": "book", "degree": 5, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "本书的核心处世智慧在于：真正的沟通高手不是巧舌如簧，而是“心里装着别人”——通过细致入微地关注对方的姓名、情绪、兴趣与需求，将尊重与关怀内化为语言行动的底层逻辑。这种智慧的本质是一种“以他人为中心”的利他型沟通策略，它要求说话者主动跳出自我视角，将对方的感受置于表达之前，用“共情”而非“炫技”来赢得信任与好感。作者认为，所有高效的社交行为都遵循一个根本原则：人最重视的是自己。因此，记住名字、选择对方感兴趣的话题、求人时礼仪先行、推销时注入关怀、真诚道谢——这些看似琐碎的行为，实则是一套系统性的“心理账户”管理术。本书案例多出自政商精英（卡内基、和珅、吉姆·佛雷），其逻辑底色是功利主义——记住名", "keywords": ["人最重视的是自己", "权力暗示", "里装着别", "装着别人", "心里装"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/会说话，就是心里装着别人_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/心理账户管理.md"}, {"id": "选择感.md", "label": "选择感", "title": "选择感", "type": "book", "degree": 4, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "《好好说话2》的核心理念在于：说话的本质不是技巧的堆砌，而是对“人”的深度理解与关怀。作者团队基于数千个真实生活困惑，提出一套以“降低对方抗拒”“建立信任”“引导思考”为核心的沟通哲学。其根本主张是：真正的沟通高手，不是用语言去操纵他人，而是通过营造“选择感”“安全感”和“共情感”，让对方心甘情愿地与你合作，同时维持关系的亲密与平等。本书将说话的目标归纳为“改变、化解、提升、维护、拉近、理解”六大维度，并强调所有技巧的根源在于说话者自身的情商——即对自我情绪、他人情绪以及双方权力关系的清醒认知。这种话术利用了心理学中的“承诺一致性”原理（先让人在小范围内做出选择，后续更易路径依赖），同时保留了", "keywords": ["核心机制", "启示", "好好说话", "选择感"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/好好说话2_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/选择感.md"}, {"id": "反馈式倾听.md", "label": "反馈式倾听", "title": "反馈式倾听", "type": "book", "degree": 4, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "倾听不是听，而是一种主动的、全身心的“接收”。它不仅仅是耳朵的功能，更是大脑、心灵和身体的协同工作。真正的倾听，是让对方感受到“你被看见了”、“你被理解了”。倾听的五个层次：樊登老师常引用“听而不闻、假装在听、选择性倾听、专注地听、同理心倾听”这五个层次。绝大多数人停留在前三个层次，而我们需要刻意练习，达到“同理心倾听”的境界", "keywords": ["倾听的五个层次", "倾听的障碍", "让对方感", "同理心"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/07如何倾听"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/反馈式倾听.md"}, {"id": "认知重构.md", "label": "认知重构", "title": "认知重构", "type": "book", "degree": 4, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "《好好说话2》的核心理念在于：说话的本质不是技巧的堆砌，而是对“人”的深度理解与关怀。作者团队基于数千个真实生活困惑，提出一套以“降低对方抗拒”“建立信任”“引导思考”为核心的沟通哲学。其根本主张是：真正的沟通高手，不是用语言去操纵他人，而是通过营造“选择感”“安全感”和“共情感”，让对方心甘情愿地与你合作，同时维持关系的亲密与平等。本书将说话的目标归纳为“改变、化解、提升、维护、拉近、理解”六大维度，并强调所有技巧的根源在于说话者自身的情商——即对自我情绪、他人情绪以及双方权力关系的清醒认知。这种话术利用了心理学中的“承诺一致性”原理（先让人在小范围内做出选择，后续更易路径依赖），同时保留了", "keywords": ["核心机制", "启示", "好好说话", "认知重"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/好好说话2_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/认知重构.md"}, {"id": "感谢艺术.md", "label": "感谢艺术", "title": "感谢艺术", "type": "book", "degree": 5, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "本书的核心处世智慧在于：真正的沟通高手不是巧舌如簧，而是“心里装着别人”——通过细致入微地关注对方的姓名、情绪、兴趣与需求，将尊重与关怀内化为语言行动的底层逻辑。这种智慧的本质是一种“以他人为中心”的利他型沟通策略，它要求说话者主动跳出自我视角，将对方的感受置于表达之前，用“共情”而非“炫技”来赢得信任与好感。作者认为，所有高效的社交行为都遵循一个根本原则：人最重视的是自己。书中以安德鲁·卡内基和吉姆·佛雷的案例为核心论证：卡内基利用“以名字命名兔子”赢得儿童合作，又以“艾格·汤姆森钢铁工厂”命名征服宾夕法尼亚铁路公司；吉姆·佛雷能叫出五万人的全名，从而从砖厂工人跃升为邮政局局长。本书案例多出", "keywords": ["人最重视的是自己", "权力暗示", "里装着别", "装着别人", "心里装"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/会说话，就是心里装着别人_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/感谢艺术.md"}, {"id": "缓冲法.md", "label": "缓冲法", "title": "缓冲法", "type": "book", "degree": 4, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "核心主题：通过系统化的发问技巧，在职场与生活中赢得他人信任、激发行动力、挖掘真心话，并最终影响他人行为。适合人群：管理者、团队领导者、销售人员、教育工作者、父母，以及任何希望提升沟通效能、建立深度人际关系的读者。要点1：用发问传递“爱的信号”，构建信赖关系。书中反复强调“在发问中传达爱”，这与心理学家史蒂芬·柯维提出的“情感账户”概念高度一致。每一次带着关心的发问，都是在对方的情感账户中“存款”；而每一次只问结果、忽略感受的发问，都是在“取款”", "keywords": ["秀的人", "都是提", "提问高", "问高手"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/优秀的人都是提问高手"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/缓冲法.md"}, {"id": "花样赞美.md", "label": "花样赞美", "title": "花样赞美", "type": "book", "degree": 3, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "本书的核心处世智慧在于：在信息爆炸、职业更迭加速的时代，高情商的聊天能力已成为个人最可靠的“终身竞争力”。作者认为，当行业可能一夕消亡、机器不断替代重复劳动时，人类唯一无法被取代的优势是“有趣的灵魂”与“聊天力”——即通过语言建立深度信任、情感联结与影响力。这种能力并非天生，而是一套可习得的谋略：它要求说话者既具备主动性（激发对方兴趣、主导对话节奏），又消除攻击性（不强迫、不压迫），在共情与对抗之间找到精妙平衡。这种指出“外向者的内向性、内向者的外向性”的做法，能瞬间击中对方灵魂，产生“你懂我”的共鸣。自我表露理论：指出对方“内在矛盾”（如外向者的沉默），实际上是一种深层次的心理镜像——让对方", "keywords": ["高情商", "内在矛盾", "外向者"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/高情商聊天术_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/花样赞美.md"}, {"id": "姓名记忆术.md", "label": "姓名记忆术", "title": "姓名记忆术", "type": "book", "degree": 5, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "本书的核心处世智慧在于：真正的沟通高手不是巧舌如簧，而是“心里装着别人”——通过细致入微地关注对方的姓名、情绪、兴趣与需求，将尊重与关怀内化为语言行动的底层逻辑。这种智慧的本质是一种“以他人为中心”的利他型沟通策略，它要求说话者主动跳出自我视角，将对方的感受置于表达之前，用“共情”而非“炫技”来赢得信任与好感。作者认为，所有高效的社交行为都遵循一个根本原则：人最重视的是自己。书中以安德鲁·卡内基和吉姆·佛雷的案例为核心论证：卡内基利用“以名字命名兔子”赢得儿童合作，又以“艾格·汤姆森钢铁工厂”命名征服宾夕法尼亚铁路公司；吉姆·佛雷能叫出五万人的全名，从而从砖厂工人跃升为邮政局局长。本书案例多出", "keywords": ["人最重视的是自己", "权力暗示", "里装着别", "装着别人", "心里装"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/会说话，就是心里装着别人_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/姓名记忆术.md"}, {"id": "情感账户.md", "label": "情感账户", "title": "情感账户", "type": "book", "degree": 2, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "核心主题：通过系统化的发问技巧，在职场与生活中赢得他人信任、激发行动力、挖掘真心话，并最终影响他人行为。适合人群：管理者、团队领导者、销售人员、教育工作者、父母，以及任何希望提升沟通效能、建立深度人际关系的读者。要点1：用发问传递“爱的信号”，构建信赖关系。书中反复强调“在发问中传达爱”，这与心理学家史蒂芬·柯维提出的“情感账户”概念高度一致。每一次带着关心的发问，都是在对方的情感账户中“存款”；而每一次只问结果、忽略感受的发问，都是在“取款”", "keywords": ["情感账户", "秀的人"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/优秀的人都是提问高手"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/情感账户.md"}, {"id": "同理心倾听.md", "label": "同理心倾听", "title": "同理心倾听", "type": "book", "degree": 4, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "倾听不是听，而是一种主动的、全身心的“接收”。它不仅仅是耳朵的功能，更是大脑、心灵和身体的协同工作。真正的倾听，是让对方感受到“你被看见了”、“你被理解了”。倾听的五个层次：樊登老师常引用“听而不闻、假装在听、选择性倾听、专注地听、同理心倾听”这五个层次。绝大多数人停留在前三个层次，而我们需要刻意练习，达到“同理心倾听”的境界", "keywords": ["倾听的五个层次", "倾听的障碍", "同理心倾", "心倾听"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/07如何倾听"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/同理心倾听.md"}, {"id": "关怀式推销.md", "label": "关怀式推销", "title": "关怀式推销", "type": "book", "degree": 5, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "本书的核心处世智慧在于：真正的沟通高手不是巧舌如簧，而是“心里装着别人”——通过细致入微地关注对方的姓名、情绪、兴趣与需求，将尊重与关怀内化为语言行动的底层逻辑。这种智慧的本质是一种“以他人为中心”的利他型沟通策略，它要求说话者主动跳出自我视角，将对方的感受置于表达之前，用“共情”而非“炫技”来赢得信任与好感。作者认为，所有高效的社交行为都遵循一个根本原则：人最重视的是自己。因此，记住名字、选择对方感兴趣的话题、求人时礼仪先行、推销时注入关怀、真诚道谢——这些看似琐碎的行为，实则是一套系统性的“心理账户”管理术。本书案例多出自政商精英（卡内基、和珅、吉姆·佛雷），其逻辑底色是功利主义——记住名", "keywords": ["人最重视的是自己", "权力暗示", "里装着别", "装着别人", "心里装"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/会说话，就是心里装着别人_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/关怀式推销.md"}, {"id": "共情沟通.md", "label": "共情沟通", "title": "共情沟通", "type": "book", "degree": 5, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "本书的核心处世智慧在于：真正的沟通高手不是巧舌如簧，而是“心里装着别人”——通过细致入微地关注对方的姓名、情绪、兴趣与需求，将尊重与关怀内化为语言行动的底层逻辑。这种智慧的本质是一种“以他人为中心”的利他型沟通策略，它要求说话者主动跳出自我视角，将对方的感受置于表达之前，用“共情”而非“炫技”来赢得信任与好感。作者认为，所有高效的社交行为都遵循一个根本原则：人最重视的是自己。书中以安德鲁·卡内基和吉姆·佛雷的案例为核心论证：卡内基利用“以名字命名兔子”赢得儿童合作，又以“艾格·汤姆森钢铁工厂”命名征服宾夕法尼亚铁路公司；吉姆·佛雷能叫出五万人的全名，从而从砖厂工人跃升为邮政局局长。本书案例多出", "keywords": ["人最重视的是自己", "权力暗示", "里装着别", "装着别人", "心里装"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/会说话，就是心里装着别人_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/共情沟通.md"}, {"id": "示弱式发问.md", "label": "示弱式发问", "title": "示弱式发问", "type": "book", "degree": 4, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "核心主题：通过系统化的发问技巧，在职场与生活中赢得他人信任、激发行动力、挖掘真心话，并最终影响他人行为。适合人群：管理者、团队领导者、销售人员、教育工作者、父母，以及任何希望提升沟通效能、建立深度人际关系的读者。要点1：用发问传递“爱的信号”，构建信赖关系。书中反复强调“在发问中传达爱”，这与心理学家史蒂芬·柯维提出的“情感账户”概念高度一致。每一次带着关心的发问，都是在对方的情感账户中“存款”；而每一次只问结果、忽略感受的发问，都是在“取款”", "keywords": ["秀的人", "都是提", "提问高", "问高手"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/优秀的人都是提问高手"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/示弱式发问.md"}, {"id": "话题选择术.md", "label": "话题选择术", "title": "话题选择术", "type": "book", "degree": 4, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "本书的核心处世智慧在于：真正的沟通高手不是巧舌如簧，而是“心里装着别人”——通过细致入微地关注对方的姓名、情绪、兴趣与需求，将尊重与关怀内化为语言行动的底层逻辑。这种智慧的本质是一种“以他人为中心”的利他型沟通策略，它要求说话者主动跳出自我视角，将对方的感受置于表达之前，用“共情”而非“炫技”来赢得信任与好感。作者认为，所有高效的社交行为都遵循一个根本原则：人最重视的是自己。因此，记住名字、选择对方感兴趣的话题、求人时礼仪先行、推销时注入关怀、真诚道谢——这些看似琐碎的行为，实则是一套系统性的“心理账户”管理术。本书案例多出自政商精英（卡内基、和珅、吉姆·佛雷），其逻辑底色是功利主义——记住名", "keywords": ["人最重视的是自己", "权力暗示", "话题选择", "心里装"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/会说话，就是心里装着别人_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/话题选择术.md"}, {"id": "兴奋点转化.md", "label": "兴奋点转化", "title": "兴奋点转化", "type": "book", "degree": 3, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "本书的核心处世智慧在于：在信息爆炸、职业更迭加速的时代，高情商的聊天能力已成为个人最可靠的“终身竞争力”。作者认为，当行业可能一夕消亡、机器不断替代重复劳动时，人类唯一无法被取代的优势是“有趣的灵魂”与“聊天力”——即通过语言建立深度信任、情感联结与影响力。这种能力并非天生，而是一套可习得的谋略：它要求说话者既具备主动性（激发对方兴趣、主导对话节奏），又消除攻击性（不强迫、不压迫），在共情与对抗之间找到精妙平衡。这种指出“外向者的内向性、内向者的外向性”的做法，能瞬间击中对方灵魂，产生“你懂我”的共鸣。自我表露理论：指出对方“内在矛盾”（如外向者的沉默），实际上是一种深层次的心理镜像——让对方", "keywords": ["高情商", "内在矛盾", "外向者"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/高情商聊天术_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/兴奋点转化.md"}, {"id": "系统思维.md", "label": "系统思维", "title": "系统思维", "type": "book", "degree": 3, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "作者：[美]道格拉斯·斯通、布鲁斯·佩顿、希拉·汉。核心主题：本书系统揭示了高难度谈话的本质与结构，提供了一套破解沟通僵局的思维框架和实用技巧，帮助人们在充满情绪、分歧和利害冲突的对话中，实现有效沟通、化解矛盾并建立更健康的人际关系。适合人群：所有在职场、家庭、社交中面临沟通困境的人，特别是管理者、谈判者、家长、医护人员、教育工作者，以及任何希望提升人际交往能力的人。要点1：高难度谈话的“三层结构”——每一场艰难对话都有隐藏的密码。每一场高难度谈话实际上都包含三个独立却又相互交织的对话层面：", "keywords": ["高难度谈", "度谈话", "归责与归因的区分"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/高难度谈话"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/系统思维.md"}, {"id": "共同学习.md", "label": "共同学习", "title": "共同学习", "type": "book", "degree": 3, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "作者：[美]道格拉斯·斯通、布鲁斯·佩顿、希拉·汉。核心主题：本书系统揭示了高难度谈话的本质与结构，提供了一套破解沟通僵局的思维框架和实用技巧，帮助人们在充满情绪、分歧和利害冲突的对话中，实现有效沟通、化解矛盾并建立更健康的人际关系。适合人群：所有在职场、家庭、社交中面临沟通困境的人，特别是管理者、谈判者、家长、医护人员、教育工作者，以及任何希望提升人际交往能力的人。要点1：高难度谈话的“三层结构”——每一场艰难对话都有隐藏的密码。每一场高难度谈话实际上都包含三个独立却又相互交织的对话层面：", "keywords": ["高难度谈", "度谈话", "归责与归因的区分"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/高难度谈话"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/共同学习.md"}, {"id": "信任建立.md", "label": "信任建立", "title": "信任建立", "type": "book", "degree": 4, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "《好好说话2》的核心理念在于：说话的本质不是技巧的堆砌，而是对“人”的深度理解与关怀。作者团队基于数千个真实生活困惑，提出一套以“降低对方抗拒”“建立信任”“引导思考”为核心的沟通哲学。其根本主张是：真正的沟通高手，不是用语言去操纵他人，而是通过营造“选择感”“安全感”和“共情感”，让对方心甘情愿地与你合作，同时维持关系的亲密与平等。本书将说话的目标归纳为“改变、化解、提升、维护、拉近、理解”六大维度，并强调所有技巧的根源在于说话者自身的情商——即对自我情绪、他人情绪以及双方权力关系的清醒认知。这种话术利用了心理学中的“承诺一致性”原理（先让人在小范围内做出选择，后续更易路径依赖），同时保留了", "keywords": ["核心机制", "启示", "好好说话", "选择感"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/好好说话2_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/信任建立.md"}, {"id": "三层结构.md", "label": "三层结构", "title": "三层结构", "type": "book", "degree": 3, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "作者：[美]道格拉斯·斯通、布鲁斯·佩顿、希拉·汉。核心主题：本书系统揭示了高难度谈话的本质与结构，提供了一套破解沟通僵局的思维框架和实用技巧，帮助人们在充满情绪、分歧和利害冲突的对话中，实现有效沟通、化解矛盾并建立更健康的人际关系。适合人群：所有在职场、家庭、社交中面临沟通困境的人，特别是管理者、谈判者、家长、医护人员、教育工作者，以及任何希望提升人际交往能力的人。要点1：高难度谈话的“三层结构”——每一场艰难对话都有隐藏的密码。每一场高难度谈话实际上都包含三个独立却又相互交织的对话层面：", "keywords": ["高难度谈", "度谈话", "归责与归因的区分"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/高难度谈话"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/三层结构.md"}, {"id": "3F倾听法.md", "label": "3F倾听法", "title": "3F倾听法", "type": "book", "degree": 4, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "倾听不是听，而是一种主动的、全身心的“接收”。它不仅仅是耳朵的功能，更是大脑、心灵和身体的协同工作。真正的倾听，是让对方感受到“你被看见了”、“你被理解了”。倾听的五个层次：樊登老师常引用“听而不闻、假装在听、选择性倾听、专注地听、同理心倾听”这五个层次。绝大多数人停留在前三个层次，而我们需要刻意练习，达到“同理心倾听”的境界", "keywords": ["倾听的五个层次", "倾听的障碍", "让对方感", "同理心"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/07如何倾听"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/3F倾听法.md"}, {"id": "倾听的五个层次.md", "label": "倾听的五个层次", "title": "倾听的五个层次", "type": "book", "degree": 4, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "倾听不是听，而是一种主动的、全身心的“接收”。它不仅仅是耳朵的功能，更是大脑、心灵和身体的协同工作。真正的倾听，是让对方感受到“你被看见了”、“你被理解了”。倾听的五个层次：樊登老师常引用“听而不闻、假装在听、选择性倾听、专注地听、同理心倾听”这五个层次。这种心态导致了沟通的失败，让对方感到不被尊重，关系疏远", "keywords": ["倾听的五个层次", "倾听的障碍", "让对方感", "同理心"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/07如何倾听"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/倾听的五个层次.md"}, {"id": "身份认同.md", "label": "身份认同", "title": "身份认同", "type": "book", "degree": 3, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "作者：[美]道格拉斯·斯通、布鲁斯·佩顿、希拉·汉。核心主题：本书系统揭示了高难度谈话的本质与结构，提供了一套破解沟通僵局的思维框架和实用技巧，帮助人们在充满情绪、分歧和利害冲突的对话中，实现有效沟通、化解矛盾并建立更健康的人际关系。适合人群：所有在职场、家庭、社交中面临沟通困境的人，特别是管理者、谈判者、家长、医护人员、教育工作者，以及任何希望提升人际交往能力的人。要点1：高难度谈话的“三层结构”——每一场艰难对话都有隐藏的密码。每一场高难度谈话实际上都包含三个独立却又相互交织的对话层面：", "keywords": ["高难度谈", "度谈话", "归责与归因的区分"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/高难度谈话"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/身份认同.md"}, {"id": "表里一体法.md", "label": "表里一体法", "title": "表里一体法", "type": "book", "degree": 4, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "核心主题：通过系统化的发问技巧，在职场与生活中赢得他人信任、激发行动力、挖掘真心话，并最终影响他人行为。适合人群：管理者、团队领导者、销售人员、教育工作者、父母，以及任何希望提升沟通效能、建立深度人际关系的读者。要点1：用发问传递“爱的信号”，构建信赖关系。书中反复强调“在发问中传达爱”，这与心理学家史蒂芬·柯维提出的“情感账户”概念高度一致。每一次带着关心的发问，都是在对方的情感账户中“存款”；而每一次只问结果、忽略感受的发问，都是在“取款”", "keywords": ["秀的人", "都是提", "提问高", "问高手"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/优秀的人都是提问高手"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/表里一体法.md"}, {"id": "情绪管理.md", "label": "情绪管理", "title": "情绪管理", "type": "book", "degree": 3, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "作者：[美]道格拉斯·斯通、布鲁斯·佩顿、希拉·汉。核心主题：本书系统揭示了高难度谈话的本质与结构，提供了一套破解沟通僵局的思维框架和实用技巧，帮助人们在充满情绪、分歧和利害冲突的对话中，实现有效沟通、化解矛盾并建立更健康的人际关系。适合人群：所有在职场、家庭、社交中面临沟通困境的人，特别是管理者、谈判者、家长、医护人员、教育工作者，以及任何希望提升人际交往能力的人。要点1：高难度谈话的“三层结构”——每一场艰难对话都有隐藏的密码。每一场高难度谈话实际上都包含三个独立却又相互交织的对话层面：", "keywords": ["高难度谈", "度谈话", "归责与归因的区分"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/高难度谈话"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/情绪管理.md"}, {"id": "内在矛盾.md", "label": "内在矛盾", "title": "内在矛盾", "type": "book", "degree": 3, "cluster": "沟通技巧", "domain": "心理学", "sub_domain": "沟通技巧", "summary": "本书的核心处世智慧在于：在信息爆炸、职业更迭加速的时代，高情商的聊天能力已成为个人最可靠的“终身竞争力”。作者认为，当行业可能一夕消亡、机器不断替代重复劳动时，人类唯一无法被取代的优势是“有趣的灵魂”与“聊天力”——即通过语言建立深度信任、情感联结与影响力。这种能力并非天生，而是一套可习得的谋略：它要求说话者既具备主动性（激发对方兴趣、主导对话节奏），又消除攻击性（不强迫、不压迫），在共情与对抗之间找到精妙平衡。这种指出“外向者的内向性、内向者的外向性”的做法，能瞬间击中对方灵魂，产生“你懂我”的共鸣。自我表露理论：指出对方“内在矛盾”（如外向者的沉默），实际上是一种深层次的心理镜像——让对方", "keywords": ["内在矛盾", "高情商", "外向者"], "tags": ["domain/心理学", "sub_domain/沟通技巧", "type/concept", "source/高情商聊天术_四层笔记"], "path": "/Users/liwenqi/Desktop/Obsidian Vault/心理学/沟通技巧/内在矛盾.md"}];
+var LINKS = [{"source": "发问技巧.md", "target": "感性驱动.md", "value": 2, "shared": ["情感账", "相关笔记"]}, {"source": "高情商聊天.md", "target": "嵌入式沟通.md", "value": 2, "shared": ["高情商", "相关笔记"]}, {"source": "话题选择.md", "target": "姓名记忆.md", "value": 2, "shared": ["人最重视的是自己", "权力暗示"]}, {"source": "话题选择.md", "target": "心理账户管理.md", "value": 2, "shared": ["人最重视的是自己", "权力暗示"]}, {"source": "话题选择.md", "target": "感谢艺术.md", "value": 2, "shared": ["人最重视的是自己", "权力暗示"]}, {"source": "话题选择.md", "target": "姓名记忆术.md", "value": 2, "shared": ["人最重视的是自己", "权力暗示"]}, {"source": "话题选择.md", "target": "关怀式推销.md", "value": 2, "shared": ["人最重视的是自己", "权力暗示"]}, {"source": "话题选择.md", "target": "共情沟通.md", "value": 2, "shared": ["人最重视的是自己", "权力暗示"]}, {"source": "话题选择.md", "target": "话题选择术.md", "value": 2, "shared": ["人最重视的是自己", "权力暗示"]}, {"source": "引导思考.md", "target": "反悔机制.md", "value": 3, "shared": ["好好说话", "核心机制", "启示"]}, {"source": "引导思考.md", "target": "选择感.md", "value": 3, "shared": ["好好说话", "核心机制", "启示"]}, {"source": "引导思考.md", "target": "认知重构.md", "value": 3, "shared": ["好好说话", "核心机制", "启示"]}, {"source": "引导思考.md", "target": "信任建立.md", "value": 3, "shared": ["好好说话", "核心机制", "启示"]}, {"source": "反悔机制.md", "target": "选择感.md", "value": 3, "shared": ["好好说话", "核心机制", "启示"]}, {"source": "反悔机制.md", "target": "认知重构.md", "value": 3, "shared": ["好好说话", "核心机制", "启示"]}, {"source": "反悔机制.md", "target": "信任建立.md", "value": 3, "shared": ["好好说话", "核心机制", "启示"]}, {"source": "姓名记忆.md", "target": "心理账户管理.md", "value": 5, "shared": ["人最重视的是自己", "里装着别", "装着别人", "心里装", "权力暗示"]}, {"source": "姓名记忆.md", "target": "感谢艺术.md", "value": 5, "shared": ["人最重视的是自己", "里装着别", "装着别人", "心里装", "权力暗示"]}, {"source": "姓名记忆.md", "target": "姓名记忆术.md", "value": 5, "shared": ["人最重视的是自己", "里装着别", "装着别人", "心里装", "权力暗示"]}, {"source": "姓名记忆.md", "target": "关怀式推销.md", "value": 5, "shared": ["人最重视的是自己", "里装着别", "装着别人", "心里装", "权力暗示"]}, {"source": "姓名记忆.md", "target": "共情沟通.md", "value": 5, "shared": ["人最重视的是自己", "里装着别", "装着别人", "心里装", "权力暗示"]}, {"source": "姓名记忆.md", "target": "话题选择术.md", "value": 3, "shared": ["人最重视的是自己", "心里装", "权力暗示"]}, {"source": "心理账户管理.md", "target": "感谢艺术.md", "value": 5, "shared": ["人最重视的是自己", "里装着别", "装着别人", "心里装", "权力暗示"]}, {"source": "心理账户管理.md", "target": "姓名记忆术.md", "value": 5, "shared": ["人最重视的是自己", "里装着别", "装着别人", "心里装", "权力暗示"]}, {"source": "心理账户管理.md", "target": "关怀式推销.md", "value": 5, "shared": ["人最重视的是自己", "里装着别", "装着别人", "心里装", "权力暗示"]}, {"source": "心理账户管理.md", "target": "共情沟通.md", "value": 5, "shared": ["人最重视的是自己", "里装着别", "装着别人", "心里装", "权力暗示"]}, {"source": "心理账户管理.md", "target": "话题选择术.md", "value": 3, "shared": ["人最重视的是自己", "心里装", "权力暗示"]}, {"source": "选择感.md", "target": "认知重构.md", "value": 3, "shared": ["好好说话", "核心机制", "启示"]}, {"source": "选择感.md", "target": "信任建立.md", "value": 4, "shared": ["好好说话", "核心机制", "启示", "选择感"]}, {"source": "反馈式倾听.md", "target": "同理心倾听.md", "value": 2, "shared": ["倾听的五个层次", "倾听的障碍"]}, {"source": "反馈式倾听.md", "target": "3F倾听法.md", "value": 4, "shared": ["倾听的障碍", "倾听的五个层次", "同理心", "让对方感"]}, {"source": "反馈式倾听.md", "target": "倾听的五个层次.md", "value": 4, "shared": ["倾听的障碍", "倾听的五个层次", "同理心", "让对方感"]}, {"source": "认知重构.md", "target": "信任建立.md", "value": 3, "shared": ["好好说话", "核心机制", "启示"]}, {"source": "感谢艺术.md", "target": "姓名记忆术.md", "value": 5, "shared": ["人最重视的是自己", "里装着别", "装着别人", "心里装", "权力暗示"]}, {"source": "感谢艺术.md", "target": "关怀式推销.md", "value": 5, "shared": ["人最重视的是自己", "里装着别", "装着别人", "心里装", "权力暗示"]}, {"source": "感谢艺术.md", "target": "共情沟通.md", "value": 5, "shared": ["人最重视的是自己", "里装着别", "装着别人", "心里装", "权力暗示"]}, {"source": "感谢艺术.md", "target": "话题选择术.md", "value": 3, "shared": ["人最重视的是自己", "心里装", "权力暗示"]}, {"source": "缓冲法.md", "target": "示弱式发问.md", "value": 4, "shared": ["提问高", "都是提", "问高手", "秀的人"]}, {"source": "缓冲法.md", "target": "表里一体法.md", "value": 4, "shared": ["提问高", "都是提", "问高手", "秀的人"]}, {"source": "花样赞美.md", "target": "兴奋点转化.md", "value": 3, "shared": ["高情商", "内在矛盾", "外向者"]}, {"source": "花样赞美.md", "target": "内在矛盾.md", "value": 3, "shared": ["高情商", "内在矛盾", "外向者"]}, {"source": "姓名记忆术.md", "target": "关怀式推销.md", "value": 5, "shared": ["人最重视的是自己", "里装着别", "装着别人", "心里装", "权力暗示"]}, {"source": "姓名记忆术.md", "target": "共情沟通.md", "value": 5, "shared": ["人最重视的是自己", "里装着别", "装着别人", "心里装", "权力暗示"]}, {"source": "姓名记忆术.md", "target": "话题选择术.md", "value": 3, "shared": ["人最重视的是自己", "心里装", "权力暗示"]}, {"source": "同理心倾听.md", "target": "3F倾听法.md", "value": 2, "shared": ["倾听的五个层次", "倾听的障碍"]}, {"source": "同理心倾听.md", "target": "倾听的五个层次.md", "value": 2, "shared": ["倾听的五个层次", "倾听的障碍"]}, {"source": "关怀式推销.md", "target": "共情沟通.md", "value": 5, "shared": ["人最重视的是自己", "里装着别", "装着别人", "心里装", "权力暗示"]}, {"source": "关怀式推销.md", "target": "话题选择术.md", "value": 3, "shared": ["人最重视的是自己", "心里装", "权力暗示"]}, {"source": "共情沟通.md", "target": "话题选择术.md", "value": 3, "shared": ["人最重视的是自己", "心里装", "权力暗示"]}, {"source": "示弱式发问.md", "target": "表里一体法.md", "value": 4, "shared": ["提问高", "都是提", "问高手", "秀的人"]}, {"source": "兴奋点转化.md", "target": "内在矛盾.md", "value": 3, "shared": ["高情商", "内在矛盾", "外向者"]}, {"source": "系统思维.md", "target": "共同学习.md", "value": 3, "shared": ["高难度谈", "归责与归因的区分", "度谈话"]}, {"source": "系统思维.md", "target": "三层结构.md", "value": 3, "shared": ["高难度谈", "归责与归因的区分", "度谈话"]}, {"source": "系统思维.md", "target": "身份认同.md", "value": 3, "shared": ["高难度谈", "归责与归因的区分", "度谈话"]}, {"source": "系统思维.md", "target": "情绪管理.md", "value": 3, "shared": ["高难度谈", "归责与归因的区分", "度谈话"]}, {"source": "共同学习.md", "target": "三层结构.md", "value": 3, "shared": ["高难度谈", "归责与归因的区分", "度谈话"]}, {"source": "共同学习.md", "target": "身份认同.md", "value": 3, "shared": ["高难度谈", "归责与归因的区分", "度谈话"]}, {"source": "共同学习.md", "target": "情绪管理.md", "value": 3, "shared": ["高难度谈", "归责与归因的区分", "度谈话"]}, {"source": "三层结构.md", "target": "身份认同.md", "value": 3, "shared": ["高难度谈", "归责与归因的区分", "度谈话"]}, {"source": "三层结构.md", "target": "情绪管理.md", "value": 3, "shared": ["高难度谈", "归责与归因的区分", "度谈话"]}, {"source": "3F倾听法.md", "target": "倾听的五个层次.md", "value": 4, "shared": ["倾听的障碍", "倾听的五个层次", "同理心", "让对方感"]}, {"source": "身份认同.md", "target": "情绪管理.md", "value": 3, "shared": ["高难度谈", "归责与归因的区分", "度谈话"]}];
+var CLUSTER_COLORS = {"沟通技巧": "#f59e0b"};
+var SEARCH_DATA = [{"id": "发问技巧.md", "label": "发问技巧"}, {"id": "高情商聊天.md", "label": "高情商聊天"}, {"id": "嵌入式沟通.md", "label": "嵌入式沟通"}, {"id": "感性驱动.md", "label": "感性驱动"}, {"id": "话题选择.md", "label": "话题选择"}, {"id": "引导思考.md", "label": "引导思考"}, {"id": "反悔机制.md", "label": "反悔机制"}, {"id": "姓名记忆.md", "label": "姓名记忆"}, {"id": "心理账户管理.md", "label": "心理账户管理"}, {"id": "选择感.md", "label": "选择感"}, {"id": "反馈式倾听.md", "label": "反馈式倾听"}, {"id": "认知重构.md", "label": "认知重构"}, {"id": "感谢艺术.md", "label": "感谢艺术"}, {"id": "缓冲法.md", "label": "缓冲法"}, {"id": "花样赞美.md", "label": "花样赞美"}, {"id": "姓名记忆术.md", "label": "姓名记忆术"}, {"id": "情感账户.md", "label": "情感账户"}, {"id": "同理心倾听.md", "label": "同理心倾听"}, {"id": "关怀式推销.md", "label": "关怀式推销"}, {"id": "共情沟通.md", "label": "共情沟通"}, {"id": "示弱式发问.md", "label": "示弱式发问"}, {"id": "话题选择术.md", "label": "话题选择术"}, {"id": "兴奋点转化.md", "label": "兴奋点转化"}, {"id": "系统思维.md", "label": "系统思维"}, {"id": "共同学习.md", "label": "共同学习"}, {"id": "信任建立.md", "label": "信任建立"}, {"id": "三层结构.md", "label": "三层结构"}, {"id": "3F倾听法.md", "label": "3F倾听法"}, {"id": "倾听的五个层次.md", "label": "倾听的五个层次"}, {"id": "身份认同.md", "label": "身份认同"}, {"id": "表里一体法.md", "label": "表里一体法"}, {"id": "情绪管理.md", "label": "情绪管理"}, {"id": "内在矛盾.md", "label": "内在矛盾"}];
+var CONCEPT_SEARCH = [];
+
+
+/* ---- 搜索 ---- */
+var searchBox = document.getElementById("search-box");
+var searchResults = document.getElementById("search-results");
+
+searchBox.addEventListener("input", function(){
+  var q = this.value.trim().toLowerCase();
+  if(!q) { searchResults.style.display="none"; return; }
+  var combined = SEARCH_DATA.concat(CONCEPT_SEARCH.map(function(c){ return {id:c,label:c,type:"concept"}; }));
+  var matches = combined.filter(function(d){ return d.label.toLowerCase().indexOf(q)>-1; }).slice(0,12);
+  if(!matches.length) { searchResults.style.display="none"; return; }
+  searchResults.innerHTML = matches.map(function(d){
+    return '<div class="sri" data-id="'+d.id+'">'+d.label+'</div>';
+  }).join("");
+  searchResults.style.display="block";
+});
+
+searchResults.addEventListener("click", function(e){
+  var el = e.target.closest(".sri");
+  if(!el) return;
+  highlightNode(el.getAttribute("data-id"));
+  searchResults.style.display="none";
+  searchBox.value="";
+});
+
+function highlightNode(id){
+  svg.selectAll(".node").classed("highlight", function(d){ return d.id===id; });
+  svg.selectAll(".link").classed("highlight", function(d){
+    return d.source.id===id || d.target.id===id;
+  });
+  var nd = nodeMap.get(id);
+  if(!nd) return;
+  var t = d3.zoomTransform(svg.node());
+  var x = -nd.x*t.k + width/2;
+  var y = -nd.y*t.k + height/2;
+  svg.transition().duration(600).call(zoom.transform, d3.zoomIdentity.translate(x,y).scale(t.k));
+}
+
+/* ---- 详情面板 ---- */
+function showDetail(d){
+  var panel = document.getElementById("detail-panel");
+  var title = document.getElementById("detail-title");
+  var body  = document.getElementById("detail-body");
+
+  title.textContent = (d.title || d.label || d.id || "").replace(/\.md$/, "");
+
+  var html = "";
+
+  /* 元信息 */
+  html += '<div class="section"><div class="meta-row"><span class="meta-label">类型</span><span>' + (d.type==="concept" ? "💡 概念" : "📖 笔记") + '</span></div>';
+  if(d.domain)   html += '<div class="meta-row"><span class="meta-label">领域</span><span>' + d.domain + '</span></div>';
+  if(d.cluster) html += '<div class="meta-row"><span class="meta-label">聚类</span><span>' + d.cluster + '</span></div>';
+  if(d.degree !== undefined) html += '<div class="meta-row"><span class="meta-label">连通度</span><span>' + d.degree + '</span></div>';
+  html += '</div>';
+
+  /* 摘要 */
+  if(d.summary){
+    html += '<div class="section"><div class="section-title">📝 摘要</div><div class="summary">' + escapeHtml(d.summary.slice(0,500)) + (d.summary.length>500 ? "..." : "") + '</div></div>';
+  }
+
+  /* 关键词 */
+  if(d.keywords && d.keywords.length){
+    html += '<div class="section"><div class="section-title">🔑 关键词</div>';
+    d.keywords.forEach(function(kw){ html += '<span class="keyword">' + escapeHtml(kw) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 标签 */
+  if(d.tags && d.tags.length){
+    html += '<div class="section"><div class="section-title">🏷️ 标签</div>';
+    d.tags.forEach(function(tg){ html += '<span class="tag">' + escapeHtml(tg) + '</span>'; });
+    html += '</div>';
+  }
+
+  /* 打开原文件：用 Obsidian URI 协议，避免浏览器 file:// 限制 */
+  if(d.path){
+    var obsidianUrl = "obsidian://open?path=" + encodeURIComponent(d.path);
+    html += '<div class="section"><a class="open-link" href="' + obsidianUrl + '">📂 在 Obsidian 中打开</a></div>';
+  }
+
+  body.innerHTML = html;
+  panel.classList.add("open");
+}
+
+function closeDetail(){
+  document.getElementById("detail-panel").classList.remove("open");
+}
+
+function escapeHtml(s){
+  if(!s) return "";
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ---- D3 力导向图 ---- */
+var width  = window.innerWidth;
+var height = window.innerHeight - 48;
+var svg = d3.select("#graph").append("svg").attr("width",width).attr("height",height);
+var g = svg.append("g");
+var zoom = d3.zoom().scaleExtent([0.05,5]).on("zoom", function(e){ g.attr("transform", e.transform); });
+svg.call(zoom);
+
+var simulation = d3.forceSimulation(NODES)
+  .force("link",    d3.forceLink(LINKS).id(function(d){ return d.id; }).distance(90))
+  .force("charge",  d3.forceManyBody().strength(-220))
+  .force("center",  d3.forceCenter(width/2, height/2))
+  .force("collision", d3.forceCollide(30))
+  .force("x",       d3.forceX(width/2).strength(0.06))
+  .force("y",       d3.forceY(height/2).strength(0.06));
+
+var link = g.append("g").attr("class","links").selectAll("line")
+  .data(LINKS).join("line")
+  .attr("class", function(d){ return "link" + ((d.type==="book-book") ? " link-book" : ""); });
+
+var node = g.append("g").attr("class","nodes").selectAll("g")
+  .data(NODES).join("g")
+  .attr("class","node")
+  .attr("data-id", function(d){ return d.id; })
+  .call(d3.drag()
+    .on("start", function(event,d){ if(!event.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+    .on("drag",  function(event,d){ d.fx=event.x; d.fy=event.y; })
+    .on("end",   function(event,d){ if(!event.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+node.append("circle")
+  .attr("r", function(d){ return d.type==="book" ? 5+Math.sqrt(d.degree||1)*1.5 : 7; })
+  .attr("fill", function(d){ return d.type==="book" ? (CLUSTER_COLORS[d.cluster]||"#94a3b8") : "#f59e0b"; })
+  .attr("stroke", function(d){ return d.type==="book" ? "#0f172a" : "#d97706"; })
+  .on("mouseover", function(event,d){
+    var html = d.type==="book"
+      ? "<strong>📖 "+d.label+"</strong><br>连通度:"+d.degree+"<br>聚类:"+(d.cluster||"未分类")
+      : "<strong>💡 "+d.concept+"</strong><br>关联:"+d.book_count+" 篇";
+    d3.select("#tooltip").html(html).style("opacity",1)
+      .style("left",(event.pageX+12)+"px").style("top",(event.pageY-8)+"px");
+  })
+  .on("mouseout", function(){ d3.select("#tooltip").style("opacity",0); })
+  .on("click", function(event,d){
+    event.stopPropagation();
+    showDetail(d);
+  });
+
+node.append("text").attr("dx",11).attr("dy","0.35em").text(function(d){ return d.label; });
+
+var nodeMap = new Map();
+simulation.on("tick", function(){
+  link
+    .attr("x1", function(d){ return d.source.x; })
+    .attr("y1", function(d){ return d.source.y; })
+    .attr("x2", function(d){ return d.target.x; })
+    .attr("y2", function(d){ return d.target.y; });
+  node.attr("transform", function(d){
+    nodeMap.set(d.id, d);
+    return "translate("+d.x+","+d.y+")";
+  });
+});
+
+/* ---- 图例 ---- */
+var legendItems = d3.select("#legend").append("div").style("font-weight","bold").style("margin-bottom","8px").text("🎨 聚类").node().parentNode;
+Object.entries(CLUSTER_COLORS).forEach(function(entry){
+  var li = d3.select(legendItems).append("div").attr("class","li");
+  li.append("span").attr("class","ld").style("background",entry[1]);
+  li.append("span").text(entry[0]);
+});
+
+/* ---- 按钮 ---- */
+var conceptVisible = true;
+d3.select("#btn-toggle-concept").on("click", function(){
+  conceptVisible = !conceptVisible;
+  svg.selectAll(".node").filter(function(d){ return d.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  svg.selectAll(".link").filter(function(d){ return d.source.type==="concept"||d.target.type==="concept"; })
+    .style("display", conceptVisible?"block":"none");
+  d3.select(this).text(conceptVisible?"隐藏概念":"显示概念").classed("active",!conceptVisible);
+});
+d3.select("#btn-reset").on("click", function(){
+  closeDetail();
+  svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+});
+
+svg.on("click", function(){ searchResults.style.display="none"; });
+document.addEventListener("click", function(e){
+  if(!document.getElementById("detail-panel").contains(e.target) && !e.target.closest(".node")){
+    closeDetail();
+  }
+});
+
+/* 更新统计 */
+d3.select("#node-count").text(NODES.length);
+d3.select("#link-count").text(LINKS.length);
+</script>
+</body>
+</html>
